@@ -249,7 +249,7 @@ export default function SettingsPage() {
           {aiLoading ? "Coach is calculating…" : "Calculate targets with AI"}
         </button>
         <p className="text-[11px] text-muted">
-          Uses your profile, goal, training, Garmin calories, intake and weight trend. Nothing changes until you apply it.
+          AI estimates calories from your profile and trends. Macros use a fixed formula based on body weight and goal. Nothing changes until you apply it.
         </p>
         {aiError && <p className="text-sm text-danger">{aiError}</p>}
         {recommendation && (
@@ -265,6 +265,9 @@ export default function SettingsPage() {
             </p>
             <p className="text-sm">
               {recommendation.targetProteinG}g protein · {recommendation.targetCarbsG}g carbs · {recommendation.targetFatG}g fat
+            </p>
+            <p className="text-xs text-muted mt-1">
+              Protein {recommendation.proteinGPerKg.toFixed(1)} g/kg · Fat {recommendation.fatCaloriesPct}% of calories · Carbs use the remainder
             </p>
             <p className="text-sm text-muted mt-2">{recommendation.summary}</p>
             <ul className="text-xs text-muted mt-2 list-disc pl-4 space-y-1">

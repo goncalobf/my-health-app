@@ -40,11 +40,24 @@ export interface CoachTargetPayload {
   targetProteinG: number;
   targetCarbsG: number;
   targetFatG: number;
+  proteinRuleGPerKg: number;
+  proteinGPerKg: number;
+  fatCaloriesPct: number;
   summary: string;
   rationale: string[];
   dataQuality: "low" | "medium" | "high";
   caution: string | null;
 }
+
+export type CoachCaloriePayload = Omit<
+  CoachTargetPayload,
+  | "targetProteinG"
+  | "targetCarbsG"
+  | "targetFatG"
+  | "proteinRuleGPerKg"
+  | "proteinGPerKg"
+  | "fatCaloriesPct"
+>;
 
 export const insightSchema = {
   type: "object",
@@ -112,14 +125,11 @@ export const mealSchema = {
   },
 } as const;
 
-export const targetSchema = {
+export const calorieTargetSchema = {
   type: "object",
   additionalProperties: false,
   required: [
     "targetCalories",
-    "targetProteinG",
-    "targetCarbsG",
-    "targetFatG",
     "summary",
     "rationale",
     "dataQuality",
@@ -127,9 +137,6 @@ export const targetSchema = {
   ],
   properties: {
     targetCalories: { type: "integer" },
-    targetProteinG: { type: "integer" },
-    targetCarbsG: { type: "integer" },
-    targetFatG: { type: "integer" },
     summary: { type: "string" },
     rationale: {
       type: "array",

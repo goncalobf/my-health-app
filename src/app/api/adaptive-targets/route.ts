@@ -3,6 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bodyweightLogs, expenditureLogs, nutritionLogs, settings } from "@/db/schema";
 import { shiftISODate, todayISO } from "@/lib/utils";
+import { calculateMacroTargets } from "@/lib/macro-targets";
 
 const average = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
 
@@ -52,9 +53,11 @@ export async function GET() {
   const byGarmin = recentBurn + (desiredWeeklyKg * 7700) / 7;
   const trendCorrection = Math.max(-150, Math.min(150, -(observedWeeklyKg - desiredWeeklyKg) * 1100));
   const proposedCalories = Math.round(Math.max(1200, (byGarmin + trendCorrection) / 10) * 10);
-  const proteinG = Math.round(laterAvg * 2);
-  const fatG = Math.round((proposedCalories * 0.25) / 9);
-  const carbsG = Math.max(0, Math.round((proposedCalories - proteinG * 4 - fatG * 9) / 4));
+  const macros = calculateMacroTargets({
+    targetCalories: proposedCalories,
+    currentWeightKg: laterAvg,
+    goal: setting.goal,
+  });
 
   const intakeByDay = recentIntake.reduce<Record<string, number>>((days, x) => {
     days[x.day] = (days[x.day] ?? 0) + x.calories;
@@ -64,7 +67,14 @@ export async function GET() {
 
   return NextResponse.json({
     ready: true,
-    proposed: { targetCalories: proposedCalories, targetProteinG: proteinG, targetCarbsG: carbsG, targetFatG: fatG },
+    proposed: {
+      targetCalories: proposedCalories,
+      targetProteinG: macros.targetProteinG,
+      targetCarbsG: macros.targetCarbsG,
+      targetFatG: macros.targetFatG,
+      proteinGPerKg: macros.proteinGPerKg,
+      fatCaloriesPct: macros.fatCaloriesPct,
+    },
     current: { targetCalories: setting.targetCalories, targetProteinG: setting.targetProteinG, targetCarbsG: setting.targetCarbsG, targetFatG: setting.targetFatG },
     evidence: { averageGarminCalories: Math.round(recentBurn), averageIntake: Math.round(avgIntake), observedWeeklyKg: Math.round(observedWeeklyKg * 100) / 100, desiredWeeklyKg: Math.round(desiredWeeklyKg * 100) / 100 },
   });
