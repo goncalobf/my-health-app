@@ -1,0 +1,427 @@
+"use client";
+
+import { useEffect, useState, use, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { Check, Plus, Trash2, Flag, X, Dumbbell } from "lucide-react";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import ExercisePicker from "@/components/ExercisePicker";
+import RestTimer from "@/components/RestTimer";
+
+interface PlanItem {
+  exerciseId: number;
+  name: string;
+  targetSets: number;
+  targetReps: number;
+  targetWeightKg: number | null;
+  restSeconds: number;
+}
+interface LoggedSet {
+  id: number;
+  exerciseId: number;
+  setNumber: number;
+  weightKg: number;
+  reps: number;
+  isWarmup: boolean;
+  completedAt: string | null;
+}
+interface SessionData {
+  session: { id: number; name: string; startedAt: string; finishedAt: string | null };
+  plan: PlanItem[];
+  loggedSets: LoggedSet[];
+  lastSets: Record<number, { weightKg: number; reps: number }[]>;
+}
+
+interface LocalSet {
+  key: string;
+  dbId?: number;
+  weight: string;
+  reps: string;
+  completed: boolean;
+}
+interface Block {
+  exerciseId: number;
+  name: string;
+  targetReps: number;
+  restSeconds: number;
+  lastSets: { weightKg: number; reps: number }[];
+  sets: LocalSet[];
+}
+
+let keyc = 0;
+const nk = () => `s${keyc++}`;
+
+export default function SessionPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
+  const router = useRouter();
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [picking, setPicking] = useState(false);
+  const [rest, setRest] = useState<{
+    startedAt: number;
+    target: number;
+    label: string;
+  } | null>(null);
+
+  const load = useCallback(async () => {
+    const [data, exercises] = await Promise.all([
+      apiGet<SessionData>(`/api/sessions/${id}`),
+      apiGet<{ id: number; name: string }[]>("/api/exercises"),
+    ]);
+    const exMap = new Map(exercises.map((e) => [e.id, e.name]));
+    setName(data.session.name);
+
+    const built: Block[] = [];
+    const seen = new Set<number>();
+
+    const makeBlock = (
+      exerciseId: number,
+      opts: { name: string; targetReps: number; restSeconds: number }
+    ): Block => {
+      const logged = data.loggedSets
+        .filter((s) => s.exerciseId === exerciseId)
+        .sort((a, b) => a.setNumber - b.setNumber);
+      const last = data.lastSets[exerciseId] ?? [];
+      let sets: LocalSet[];
+      if (logged.length) {
+        sets = logged.map((s) => ({
+          key: nk(),
+          dbId: s.id,
+          weight: s.weightKg ? String(s.weightKg) : "",
+          reps: s.reps ? String(s.reps) : "",
+          completed: !!s.completedAt,
+        }));
+      } else {
+        const count = Math.max(1, (opts as { targetSets?: number }).targetSets ?? 1);
+        sets = Array.from({ length: count }, (_, i) => ({
+          key: nk(),
+          weight: last[i]?.weightKg ? String(last[i].weightKg) : "",
+          reps: last[i]?.reps
+            ? String(last[i].reps)
+            : opts.targetReps
+              ? String(opts.targetReps)
+              : "",
+          completed: false,
+        }));
+      }
+      return {
+        exerciseId,
+        name: opts.name,
+        targetReps: opts.targetReps,
+        restSeconds: opts.restSeconds,
+        lastSets: last,
+        sets,
+      };
+    };
+
+    for (const p of data.plan) {
+      seen.add(p.exerciseId);
+      built.push(
+        makeBlock(p.exerciseId, {
+          name: p.name,
+          targetReps: p.targetReps,
+          restSeconds: p.restSeconds,
+          ...({ targetSets: p.targetSets } as object),
+        })
+      );
+    }
+    for (const s of data.loggedSets) {
+      if (seen.has(s.exerciseId)) continue;
+      seen.add(s.exerciseId);
+      built.push(
+        makeBlock(s.exerciseId, {
+          name: exMap.get(s.exerciseId) ?? "Exercise",
+          targetReps: 0,
+          restSeconds: 120,
+        })
+      );
+    }
+
+    setBlocks(built);
+    setLoading(false);
+  }, [id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function patchSet(exIdx: number, setKey: string, patch: Partial<LocalSet>) {
+    setBlocks((bs) =>
+      bs.map((b, i) =>
+        i === exIdx
+          ? {
+              ...b,
+              sets: b.sets.map((s) =>
+                s.key === setKey ? { ...s, ...patch } : s
+              ),
+            }
+          : b
+      )
+    );
+  }
+
+  async function commitValues(exIdx: number, s: LocalSet) {
+    if (!s.dbId) return;
+    await apiPatch(`/api/sessions/${id}/sets/${s.dbId}`, {
+      weightKg: Number(s.weight) || 0,
+      reps: Number(s.reps) || 0,
+    });
+  }
+
+  async function toggleComplete(exIdx: number, setKey: string) {
+    const block = blocks[exIdx];
+    const idx = block.sets.findIndex((s) => s.key === setKey);
+    const s = block.sets[idx];
+    const nextCompleted = !s.completed;
+
+    if (!s.dbId) {
+      const created = await apiPost<{ id: number }>(
+        `/api/sessions/${id}/sets`,
+        {
+          exerciseId: block.exerciseId,
+          setNumber: idx + 1,
+          weightKg: Number(s.weight) || 0,
+          reps: Number(s.reps) || 0,
+          completed: nextCompleted,
+        }
+      );
+      patchSet(exIdx, setKey, { dbId: created.id, completed: nextCompleted });
+    } else {
+      await apiPatch(`/api/sessions/${id}/sets/${s.dbId}`, {
+        weightKg: Number(s.weight) || 0,
+        reps: Number(s.reps) || 0,
+        completed: nextCompleted,
+      });
+      patchSet(exIdx, setKey, { completed: nextCompleted });
+    }
+
+    if (nextCompleted) {
+      setRest({
+        startedAt: Date.now(),
+        target: block.restSeconds,
+        label: block.name,
+      });
+    }
+  }
+
+  function addSet(exIdx: number) {
+    setBlocks((bs) =>
+      bs.map((b, i) => {
+        if (i !== exIdx) return b;
+        const prev = b.sets[b.sets.length - 1];
+        return {
+          ...b,
+          sets: [
+            ...b.sets,
+            {
+              key: nk(),
+              weight: prev?.weight ?? "",
+              reps: prev?.reps ?? (b.targetReps ? String(b.targetReps) : ""),
+              completed: false,
+            },
+          ],
+        };
+      })
+    );
+  }
+
+  async function removeSet(exIdx: number, setKey: string) {
+    const s = blocks[exIdx].sets.find((x) => x.key === setKey);
+    if (s?.dbId) await apiDelete(`/api/sessions/${id}/sets/${s.dbId}`);
+    setBlocks((bs) =>
+      bs.map((b, i) =>
+        i === exIdx
+          ? { ...b, sets: b.sets.filter((x) => x.key !== setKey) }
+          : b
+      )
+    );
+  }
+
+  async function addExercise(exerciseId: number) {
+    setPicking(false);
+    const exercises = await apiGet<{ id: number; name: string }[]>(
+      "/api/exercises"
+    );
+    const ex = exercises.find((e) => e.id === exerciseId);
+    setBlocks((bs) => [
+      ...bs,
+      {
+        exerciseId,
+        name: ex?.name ?? "Exercise",
+        targetReps: 0,
+        restSeconds: 120,
+        lastSets: [],
+        sets: [{ key: nk(), weight: "", reps: "", completed: false }],
+      },
+    ]);
+  }
+
+  async function finish() {
+    await apiPatch(`/api/sessions/${id}`, { finish: true });
+    router.replace("/workouts/history");
+  }
+
+  async function discard() {
+    if (!window.confirm("Discard this workout and all its sets?")) return;
+    await apiDelete(`/api/sessions/${id}`);
+    router.replace("/workouts");
+  }
+
+  const completedCount = blocks.reduce(
+    (a, b) => a + b.sets.filter((s) => s.completed).length,
+    0
+  );
+
+  if (loading) return <p className="text-muted text-sm">Loading…</p>;
+
+  return (
+    <div className={rest ? "pb-24" : ""}>
+      <header className="flex items-center gap-2 mb-4">
+        <button
+          onClick={discard}
+          className="w-10 h-10 -ml-2 flex items-center justify-center text-muted"
+          aria-label="Discard"
+        >
+          <X size={24} />
+        </button>
+        <div className="flex-1">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => apiPatch(`/api/sessions/${id}`, { name })}
+            className="w-full bg-transparent text-xl font-bold outline-none"
+          />
+          <p className="text-xs text-muted">{completedCount} sets completed</p>
+        </div>
+        <button onClick={finish} className="btn-primary py-2 px-4">
+          <Flag size={16} /> Finish
+        </button>
+      </header>
+
+      {blocks.length === 0 && (
+        <div className="card p-6 flex flex-col items-center text-center gap-3">
+          <Dumbbell className="text-muted" size={32} />
+          <p className="text-muted text-sm">
+            Empty workout. Add an exercise to get started.
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-4">
+        {blocks.map((b, exIdx) => (
+          <div key={`${b.exerciseId}-${exIdx}`} className="card p-4">
+            <p className="font-semibold mb-3">{b.name}</p>
+
+            <div className="grid grid-cols-[24px_1fr_1fr_44px] gap-2 items-center text-[11px] text-muted uppercase tracking-wide mb-1 px-1">
+              <span>#</span>
+              <span>Weight (kg)</span>
+              <span>Reps</span>
+              <span></span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {b.sets.map((s, si) => (
+                <div
+                  key={s.key}
+                  className={`grid grid-cols-[24px_1fr_1fr_44px] gap-2 items-center rounded-xl px-1 py-1 ${
+                    s.completed ? "bg-accent/10" : ""
+                  }`}
+                >
+                  <span className="text-center text-sm text-muted tabular-nums">
+                    {si + 1}
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step={0.5}
+                    placeholder={
+                      b.lastSets[si]?.weightKg
+                        ? String(b.lastSets[si].weightKg)
+                        : "0"
+                    }
+                    value={s.weight}
+                    onChange={(e) =>
+                      patchSet(exIdx, s.key, { weight: e.target.value })
+                    }
+                    onBlur={() => commitValues(exIdx, s)}
+                    className="bg-surface-2 border border-border rounded-lg px-2 py-2.5 text-center tabular-nums outline-none focus:border-accent"
+                  />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder={
+                      b.lastSets[si]?.reps
+                        ? String(b.lastSets[si].reps)
+                        : b.targetReps
+                          ? String(b.targetReps)
+                          : "0"
+                    }
+                    value={s.reps}
+                    onChange={(e) =>
+                      patchSet(exIdx, s.key, { reps: e.target.value })
+                    }
+                    onBlur={() => commitValues(exIdx, s)}
+                    className="bg-surface-2 border border-border rounded-lg px-2 py-2.5 text-center tabular-nums outline-none focus:border-accent"
+                  />
+                  <button
+                    onClick={() => toggleComplete(exIdx, s.key)}
+                    className={`h-full min-h-[42px] rounded-lg flex items-center justify-center transition ${
+                      s.completed
+                        ? "bg-accent text-bg"
+                        : "bg-surface-2 border border-border text-muted"
+                    }`}
+                    aria-label="Complete set"
+                  >
+                    <Check size={18} strokeWidth={3} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => addSet(exIdx)}
+                className="btn-ghost flex-1 py-2 text-sm"
+              >
+                <Plus size={16} /> Add set
+              </button>
+              {b.sets.length > 0 && (
+                <button
+                  onClick={() => removeSet(exIdx, b.sets[b.sets.length - 1].key)}
+                  className="btn-ghost py-2 px-3 text-sm"
+                  aria-label="Remove last set"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={() => setPicking(true)}
+        className="btn-ghost w-full mt-4"
+      >
+        <Plus size={18} /> Add exercise
+      </button>
+
+      {picking && (
+        <ExercisePicker onPick={addExercise} onClose={() => setPicking(false)} />
+      )}
+
+      {rest && (
+        <RestTimer
+          startedAt={rest.startedAt}
+          targetSeconds={rest.target}
+          label={rest.label}
+          onEnd={() => setRest(null)}
+        />
+      )}
+    </div>
+  );
+}
