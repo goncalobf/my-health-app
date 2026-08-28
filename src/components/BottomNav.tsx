@@ -14,6 +14,9 @@ const TABS = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const activeWorkout = /^\/workouts\/session\/[^/]+$/.test(pathname);
+
+  if (activeWorkout) return null;
 
   return (
     <nav className="fixed bottom-0 inset-x-0 z-40 bg-surface/90 backdrop-blur border-t border-border safe-bottom">

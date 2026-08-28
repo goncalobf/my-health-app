@@ -38,21 +38,21 @@ export default function RestTimer({
     targetSeconds > 0 ? Math.min(100, (elapsed / targetSeconds) * 100) : 0;
 
   return (
-    <div className="fixed inset-x-0 bottom-[64px] z-40 safe-bottom pointer-events-none">
-      <div className="max-w-lg mx-auto px-4">
-        <div className="card p-3 pointer-events-auto border-accent/40 bg-surface/95 backdrop-blur shadow-lg">
-          <div className="flex items-center gap-3">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 safe-bottom">
+      <div className="mx-auto max-w-lg px-4">
+        <div className="card pointer-events-auto mb-3 border-accent/40 bg-surface/95 p-3 shadow-xl backdrop-blur">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
             <Timer
               size={22}
               className={reached ? "text-accent" : "text-muted"}
             />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline justify-between">
-                <span className="text-xs text-muted truncate">
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-baseline justify-between gap-2">
+                <span className="min-w-0 truncate text-xs text-muted">
                   Resting · {label}
                 </span>
                 <span
-                  className={`text-lg font-bold tabular-nums ${
+                  className={`shrink-0 text-lg font-bold tabular-nums ${
                     reached ? "text-accent" : ""
                   }`}
                 >
@@ -65,7 +65,7 @@ export default function RestTimer({
                   )}
                 </span>
               </div>
-              <div className="h-1.5 rounded-full bg-surface-2 mt-1.5 overflow-hidden">
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
@@ -77,16 +77,10 @@ export default function RestTimer({
             </div>
             <button
               onClick={onEnd}
-              className="shrink-0 btn-primary py-2 px-3 text-sm"
+              className="btn-primary h-10 shrink-0 px-3 py-0 text-sm"
+              aria-label="End rest timer"
             >
-              End rest
-            </button>
-            <button
-              onClick={onEnd}
-              className="shrink-0 text-muted p-1"
-              aria-label="Dismiss"
-            >
-              <X size={18} />
+              <X size={16} /> End
             </button>
           </div>
         </div>

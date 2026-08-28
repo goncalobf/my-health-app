@@ -292,35 +292,59 @@ export default function SessionPage({
     (a, b) => a + b.sets.filter((s) => s.completed).length,
     0
   );
+  const totalSets = blocks.reduce((total, block) => total + block.sets.length, 0);
+  const progress = totalSets ? Math.round((completedCount / totalSets) * 100) : 0;
 
-  if (loading) return <p className="text-muted text-sm">Loading…</p>;
+  if (loading) {
+    return (
+      <div className="card p-6 text-center">
+        <p className="text-sm text-muted">Loading your workout…</p>
+      </div>
+    );
+  }
 
   return (
-    <div className={rest ? "pb-24" : ""}>
-      <header className="flex items-center gap-2 mb-4">
-        <button
-          onClick={discard}
-          className="w-10 h-10 -ml-2 flex items-center justify-center text-muted"
-          aria-label="Discard"
-        >
-          <X size={24} />
-        </button>
-        <div className="flex-1">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => apiPatch(`/api/sessions/${id}`, { name })}
-            className="w-full bg-transparent text-xl font-bold outline-none"
-          />
-          <p className="text-xs text-muted">{completedCount} sets completed</p>
+    <div className={rest ? "min-w-0 pb-32" : "min-w-0 pb-6"}>
+      <header className="sticky top-[env(safe-area-inset-top)] z-30 -mx-4 mb-5 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push("/workouts")}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-surface active:scale-95"
+            aria-label="Save and exit workout"
+          >
+            <X size={22} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={() => apiPatch(`/api/sessions/${id}`, { name })}
+              aria-label="Workout name"
+              className="w-full truncate bg-transparent text-lg font-bold outline-none focus:text-accent"
+            />
+            <div className="mt-1 flex items-center gap-2">
+              <p className="shrink-0 text-[11px] text-muted tabular-nums">
+                {completedCount} of {totalSets} sets
+              </p>
+              <div className="h-1 min-w-8 flex-1 overflow-hidden rounded-full bg-surface-2">
+                <div
+                  className="h-full rounded-full bg-accent transition-[width]"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={finish}
+            className="btn-primary h-10 shrink-0 px-3 py-0 text-sm"
+          >
+            <Flag size={15} /> Finish
+          </button>
         </div>
-        <button onClick={finish} className="btn-primary py-2 px-4">
-          <Flag size={16} /> Finish
-        </button>
       </header>
 
       {blocks.length === 0 && (
-        <div className="card p-6 flex flex-col items-center text-center gap-3">
+        <div className="card flex flex-col items-center gap-3 p-6 text-center">
           <Dumbbell className="text-muted" size={32} />
           <p className="text-muted text-sm">
             Empty workout. Add an exercise to get started.
@@ -330,34 +354,45 @@ export default function SessionPage({
 
       <div className="flex flex-col gap-4">
         {blocks.map((b, exIdx) => (
-          <div key={`${b.exerciseId}-${exIdx}`} className="card p-4">
-            <p className="font-semibold">{b.name}</p>
+          <section
+            key={`${b.exerciseId}-${exIdx}`}
+            className="card min-w-0 overflow-hidden p-3 sm:p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <p className="min-w-0 break-words font-semibold leading-snug">
+                {b.name}
+              </p>
+              <span className="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[11px] text-muted tabular-nums">
+                {b.sets.filter((set) => set.completed).length}/{b.sets.length}
+              </span>
+            </div>
             {b.recommendation && (
-              <p className={`text-xs mb-3 ${
+              <p className={`mt-1 text-xs ${
                 b.recommendation.action === "increase" ? "text-accent" :
                 b.recommendation.action === "reduce" ? "text-warn" : "text-muted"
               }`}>
                 {b.recommendation.message}
               </p>
             )}
-            {!b.recommendation && <div className="mb-3" />}
 
-            <div className="grid grid-cols-[24px_1fr_1fr_44px] gap-2 items-center text-[11px] text-muted uppercase tracking-wide mb-1 px-1">
-              <span>#</span>
-              <span>Weight (kg)</span>
-              <span>Reps</span>
-              <span></span>
+            <div className="mt-4 grid grid-cols-[1.5rem_minmax(0,1fr)_minmax(0,0.72fr)_2.75rem] items-center gap-2 px-1 text-center text-[10px] uppercase tracking-wide text-muted">
+              <span className="text-left">Set</span>
+              <span>kg</span>
+              <span>reps</span>
+              <span className="sr-only">Complete</span>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="mt-1 flex flex-col gap-2">
               {b.sets.map((s, si) => (
                 <div
                   key={s.key}
-                  className={`grid grid-cols-[24px_1fr_1fr_44px] gap-2 items-center rounded-xl px-1 py-1 ${
-                    s.completed ? "bg-accent/10" : ""
+                  className={`grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)_minmax(0,0.72fr)_2.75rem] items-center gap-2 rounded-xl p-1 transition ${
+                    s.completed ? "bg-accent/10 ring-1 ring-inset ring-accent/15" : ""
                   }`}
                 >
-                  <span className="text-center text-sm text-muted tabular-nums">
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs tabular-nums ${
+                    s.completed ? "bg-accent/15 text-accent" : "text-muted"
+                  }`}>
                     {si + 1}
                   </span>
                   <input
@@ -370,15 +405,18 @@ export default function SessionPage({
                         : "0"
                     }
                     value={s.weight}
+                    min={0}
+                    aria-label={`${b.name}, set ${si + 1}, weight in kilograms`}
                     onChange={(e) =>
                       patchSet(exIdx, s.key, { weight: e.target.value })
                     }
                     onBlur={() => commitValues(exIdx, s)}
-                    className="bg-surface-2 border border-border rounded-lg px-2 py-2.5 text-center tabular-nums outline-none focus:border-accent"
+                    className="min-w-0 w-full rounded-lg border border-border bg-surface-2 px-1 py-2.5 text-center text-base tabular-nums outline-none focus:border-accent"
                   />
                   <input
                     type="number"
                     inputMode="numeric"
+                    min={0}
                     placeholder={
                       b.lastSets[si]?.reps
                         ? String(b.lastSets[si].reps)
@@ -387,15 +425,16 @@ export default function SessionPage({
                           : "0"
                     }
                     value={s.reps}
+                    aria-label={`${b.name}, set ${si + 1}, repetitions`}
                     onChange={(e) =>
                       patchSet(exIdx, s.key, { reps: e.target.value })
                     }
                     onBlur={() => commitValues(exIdx, s)}
-                    className="bg-surface-2 border border-border rounded-lg px-2 py-2.5 text-center tabular-nums outline-none focus:border-accent"
+                    className="min-w-0 w-full rounded-lg border border-border bg-surface-2 px-1 py-2.5 text-center text-base tabular-nums outline-none focus:border-accent"
                   />
                   <button
                     onClick={() => toggleComplete(exIdx, s.key)}
-                    className={`h-full min-h-[42px] rounded-lg flex items-center justify-center transition ${
+                    className={`flex h-11 w-11 items-center justify-center rounded-lg transition active:scale-95 ${
                       s.completed
                         ? "bg-accent text-bg"
                         : "bg-surface-2 border border-border text-muted"
@@ -408,32 +447,39 @@ export default function SessionPage({
               ))}
             </div>
 
-            <div className="flex gap-2 mt-3">
+            <div className="mt-3 flex gap-2">
               <button
                 onClick={() => addSet(exIdx)}
-                className="btn-ghost flex-1 py-2 text-sm"
+                className="btn-ghost min-w-0 flex-1 py-2 text-sm"
               >
                 <Plus size={16} /> Add set
               </button>
               {b.sets.length > 0 && (
                 <button
                   onClick={() => removeSet(exIdx, b.sets[b.sets.length - 1].key)}
-                  className="btn-ghost py-2 px-3 text-sm"
+                  className="btn-ghost h-10 w-11 shrink-0 px-0 py-0 text-sm"
                   aria-label="Remove last set"
                 >
                   <Trash2 size={16} />
                 </button>
               )}
             </div>
-          </div>
+          </section>
         ))}
       </div>
 
       <button
         onClick={() => setPicking(true)}
-        className="btn-ghost w-full mt-4"
+        className="btn-ghost mt-4 w-full"
       >
         <Plus size={18} /> Add exercise
+      </button>
+
+      <button
+        onClick={discard}
+        className="mt-5 w-full py-2 text-center text-sm text-danger"
+      >
+        Discard workout
       </button>
 
       {picking && (
