@@ -4,7 +4,14 @@ import { Dumbbell, Apple, Settings, ChevronRight, Scale } from "lucide-react";
 import { db } from "@/db";
 import { nutritionLogs, sessions, bodyweightLogs, workoutSchedule, routines, expenditureLogs } from "@/db/schema";
 import { getTargets } from "@/lib/server-data";
-import { todayISO, formatDate } from "@/lib/utils";
+import {
+  dayOfWeekISO,
+  formatDate,
+  hourInAppTimeZone,
+  shiftISODate,
+  startOfAppDay,
+  todayISO,
+} from "@/lib/utils";
 import MacroSummary from "@/components/MacroSummary";
 import DailyPlan from "@/components/DailyPlan";
 import CoachDashboardCard from "@/components/CoachDashboardCard";
@@ -41,8 +48,7 @@ export default async function DashboardPage() {
     .orderBy(desc(bodyweightLogs.day))
     .limit(1);
 
-  const jsDay = new Date().getDay();
-  const dayOfWeek = jsDay === 0 ? 7 : jsDay;
+  const dayOfWeek = dayOfWeekISO(today);
   let [scheduled] = await db.select({ id: routines.id, name: routines.name })
     .from(workoutSchedule)
     .innerJoin(routines, eq(routines.id, workoutSchedule.routineId))
@@ -53,15 +59,14 @@ export default async function DashboardPage() {
       .from(routines).where(ilike(routines.name, `%${term}%`)).limit(1);
   }
   const [todayBurn] = await db.select().from(expenditureLogs).where(eq(expenditureLogs.day, today));
-  const weekStart = new Date();
-  weekStart.setHours(0, 0, 0, 0); weekStart.setDate(weekStart.getDate() - 6);
-  const weekStartDay = new Date(weekStart.getTime() - weekStart.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  const weekStartDay = shiftISODate(today, -6);
+  const weekStart = startOfAppDay(weekStartDay);
   const [[training], [nutritionDays]] = await Promise.all([
     db.select({ count: sql<number>`count(*)::int` }).from(sessions).where(gte(sessions.finishedAt, weekStart)),
     db.select({ count: sql<number>`count(distinct ${nutritionLogs.day})::int` }).from(nutritionLogs).where(gte(nutritionLogs.day, weekStartDay)),
   ]);
 
-  const hour = new Date().getHours();
+  const hour = hourInAppTimeZone();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 

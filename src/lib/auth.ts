@@ -5,7 +5,12 @@ export const COOKIE_NAME = "mha_session";
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 function getSecret(): string {
-  return process.env.AUTH_SECRET ?? "insecure-dev-secret-change-me";
+  const secret = process.env.AUTH_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_SECRET must be configured in production.");
+  }
+  return "insecure-dev-secret-change-me";
 }
 
 async function hmac(message: string): Promise<string> {
@@ -34,9 +39,12 @@ export async function createToken(): Promise<string> {
 
 export async function verifyToken(token: string | undefined): Promise<boolean> {
   if (!token) return false;
-  const [exp, sig] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+  const [exp, sig] = parts;
   if (!exp || !sig) return false;
-  if (Number(exp) < Date.now()) return false;
+  const expiry = Number(exp);
+  if (!Number.isFinite(expiry) || expiry < Date.now()) return false;
   const expected = await hmac(exp);
   // Constant-time-ish compare.
   if (expected.length !== sig.length) return false;

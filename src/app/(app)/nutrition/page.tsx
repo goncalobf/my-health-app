@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Pencil, BookmarkPlus } from "lucide-react";
 import { apiGet, apiDelete, apiPatch, apiPost } from "@/lib/api";
-import { todayISO, formatDate, round } from "@/lib/utils";
+import { todayISO, formatDate, round, shiftISODate } from "@/lib/utils";
 import MacroSummary from "@/components/MacroSummary";
 import FoodLogger from "@/components/FoodLogger";
 
@@ -31,12 +31,6 @@ interface Targets {
 }
 
 const MEALS = ["breakfast", "lunch", "dinner", "snack"];
-
-function shiftDay(day: string, delta: number): string {
-  const d = new Date(day + "T00:00:00");
-  d.setDate(d.getDate() + delta);
-  return d.toISOString().slice(0, 10);
-}
 
 export default function NutritionPage() {
   const [day, setDay] = useState(todayISO());
@@ -94,7 +88,7 @@ export default function NutritionPage() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <button
-          onClick={() => setDay((d) => shiftDay(d, -1))}
+          onClick={() => setDay((d) => shiftISODate(d, -1))}
           className="w-10 h-10 rounded-full bg-surface-2 border border-border flex items-center justify-center text-muted"
         >
           <ChevronLeft size={20} />
@@ -113,7 +107,7 @@ export default function NutritionPage() {
           )}
         </div>
         <button
-          onClick={() => setDay((d) => shiftDay(d, 1))}
+          onClick={() => setDay((d) => shiftISODate(d, 1))}
           disabled={isToday}
           className="w-10 h-10 rounded-full bg-surface-2 border border-border flex items-center justify-center text-muted disabled:opacity-30"
         >

@@ -12,14 +12,15 @@ import {
   settings,
   workoutSchedule,
 } from "@/db/schema";
-import { todayISO } from "@/lib/utils";
+import {
+  dateISOInTimeZone,
+  shiftISODate,
+  startOfAppDay,
+  todayISO,
+} from "@/lib/utils";
 
 function isoDaysAgo(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-    .toISOString()
-    .slice(0, 10);
+  return shiftISODate(todayISO(), -days);
 }
 
 export async function getCoachSnapshot({
@@ -27,7 +28,7 @@ export async function getCoachSnapshot({
   sessionId,
 }: { days?: number; sessionId?: number } = {}) {
   const fromDay = isoDaysAgo(days - 1);
-  const fromTime = new Date(`${fromDay}T00:00:00`);
+  const fromTime = startOfAppDay(fromDay);
 
   const [setting] = await db.select().from(settings).where(eq(settings.id, 1));
   const [weights, expenditures, foods, sessionRows, setRows, schedule, routineTargets] =
@@ -89,7 +90,7 @@ export async function getCoachSnapshot({
       }
       return {
         id: session.id,
-        date: session.startedAt.toISOString().slice(0, 10),
+        date: dateISOInTimeZone(session.startedAt),
         name: session.name,
         durationMinutes: session.finishedAt ? Math.round((session.finishedAt.getTime() - session.startedAt.getTime()) / 60_000) : null,
         volumeKg: Math.round(sets.reduce((sum, set) => sum + set.weightKg * set.reps, 0)),

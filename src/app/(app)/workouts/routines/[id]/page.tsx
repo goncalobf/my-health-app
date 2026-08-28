@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useCallback, useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Play, Timer } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
@@ -70,14 +70,14 @@ export default function RoutineEditorPage({
   const [name, setName] = useState("");
   const [picking, setPicking] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     const r = await apiGet<Routine>(`/api/routines/${id}`);
     setRoutine(r);
     setName(r.name);
-  }
+  }, [id]);
   useEffect(() => {
     load();
-  }, [id]);
+  }, [load]);
 
   async function saveName() {
     if (!name.trim() || name === routine?.name) return;

@@ -40,19 +40,33 @@ export function normalize(p: any): FoodResult | null {
 }
 
 export async function searchFoods(query: string): Promise<FoodResult[]> {
-  const url =
-    "https://world.openfoodfacts.org/cgi/search.pl?" +
-    new URLSearchParams({
-      search_terms: query,
-      json: "1",
-      page_size: "24",
-      fields:
-        "code,product_name,product_name_en,generic_name,brands,image_small_url,image_front_small_url,serving_size,nutriments",
-    }).toString();
-  const res = await fetch(url, { headers: { "User-Agent": UA } });
-  if (!res.ok) return [];
+  const fields = [
+    "code",
+    "product_name",
+    "product_name_en",
+    "generic_name",
+    "brands",
+    "image_small_url",
+    "image_front_small_url",
+    "serving_size",
+    "nutriments",
+  ];
+  const res = await fetch("https://search.openfoodfacts.org/search", {
+    method: "POST",
+    headers: { "User-Agent": UA, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      q: query,
+      page_size: 24,
+      langs: ["en"],
+      fields,
+    }),
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!res.ok) {
+    throw new Error(`Open Food Facts search failed (${res.status}).`);
+  }
   const data = await res.json();
-  return (data.products || [])
+  return (data.hits || [])
     .map(normalize)
     .filter((f: FoodResult | null): f is FoodResult => f !== null);
 }
@@ -66,7 +80,10 @@ export async function lookupBarcode(code: string): Promise<FoodResult | null> {
       fields:
         "code,product_name,product_name_en,generic_name,brands,image_small_url,image_front_small_url,serving_size,nutriments",
     }).toString();
-  const res = await fetch(url, { headers: { "User-Agent": UA } });
+  const res = await fetch(url, {
+    headers: { "User-Agent": UA },
+    signal: AbortSignal.timeout(8_000),
+  });
   if (!res.ok) return null;
   const data = await res.json();
   if (data.status !== 1) return null;

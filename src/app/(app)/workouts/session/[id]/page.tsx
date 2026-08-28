@@ -159,7 +159,7 @@ export default function SessionPage({
 
     setBlocks(built);
     setLoading(false);
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => {
     load();

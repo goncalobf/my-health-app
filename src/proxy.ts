@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { COOKIE_NAME, verifyToken } from "@/lib/auth";
 
-const PUBLIC_PATHS = ["/unlock", "/api/auth"];
+const PUBLIC_PATHS = new Set(["/unlock", "/api/auth"]);
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (PUBLIC_PATHS.has(pathname)) {
     return NextResponse.next();
   }
 
@@ -23,10 +23,14 @@ export async function middleware(req: NextRequest) {
 
   const url = req.nextUrl.clone();
   url.pathname = "/unlock";
+  url.search = "";
+  url.searchParams.set("next", `${pathname}${req.nextUrl.search}`);
   return NextResponse.redirect(url);
 }
 
 export const config = {
   // Protect everything except Next internals and static assets.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|sw.js).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|sw.js).*)",
+  ],
 };

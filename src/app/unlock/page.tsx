@@ -20,7 +20,8 @@ export default function UnlockPage() {
       body: JSON.stringify({ password }),
     });
     if (res.ok) {
-      router.replace("/");
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.replace(next?.startsWith("/") && !next.startsWith("//") ? next : "/");
       router.refresh();
     } else {
       setError("Wrong password");

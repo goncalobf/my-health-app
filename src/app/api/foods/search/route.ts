@@ -9,6 +9,9 @@ export async function GET(req: Request) {
     const results = await searchFoods(q);
     return NextResponse.json(results);
   } catch {
-    return NextResponse.json([]);
+    return NextResponse.json(
+      { error: "Food search is temporarily unavailable." },
+      { status: 502 }
+    );
   }
 }

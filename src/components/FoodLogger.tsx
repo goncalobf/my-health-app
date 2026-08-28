@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { X, Search, ScanLine, Pencil, ChevronLeft, Star, Clock3, Utensils } from "lucide-react";
-import { apiGet, apiPost } from "@/lib/api";
+import { api, apiGet, apiPost } from "@/lib/api";
 import { round } from "@/lib/utils";
 import BarcodeScanner from "@/components/BarcodeScanner";
 
@@ -44,6 +44,7 @@ export default function FoodLogger({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FoodResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const [selected, setSelected] = useState<FoodResult | null>(null);
   const [meal, setMeal] = useState(defaultMeal);
   const [qty, setQty] = useState("100");
@@ -69,20 +70,34 @@ export default function FoodLogger({
   useEffect(() => {
     if (query.trim().length < 2) {
       setResults([]);
+      setSearchError("");
       return;
     }
+    const controller = new AbortController();
     setSearching(true);
+    setSearchError("");
     const t = setTimeout(async () => {
       try {
-        const r = await apiGet<FoodResult[]>(
-          `/api/foods/search?q=${encodeURIComponent(query.trim())}`
+        const r = await api<FoodResult[]>(
+          `/api/foods/search?q=${encodeURIComponent(query.trim())}`,
+          { signal: controller.signal }
         );
         setResults(r);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setResults([]);
+          setSearchError(
+            error instanceof Error ? error.message : "Food search failed."
+          );
+        }
       } finally {
-        setSearching(false);
+        if (!controller.signal.aborted) setSearching(false);
       }
     }, 400);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      controller.abort();
+    };
   }, [query]);
 
   async function onScanned(code: string) {
@@ -331,6 +346,11 @@ export default function FoodLogger({
                       Searching…
                     </p>
                   )}
+                  {searchError && (
+                    <p className="text-danger text-sm text-center py-2">
+                      {searchError}
+                    </p>
+                  )}
                   {results.map((f, i) => (
                     <button
                       key={i}
@@ -361,6 +381,7 @@ export default function FoodLogger({
                     </button>
                   ))}
                   {!searching &&
+                    !searchError &&
                     query.trim().length >= 2 &&
                     results.length === 0 && (
                       <p className="text-muted text-sm text-center py-4">

@@ -227,7 +227,12 @@ export default function ProgressPage() {
         {measurements.some((m) => m.photoDataUrl) && (
           <div className="flex gap-2 overflow-x-auto mt-3">
             {measurements.filter((m) => m.photoDataUrl).slice(-8).map((m) => (
-              <div key={m.id} className="shrink-0"><img src={m.photoDataUrl!} alt={`Progress ${m.day}`} className="w-28 h-36 object-cover rounded-xl border border-border" /><p className="text-[11px] text-muted mt-1">{formatDate(m.day)}</p></div>
+              <div key={m.id} className="shrink-0">
+                {/* Private in-memory data URLs cannot benefit from image optimization. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={m.photoDataUrl!} alt={`Progress ${m.day}`} className="w-28 h-36 object-cover rounded-xl border border-border" />
+                <p className="text-[11px] text-muted mt-1">{formatDate(m.day)}</p>
+              </div>
             ))}
           </div>
         )}
