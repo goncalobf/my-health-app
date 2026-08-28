@@ -14,7 +14,10 @@ interface Item {
   muscleGroup: string | null;
   targetSets: number;
   targetReps: number;
+  minReps: number;
+  maxReps: number;
   targetWeightKg: number | null;
+  weightIncrementKg: number;
   restSeconds: number;
 }
 interface Routine {
@@ -163,12 +166,19 @@ export default function RoutineEditorPage({
                 />
               </label>
               <label className="flex items-center justify-between">
-                <span className="text-sm text-muted">Reps</span>
+                <span className="text-sm text-muted">Min reps</span>
                 <NumField
-                  value={it.targetReps}
+                  value={it.minReps}
                   onCommit={(v) =>
-                    updateItem(it.id, { targetReps: Number(v) || 1 })
+                    updateItem(it.id, { minReps: Number(v) || 1 })
                   }
+                />
+              </label>
+              <label className="flex items-center justify-between">
+                <span className="text-sm text-muted">Max reps</span>
+                <NumField
+                  value={it.maxReps}
+                  onCommit={(v) => updateItem(it.id, { maxReps: Number(v) || 1 })}
                 />
               </label>
               <label className="flex items-center justify-between">
@@ -178,6 +188,15 @@ export default function RoutineEditorPage({
                   step={0.5}
                   suffix="kg"
                   onCommit={(v) => updateItem(it.id, { targetWeightKg: v })}
+                />
+              </label>
+              <label className="flex items-center justify-between">
+                <span className="text-sm text-muted">Increment</span>
+                <NumField
+                  value={it.weightIncrementKg}
+                  step={0.5}
+                  suffix="kg"
+                  onCommit={(v) => updateItem(it.id, { weightIncrementKg: Number(v) || 0.5 })}
                 />
               </label>
               <label className="flex items-center justify-between">

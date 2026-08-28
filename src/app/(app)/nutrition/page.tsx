@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
-import { apiGet, apiDelete } from "@/lib/api";
+import { ChevronLeft, ChevronRight, Plus, Trash2, Pencil, BookmarkPlus } from "lucide-react";
+import { apiGet, apiDelete, apiPatch, apiPost } from "@/lib/api";
 import { todayISO, formatDate, round } from "@/lib/utils";
 import MacroSummary from "@/components/MacroSummary";
 import FoodLogger from "@/components/FoodLogger";
@@ -75,6 +75,19 @@ export default function NutritionPage() {
     loadDay();
   }
 
+  async function editQuantity(log: Log) {
+    const next = window.prompt(`Quantity for ${log.name} (grams)`, String(log.quantityG));
+    if (next == null || !Number(next) || Number(next) <= 0) return;
+    await apiPatch(`/api/nutrition/${log.id}`, { quantityG: Number(next) });
+    loadDay();
+  }
+
+  async function saveMeal(meal: string, items: Log[]) {
+    const name = window.prompt("Save this meal as", `${meal[0].toUpperCase()}${meal.slice(1)} favourite`);
+    if (!name?.trim()) return;
+    await apiPost("/api/meals", { name: name.trim(), items });
+  }
+
   const isToday = day === todayISO();
 
   return (
@@ -124,6 +137,9 @@ export default function NutritionPage() {
                       {round(kcal, 0)} kcal
                     </span>
                   )}
+                  {items.length > 0 && (
+                    <button onClick={() => saveMeal(meal, items)} className="text-muted" aria-label={`Save ${meal} as meal`}><BookmarkPlus size={17} /></button>
+                  )}
                   <button
                     onClick={() => setLogging(meal)}
                     className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center"
@@ -150,6 +166,13 @@ export default function NutritionPage() {
                           {round(l.fatG, 0)}F
                         </p>
                       </div>
+                      <button
+                        onClick={() => editQuantity(l)}
+                        className="text-muted p-1.5"
+                        aria-label="Edit grams"
+                      >
+                        <Pencil size={16} />
+                      </button>
                       <button
                         onClick={() => remove(l.id)}
                         className="text-muted p-1.5"

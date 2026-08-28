@@ -40,7 +40,7 @@ export default function HistoryPage() {
           {rows.map((s) => (
             <Link
               key={s.id}
-              href={`/workouts/session/${s.id}`}
+              href={s.finishedAt ? `/workouts/session/${s.id}/summary` : `/workouts/session/${s.id}`}
               className="card p-4 flex items-center justify-between active:scale-[0.98] transition"
             >
               <div>

@@ -5,12 +5,18 @@ deployed on Vercel.
 
 - **Workouts** — build routines (exercises + target sets/reps/rest), then run a
   live session: log weight & reps per set, with a **manual rest timer** that
-  counts your rest and waits for you to end it (it never auto-starts the next
-  set).
+  counts your rest and waits for you to end it. Rep ranges, per-exercise weight
+  increments, progressive-overload suggestions, deload detection, a fixed
+  weekly schedule, and post-workout summaries are built in.
 - **Nutrition** — native food logging via [Open Food Facts](https://world.openfoodfacts.org/)
   (barcode scan + search, no API key needed) plus manual macro entry. Daily
-  totals vs. your targets.
-- **Progress** — bodyweight trend and per-exercise PRs (estimated 1RM) over time.
+  totals vs. your targets. Recent foods, favourites, gram/serving quantities,
+  reusable meals, and recipes make repeat logging fast.
+- **Adaptive targets** — enter Garmin total calories daily; after enough food,
+  expenditure, and weight data, Fitlog proposes a conservative two-week target
+  update for a recomposition goal.
+- **Progress** — bodyweight, measurements, private progress photos, workout
+  volume, and per-exercise PRs (estimated 1RM) over time.
 - **PWA** — installable on your iPhone home screen, fullscreen, offline shell.
 - Single-password unlock. Everything in **kg**.
 

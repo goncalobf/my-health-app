@@ -1,0 +1,1 @@
+ALTER TABLE "settings" ADD COLUMN "last_target_review_at" timestamp;

@@ -32,7 +32,10 @@ export async function GET(
           muscleGroup: exercises.muscleGroup,
           targetSets: routineExercises.targetSets,
           targetReps: routineExercises.targetReps,
+          minReps: routineExercises.minReps,
+          maxReps: routineExercises.maxReps,
           targetWeightKg: routineExercises.targetWeightKg,
+          weightIncrementKg: routineExercises.weightIncrementKg,
           restSeconds: routineExercises.restSeconds,
           position: routineExercises.position,
         })
@@ -44,8 +47,20 @@ export async function GET(
 
   // Sets already logged in this session.
   const loggedSets = await db
-    .select()
+    .select({
+      id: sessionSets.id,
+      sessionId: sessionSets.sessionId,
+      exerciseId: sessionSets.exerciseId,
+      setNumber: sessionSets.setNumber,
+      weightKg: sessionSets.weightKg,
+      reps: sessionSets.reps,
+      isWarmup: sessionSets.isWarmup,
+      completedAt: sessionSets.completedAt,
+      exerciseName: exercises.name,
+      muscleGroup: exercises.muscleGroup,
+    })
     .from(sessionSets)
+    .innerJoin(exercises, eq(exercises.id, sessionSets.exerciseId))
     .where(eq(sessionSets.sessionId, sessionId))
     .orderBy(asc(sessionSets.exerciseId), asc(sessionSets.setNumber));
 
@@ -56,37 +71,68 @@ export async function GET(
     ...loggedSets.map((s) => s.exerciseId),
   ]);
   const lastSets: Record<number, { weightKg: number; reps: number }[]> = {};
+  const recommendations: Record<number, {
+    action: "start" | "increase" | "repeat" | "reduce";
+    weightKg: number | null;
+    message: string;
+  }> = {};
   for (const exId of exerciseIds) {
-    const [prev] = await db
-      .select({ sessionId: sessionSets.sessionId })
+    const historyRows = await db
+      .select({
+        sessionId: sessionSets.sessionId,
+        weightKg: sessionSets.weightKg,
+        reps: sessionSets.reps,
+        startedAt: sessions.startedAt,
+      })
       .from(sessionSets)
       .innerJoin(sessions, eq(sessions.id, sessionSets.sessionId))
       .where(
         and(
           eq(sessionSets.exerciseId, exId),
           ne(sessionSets.sessionId, sessionId),
-          isNotNull(sessions.finishedAt)
+          isNotNull(sessions.finishedAt),
+          isNotNull(sessionSets.completedAt),
+          eq(sessionSets.isWarmup, false)
         )
       )
-      .orderBy(desc(sessions.startedAt))
-      .limit(1);
-    if (prev) {
-      const sets = await db
-        .select({ weightKg: sessionSets.weightKg, reps: sessionSets.reps })
-        .from(sessionSets)
-        .where(
-          and(
-            eq(sessionSets.sessionId, prev.sessionId),
-            eq(sessionSets.exerciseId, exId),
-            eq(sessionSets.isWarmup, false)
-          )
-        )
-        .orderBy(asc(sessionSets.setNumber));
-      if (sets.length) lastSets[exId] = sets;
+      .orderBy(desc(sessions.startedAt), asc(sessionSets.setNumber));
+
+    const grouped = new Map<number, { weightKg: number; reps: number }[]>();
+    for (const row of historyRows) {
+      if (!grouped.has(row.sessionId) && grouped.size >= 2) continue;
+      const group = grouped.get(row.sessionId) ?? [];
+      group.push({ weightKg: row.weightKg, reps: row.reps });
+      grouped.set(row.sessionId, group);
+    }
+    const history = [...grouped.values()];
+    if (history[0]?.length) lastSets[exId] = history[0];
+
+    const item = plan.find((p) => p.exerciseId === exId);
+    if (!item || !history[0]?.length) {
+      recommendations[exId] = {
+        action: "start",
+        weightKg: item?.targetWeightKg ?? null,
+        message: item?.targetWeightKg ? `Start at ${item.targetWeightKg}kg` : "Choose a comfortable starting weight",
+      };
+      continue;
+    }
+    const latest = history[0];
+    const workingWeight = Math.max(...latest.map((s) => s.weightKg));
+    const enoughSets = latest.length >= item.targetSets;
+    const hitTop = enoughSets && latest.every((s) => s.reps >= item.maxReps);
+    const missedTwice = history.length >= 2 && history.slice(0, 2).every((sets) => sets.some((s) => s.reps < item.minReps));
+    if (hitTop) {
+      const next = Math.round((workingWeight + item.weightIncrementKg) * 10) / 10;
+      recommendations[exId] = { action: "increase", weightKg: next, message: `Progress to ${next}kg · aim for ${item.minReps}–${item.maxReps} reps` };
+    } else if (missedTwice) {
+      const next = Math.max(0, Math.round((workingWeight - item.weightIncrementKg) * 10) / 10);
+      recommendations[exId] = { action: "reduce", weightKg: next, message: `Deload to ${next}kg after two difficult sessions` };
+    } else {
+      recommendations[exId] = { action: "repeat", weightKg: workingWeight, message: `Repeat ${workingWeight}kg · build toward ${item.maxReps} reps` };
     }
   }
 
-  return NextResponse.json({ session, plan, loggedSets, lastSets });
+  return NextResponse.json({ session, plan, loggedSets, lastSets, recommendations });
 }
 
 export async function PATCH(

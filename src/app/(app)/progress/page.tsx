@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { Plus, Trophy, ChevronDown } from "lucide-react";
+import { Plus, Trophy, ChevronDown, Ruler, Camera } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import { formatDate, todayISO } from "@/lib/utils";
@@ -31,6 +31,11 @@ interface ExPoint {
   date: string;
   est1RM: number;
   topWeightKg: number;
+}
+interface Measurement {
+  id: number; day: string; waistCm: number | null; chestCm: number | null;
+  armsCm: number | null; thighsCm: number | null; bodyFatPct: number | null;
+  notes: string | null; photoDataUrl: string | null;
 }
 
 function Chart({
@@ -92,14 +97,37 @@ export default function ProgressPage() {
   const [weightInput, setWeightInput] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [exData, setExData] = useState<Record<number, ExPoint[]>>({});
+  const [measurements, setMeasurements] = useState<Measurement[]>([]);
+  const [measure, setMeasure] = useState({ waistCm: "", chestCm: "", armsCm: "", thighsCm: "", bodyFatPct: "", notes: "", photoDataUrl: "" });
+  const latestMeasurement = measurements[measurements.length - 1];
+  const recentWeightAvg = bw.length ? bw.slice(-7).reduce((n, x) => n + x.weightKg, 0) / Math.min(7, bw.length) : null;
 
   async function load() {
-    const [p, b] = await Promise.all([
+    const [p, b, m] = await Promise.all([
       apiGet<PR[]>("/api/progress/prs"),
       apiGet<BW[]>("/api/bodyweight"),
+      apiGet<Measurement[]>("/api/measurements"),
     ]);
     setPrs(p);
     setBw(b);
+    setMeasurements(m);
+  }
+
+  async function logMeasurements(e: React.FormEvent) {
+    e.preventDefault();
+    await apiPost("/api/measurements", { ...measure, day: todayISO() });
+    setMeasure({ waistCm: "", chestCm: "", armsCm: "", thighsCm: "", bodyFatPct: "", notes: "", photoDataUrl: "" });
+    setMeasurements(await apiGet<Measurement[]>("/api/measurements"));
+  }
+
+  async function selectPhoto(file?: File) {
+    if (!file) return;
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 900 / bitmap.width);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    setMeasure((m) => ({ ...m, photoDataUrl: canvas.toDataURL("image/jpeg", 0.72) }));
   }
   useEffect(() => {
     load();
@@ -140,6 +168,7 @@ export default function ProgressPage() {
             dataKey="weightKg"
             color="#22d3a6"
           />
+          {recentWeightAvg != null && <p className="text-xs text-muted text-center -mt-1 mb-2">Recent average: <span className="text-text font-semibold">{Math.round(recentWeightAvg * 10) / 10} kg</span></p>}
           <form onSubmit={logWeight} className="flex gap-2 mt-3">
             <input
               type="number"
@@ -155,6 +184,53 @@ export default function ProgressPage() {
             </button>
           </form>
         </div>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="text-sm font-semibold text-muted mb-2">Measurements & photos</h2>
+        <form onSubmit={logMeasurements} className="card p-4 flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              ["waistCm", "Waist (cm)"], ["chestCm", "Chest (cm)"],
+              ["armsCm", "Arms (cm)"], ["thighsCm", "Thighs (cm)"],
+              ["bodyFatPct", "Body fat (%)"],
+            ] as const).map(([key, label]) => (
+              <input key={key} type="number" inputMode="decimal" step={0.1} className="input" placeholder={label}
+                value={measure[key]} onChange={(e) => setMeasure({ ...measure, [key]: e.target.value })} />
+            ))}
+          </div>
+          <input className="input" placeholder="Notes (optional)" value={measure.notes} onChange={(e) => setMeasure({ ...measure, notes: e.target.value })} />
+          <label className="btn-ghost cursor-pointer">
+            <Camera size={18} /> {measure.photoDataUrl ? "Photo selected" : "Add progress photo"}
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => selectPhoto(e.target.files?.[0])} />
+          </label>
+          <button className="btn-primary" disabled={!measure.waistCm && !measure.chestCm && !measure.armsCm && !measure.thighsCm && !measure.bodyFatPct && !measure.photoDataUrl}>
+            <Ruler size={18} /> Save check-in
+          </button>
+        </form>
+        {latestMeasurement && (
+          <div className="card p-4 mt-3">
+            <div className="flex justify-between items-center mb-3"><p className="font-semibold">Latest check-in</p><span className="text-xs text-muted">{formatDate(latestMeasurement.day)}</span></div>
+            <div className="grid grid-cols-3 gap-2">
+              {([['waistCm', 'Waist'], ['chestCm', 'Chest'], ['armsCm', 'Arms'], ['thighsCm', 'Thighs'], ['bodyFatPct', 'Body fat']] as const).map(([key, label]) => latestMeasurement[key] != null ? (
+                <div key={key} className="bg-surface-2 rounded-xl p-2 text-center"><p className="font-bold tabular-nums">{latestMeasurement[key]}<span className="text-[10px] text-muted">{key === 'bodyFatPct' ? '%' : 'cm'}</span></p><p className="text-[10px] text-muted">{label}</p></div>
+              ) : null)}
+            </div>
+          </div>
+        )}
+        {measurements.filter((m) => m.waistCm != null).length >= 2 && (
+          <div className="card p-3 mt-3">
+            <p className="text-xs text-muted mb-2">Waist trend</p>
+            <Chart data={measurements.filter((m) => m.waistCm != null).map((m) => ({ date: m.day, waistCm: m.waistCm! }))} dataKey="waistCm" color="#f5a623" />
+          </div>
+        )}
+        {measurements.some((m) => m.photoDataUrl) && (
+          <div className="flex gap-2 overflow-x-auto mt-3">
+            {measurements.filter((m) => m.photoDataUrl).slice(-8).map((m) => (
+              <div key={m.id} className="shrink-0"><img src={m.photoDataUrl!} alt={`Progress ${m.day}`} className="w-28 h-36 object-cover rounded-xl border border-border" /><p className="text-[11px] text-muted mt-1">{formatDate(m.day)}</p></div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section>

@@ -12,6 +12,13 @@ export async function PATCH(
   const set: Record<string, unknown> = {};
   if (body.targetSets !== undefined) set.targetSets = Number(body.targetSets);
   if (body.targetReps !== undefined) set.targetReps = Number(body.targetReps);
+  if (body.minReps !== undefined) set.minReps = Number(body.minReps);
+  if (body.maxReps !== undefined) {
+    set.maxReps = Number(body.maxReps);
+    set.targetReps = Number(body.maxReps);
+  }
+  if (body.weightIncrementKg !== undefined)
+    set.weightIncrementKg = Number(body.weightIncrementKg);
   if (body.restSeconds !== undefined)
     set.restSeconds = Number(body.restSeconds);
   if (body.targetWeightKg !== undefined)

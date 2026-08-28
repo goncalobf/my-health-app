@@ -7,6 +7,11 @@ const DEFAULT_TARGETS = {
   targetProteinG: 160,
   targetCarbsG: 220,
   targetFatG: 70,
+  goal: "recomposition",
+  targetWeeklyChangePct: -0.25,
+  adaptiveTargets: true,
+  lastTargetReviewAt: null,
+  goalWeightKg: null,
 };
 
 export async function getTargets() {

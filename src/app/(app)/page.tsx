@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, ilike, gte, sql } from "drizzle-orm";
 import { Dumbbell, Apple, Settings, ChevronRight, Scale } from "lucide-react";
 import { db } from "@/db";
-import { nutritionLogs, sessions, bodyweightLogs } from "@/db/schema";
+import { nutritionLogs, sessions, bodyweightLogs, workoutSchedule, routines, expenditureLogs } from "@/db/schema";
 import { getTargets } from "@/lib/server-data";
 import { todayISO, formatDate } from "@/lib/utils";
 import MacroSummary from "@/components/MacroSummary";
+import DailyPlan from "@/components/DailyPlan";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,26 @@ export default async function DashboardPage() {
     .orderBy(desc(bodyweightLogs.day))
     .limit(1);
 
+  const jsDay = new Date().getDay();
+  const dayOfWeek = jsDay === 0 ? 7 : jsDay;
+  let [scheduled] = await db.select({ id: routines.id, name: routines.name })
+    .from(workoutSchedule)
+    .innerJoin(routines, eq(routines.id, workoutSchedule.routineId))
+    .where(eq(workoutSchedule.dayOfWeek, dayOfWeek));
+  if (!scheduled && dayOfWeek <= 6) {
+    const term = dayOfWeek % 3 === 1 ? "push" : dayOfWeek % 3 === 2 ? "pull" : "leg";
+    [scheduled] = await db.select({ id: routines.id, name: routines.name })
+      .from(routines).where(ilike(routines.name, `%${term}%`)).limit(1);
+  }
+  const [todayBurn] = await db.select().from(expenditureLogs).where(eq(expenditureLogs.day, today));
+  const weekStart = new Date();
+  weekStart.setHours(0, 0, 0, 0); weekStart.setDate(weekStart.getDate() - 6);
+  const weekStartDay = new Date(weekStart.getTime() - weekStart.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  const [[training], [nutritionDays]] = await Promise.all([
+    db.select({ count: sql<number>`count(*)::int` }).from(sessions).where(gte(sessions.finishedAt, weekStart)),
+    db.select({ count: sql<number>`count(distinct ${nutritionLogs.day})::int` }).from(nutritionLogs).where(gte(nutritionLogs.day, weekStartDay)),
+  ]);
+
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -57,6 +78,13 @@ export default async function DashboardPage() {
           <Settings size={20} />
         </Link>
       </header>
+
+      <DailyPlan
+        day={today}
+        routine={scheduled ?? null}
+        activeSessionId={lastSession && !lastSession.finishedAt ? lastSession.id : null}
+        garminCalories={todayBurn?.totalCalories ?? null}
+      />
 
       <section className="grid grid-cols-2 gap-3">
         <Link
@@ -84,6 +112,14 @@ export default async function DashboardPage() {
       <section>
         <h2 className="text-sm font-semibold text-muted mb-2">Today</h2>
         <MacroSummary totals={totals} targets={targets} />
+      </section>
+
+      <section>
+        <h2 className="text-sm font-semibold text-muted mb-2">Last 7 days</h2>
+        <div className="card p-4 grid grid-cols-2 gap-4 text-center">
+          <div><p className="text-2xl font-bold text-accent">{training?.count ?? 0}<span className="text-sm text-muted font-normal"> / 6</span></p><p className="text-xs text-muted">Workouts</p></div>
+          <div><p className="text-2xl font-bold text-warn">{nutritionDays?.count ?? 0}<span className="text-sm text-muted font-normal"> / 7</span></p><p className="text-xs text-muted">Nutrition days</p></div>
+        </div>
       </section>
 
       {lastSession && (
@@ -128,9 +164,7 @@ export default async function DashboardPage() {
               <p className="font-semibold">Bodyweight</p>
               <p className="text-xs text-muted">
                 {latestWeight
-                  ? `${latestWeight.weightKg} kg · ${formatDate(
-                      latestWeight.day
-                    )}`
+                  ? `${latestWeight.weightKg} kg${targets.goalWeightKg ? ` → ${targets.goalWeightKg} kg goal` : ""} · ${formatDate(latestWeight.day)}`
                   : "No entries yet"}
               </p>
             </div>

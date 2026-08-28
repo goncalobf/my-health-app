@@ -12,7 +12,10 @@ interface PlanItem {
   name: string;
   targetSets: number;
   targetReps: number;
+  minReps: number;
+  maxReps: number;
   targetWeightKg: number | null;
+  weightIncrementKg: number;
   restSeconds: number;
 }
 interface LoggedSet {
@@ -29,6 +32,11 @@ interface SessionData {
   plan: PlanItem[];
   loggedSets: LoggedSet[];
   lastSets: Record<number, { weightKg: number; reps: number }[]>;
+  recommendations: Record<number, {
+    action: "start" | "increase" | "repeat" | "reduce";
+    weightKg: number | null;
+    message: string;
+  }>;
 }
 
 interface LocalSet {
@@ -44,6 +52,7 @@ interface Block {
   targetReps: number;
   restSeconds: number;
   lastSets: { weightKg: number; reps: number }[];
+  recommendation?: SessionData["recommendations"][number];
   sets: LocalSet[];
 }
 
@@ -73,6 +82,10 @@ export default function SessionPage({
       apiGet<{ id: number; name: string }[]>("/api/exercises"),
     ]);
     const exMap = new Map(exercises.map((e) => [e.id, e.name]));
+    if (data.session.finishedAt) {
+      router.replace(`/workouts/session/${id}/summary`);
+      return;
+    }
     setName(data.session.name);
 
     const built: Block[] = [];
@@ -99,7 +112,9 @@ export default function SessionPage({
         const count = Math.max(1, (opts as { targetSets?: number }).targetSets ?? 1);
         sets = Array.from({ length: count }, (_, i) => ({
           key: nk(),
-          weight: last[i]?.weightKg ? String(last[i].weightKg) : "",
+          weight: data.recommendations[exerciseId]?.weightKg != null
+            ? String(data.recommendations[exerciseId].weightKg)
+            : last[i]?.weightKg ? String(last[i].weightKg) : "",
           reps: last[i]?.reps
             ? String(last[i].reps)
             : opts.targetReps
@@ -114,6 +129,7 @@ export default function SessionPage({
         targetReps: opts.targetReps,
         restSeconds: opts.restSeconds,
         lastSets: last,
+        recommendation: data.recommendations[exerciseId],
         sets,
       };
     };
@@ -255,6 +271,7 @@ export default function SessionPage({
         targetReps: 0,
         restSeconds: 120,
         lastSets: [],
+        recommendation: undefined,
         sets: [{ key: nk(), weight: "", reps: "", completed: false }],
       },
     ]);
@@ -262,7 +279,7 @@ export default function SessionPage({
 
   async function finish() {
     await apiPatch(`/api/sessions/${id}`, { finish: true });
-    router.replace("/workouts/history");
+    router.replace(`/workouts/session/${id}/summary`);
   }
 
   async function discard() {
@@ -314,7 +331,16 @@ export default function SessionPage({
       <div className="flex flex-col gap-4">
         {blocks.map((b, exIdx) => (
           <div key={`${b.exerciseId}-${exIdx}`} className="card p-4">
-            <p className="font-semibold mb-3">{b.name}</p>
+            <p className="font-semibold">{b.name}</p>
+            {b.recommendation && (
+              <p className={`text-xs mb-3 ${
+                b.recommendation.action === "increase" ? "text-accent" :
+                b.recommendation.action === "reduce" ? "text-warn" : "text-muted"
+              }`}>
+                {b.recommendation.message}
+              </p>
+            )}
+            {!b.recommendation && <div className="mb-3" />}
 
             <div className="grid grid-cols-[24px_1fr_1fr_44px] gap-2 items-center text-[11px] text-muted uppercase tracking-wide mb-1 px-1">
               <span>#</span>

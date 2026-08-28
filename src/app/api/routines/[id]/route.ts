@@ -25,7 +25,10 @@ export async function GET(
       position: routineExercises.position,
       targetSets: routineExercises.targetSets,
       targetReps: routineExercises.targetReps,
+      minReps: routineExercises.minReps,
+      maxReps: routineExercises.maxReps,
       targetWeightKg: routineExercises.targetWeightKg,
+      weightIncrementKg: routineExercises.weightIncrementKg,
       restSeconds: routineExercises.restSeconds,
     })
     .from(routineExercises)

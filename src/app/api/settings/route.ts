@@ -28,6 +28,14 @@ export async function PATCH(req: Request) {
   if (body.targetCarbsG !== undefined)
     set.targetCarbsG = Number(body.targetCarbsG);
   if (body.targetFatG !== undefined) set.targetFatG = Number(body.targetFatG);
+  if (body.goal !== undefined) set.goal = String(body.goal);
+  if (body.targetWeeklyChangePct !== undefined)
+    set.targetWeeklyChangePct = Number(body.targetWeeklyChangePct);
+  if (body.adaptiveTargets !== undefined)
+    set.adaptiveTargets = !!body.adaptiveTargets;
+  if (body.reviewAdaptiveTarget === true) set.lastTargetReviewAt = new Date();
+  if (body.goalWeightKg !== undefined)
+    set.goalWeightKg = body.goalWeightKg === "" || body.goalWeightKg == null ? null : Number(body.goalWeightKg);
 
   const [row] = await db
     .update(settings)

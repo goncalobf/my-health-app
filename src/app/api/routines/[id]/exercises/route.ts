@@ -29,10 +29,14 @@ export async function POST(
       position: (max ?? 0) + 1,
       targetSets: body.targetSets ? Number(body.targetSets) : 3,
       targetReps: body.targetReps ? Number(body.targetReps) : 10,
+      minReps: body.minReps ? Number(body.minReps) : 8,
+      maxReps: body.maxReps ? Number(body.maxReps) : 12,
       targetWeightKg:
         body.targetWeightKg != null && body.targetWeightKg !== ""
           ? Number(body.targetWeightKg)
           : null,
+      weightIncrementKg:
+        body.weightIncrementKg != null ? Number(body.weightIncrementKg) : 2.5,
       restSeconds: body.restSeconds ? Number(body.restSeconds) : 120,
     })
     .returning();
