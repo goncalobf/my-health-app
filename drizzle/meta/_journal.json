@@ -50,6 +50,13 @@
       "when": 1787944707703,
       "tag": "0006_minor_puff_adder",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787945901967,
+      "tag": "0007_dry_colleen_wing",
+      "breakpoints": true
     }
   ]
 }

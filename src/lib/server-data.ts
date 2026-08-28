@@ -8,6 +8,7 @@ const DEFAULT_TARGETS = {
   targetCarbsG: 220,
   targetFatG: 70,
   goal: "recomposition",
+  goalStartedOn: null,
   targetWeeklyChangePct: -0.25,
   adaptiveTargets: true,
   lastTargetReviewAt: null,

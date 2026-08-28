@@ -1,0 +1,1 @@
+ALTER TABLE "settings" ADD COLUMN "goal_started_on" date;

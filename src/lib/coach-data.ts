@@ -18,6 +18,7 @@ import {
   startOfAppDay,
   todayISO,
 } from "@/lib/utils";
+import { buildNutritionPhase } from "@/lib/nutrition-phase";
 
 function isoDaysAgo(days: number) {
   return shiftISODate(todayISO(), -days);
@@ -147,6 +148,13 @@ export async function getCoachSnapshot({
     schedule,
     routineTargets,
     commonFoods,
+    nutritionPhase: buildNutritionPhase({
+      goal: setting?.goal ?? "recomposition",
+      startedOn: setting?.goalStartedOn ?? null,
+      today,
+      targetWeeklyChangePct: setting?.targetWeeklyChangePct ?? -0.25,
+      weights,
+    }),
     dataCoverage: {
       weighIns: weights.length,
       garminDays: expenditures.length,

@@ -6,6 +6,7 @@ import { api, apiGet, apiPatch, apiPost } from "@/lib/api";
 import type { CoachChatPayload, CoachMealPayload } from "@/lib/coach";
 import CoachInsightCard, { CoachInsightRow } from "@/components/CoachInsightCard";
 import PageHeader from "@/components/PageHeader";
+import NutritionPhaseCard from "@/components/NutritionPhaseCard";
 
 interface Message { id: number; role: "user" | "assistant"; content: string; createdAt: string; }
 
@@ -72,6 +73,10 @@ export default function CoachPage() {
       <PageHeader title="Fitlog Coach" />
       <div className="card p-4 mb-5 bg-gradient-to-br from-accent/15 to-transparent border-accent/30">
         <div className="flex items-center gap-3"><Brain size={24} className="text-accent" /><div><p className="font-semibold">Your private training partner</p><p className="text-xs text-muted">Evidence from your Fitlog data, reviewed by you.</p></div></div>
+      </div>
+
+      <div className="mb-5">
+        <NutritionPhaseCard />
       </div>
 
       <section className="mb-6">

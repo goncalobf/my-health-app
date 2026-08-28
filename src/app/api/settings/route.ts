@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { settings } from "@/db/schema";
+import { shiftISODate, todayISO } from "@/lib/utils";
 
 async function getOrCreate() {
   const [existing] = await db
@@ -31,6 +32,21 @@ export async function PATCH(req: Request) {
     set.targetCarbsG = Number(body.targetCarbsG);
   if (body.targetFatG !== undefined) set.targetFatG = Number(body.targetFatG);
   if (body.goal !== undefined) set.goal = String(body.goal);
+  if (body.goalStartedOn !== undefined) {
+    const day = body.goalStartedOn ? String(body.goalStartedOn) : null;
+    if (
+      day !== null &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+        shiftISODate(day, 0) !== day ||
+        day > todayISO())
+    ) {
+      return NextResponse.json(
+        { error: "Enter a valid phase start date that is not in the future." },
+        { status: 400 }
+      );
+    }
+    set.goalStartedOn = day;
+  }
   if (body.targetWeeklyChangePct !== undefined)
     set.targetWeeklyChangePct = Number(body.targetWeeklyChangePct);
   if (body.adaptiveTargets !== undefined)

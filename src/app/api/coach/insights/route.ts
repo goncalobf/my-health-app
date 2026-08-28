@@ -37,8 +37,8 @@ export async function POST(req: Request) {
 
   const snapshot = await getCoachSnapshot({ days: kind === "weekly" ? 28 : 14, sessionId });
   const tasks: Record<string, string> = {
-    daily: "Create 1-3 useful coaching insights for today. Prioritize adherence, remaining macros, scheduled training, and recent trends. Do not invent missing data.",
-    weekly: "Create a weekly recomposition review with 3-5 prioritized insights covering training progression, nutrition consistency, Garmin expenditure, weight trend, and recovery signals inferred only from performance. Give concrete next-week actions.",
+    daily: "Create 1-3 useful coaching insights for today. Prioritize any nutrition-phase check-in that is due, adherence, remaining macros, scheduled training, and recent trends. State the cutting week only when nutritionPhase is active. Do not invent missing data.",
+    weekly: "Create a weekly recomposition review with 3-5 prioritized insights covering the current nutrition-phase duration and rate, training progression, nutrition consistency, Garmin expenditure, weight trend, and recovery signals inferred only from performance. There is no universal maximum cut length: use the supplied evidence rules and make diet breaks conditional on recovery, performance, symptoms, and adherence. Give concrete next-week actions.",
     post_workout: "Analyze this completed workout. Compare performance only with history present in the data, recognize progress, flag repeated under-performance cautiously, and give practical next-session guidance without overriding Fitlog's calculated targets.",
   };
   try {

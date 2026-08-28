@@ -13,6 +13,7 @@ interface Targets {
   targetCarbsG: number;
   targetFatG: number;
   goal: string;
+  goalStartedOn: string | null;
   targetWeeklyChangePct: number;
   adaptiveTargets: boolean;
   currentWeightKg: number | null;
@@ -197,6 +198,20 @@ export default function SettingsPage() {
             <option value="maintenance">Maintain</option>
             <option value="muscle_gain">Gain muscle</option>
           </select>
+        </label>
+        <label>
+          <span className="label">Goal phase started</span>
+          <input
+            type="date"
+            className="input mt-1"
+            value={t.goalStartedOn ?? ""}
+            onChange={(e) =>
+              setT({ ...t, goalStartedOn: e.target.value || null })
+            }
+          />
+          <span className="text-[11px] text-muted mt-1 block">
+            Used to track cut duration and schedule evidence-based check-ins. Backdate it if your current phase already started.
+          </span>
         </label>
         <label className="flex items-center justify-between gap-3">
           <span>

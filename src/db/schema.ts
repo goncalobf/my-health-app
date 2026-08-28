@@ -112,6 +112,7 @@ export const settings = pgTable("settings", {
   targetCarbsG: real("target_carbs_g").notNull().default(220),
   targetFatG: real("target_fat_g").notNull().default(70),
   goal: text("goal").notNull().default("recomposition"),
+  goalStartedOn: date("goal_started_on"),
   targetWeeklyChangePct: real("target_weekly_change_pct")
     .notNull()
     .default(-0.25),

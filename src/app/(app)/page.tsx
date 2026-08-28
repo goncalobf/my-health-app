@@ -15,6 +15,7 @@ import {
 import MacroSummary from "@/components/MacroSummary";
 import DailyPlan from "@/components/DailyPlan";
 import CoachDashboardCard from "@/components/CoachDashboardCard";
+import NutritionPhaseCard from "@/components/NutritionPhaseCard";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,8 @@ export default async function DashboardPage() {
         activeSessionId={lastSession && !lastSession.finishedAt ? lastSession.id : null}
         garminCalories={todayBurn?.totalCalories ?? null}
       />
+
+      <NutritionPhaseCard />
 
       <CoachDashboardCard />
 
