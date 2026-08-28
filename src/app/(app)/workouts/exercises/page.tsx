@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2, Search } from "lucide-react";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import ExerciseImage from "@/components/ExerciseImage";
 
 interface Exercise {
   id: number;
@@ -11,6 +12,7 @@ interface Exercise {
   muscleGroup: string | null;
   equipment: string | null;
   category: string | null;
+  imageUrl: string | null;
 }
 
 const RESULT_LIMIT = 100;
@@ -120,8 +122,13 @@ export default function ExercisesPage() {
 
       <div className="flex flex-col gap-2">
         {visible.map((x) => (
-          <div key={x.id} className="card px-4 py-3 flex items-center gap-3">
-            <div className="flex-1">
+          <div key={x.id} className="card flex items-center gap-3 p-2">
+            <ExerciseImage
+              name={x.name}
+              imageUrl={x.imageUrl}
+              className="h-16 w-16"
+            />
+            <div className="min-w-0 flex-1">
               <p className="font-medium">{x.name}</p>
               {(x.muscleGroup || x.equipment) && (
                 <p className="text-xs text-muted">

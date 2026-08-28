@@ -21,6 +21,7 @@ export const exercises = pgTable(
     category: text("category"),
     source: text("source"),
     externalId: text("external_id"),
+    imageUrl: text("image_url"),
     notes: text("notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },

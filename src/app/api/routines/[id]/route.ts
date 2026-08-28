@@ -22,6 +22,7 @@ export async function GET(
       exerciseId: routineExercises.exerciseId,
       name: exercises.name,
       muscleGroup: exercises.muscleGroup,
+      imageUrl: exercises.imageUrl,
       position: routineExercises.position,
       targetSets: routineExercises.targetSets,
       targetReps: routineExercises.targetReps,

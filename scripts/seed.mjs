@@ -81,7 +81,8 @@ async function main() {
   const library = await syncExerciseLibrary(sql);
   console.log(
     `Exercise library synced: ${library.total} source records, ` +
-      `${library.inserted} added, ${library.updated} refreshed.`
+      `${library.inserted} added, ${library.updated} refreshed, ` +
+      `${library.aliased} local names linked.`
   );
   await sql`INSERT INTO settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING`;
   await sql`

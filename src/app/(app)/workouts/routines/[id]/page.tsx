@@ -6,12 +6,14 @@ import { Plus, Trash2, Play, Timer } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import ExercisePicker from "@/components/ExercisePicker";
+import ExerciseImage from "@/components/ExerciseImage";
 
 interface Item {
   id: number;
   exerciseId: number;
   name: string;
   muscleGroup: string | null;
+  imageUrl: string | null;
   targetSets: number;
   targetReps: number;
   minReps: number;
@@ -140,8 +142,13 @@ export default function RoutineEditorPage({
       <div className="flex flex-col gap-3">
         {routine.exercises.map((it) => (
           <div key={it.id} className="card p-4">
-            <div className="flex items-start justify-between mb-3">
-              <div>
+            <div className="mb-3 flex items-start gap-3">
+              <ExerciseImage
+                name={it.name}
+                imageUrl={it.imageUrl}
+                className="h-14 w-14"
+              />
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold">{it.name}</p>
                 {it.muscleGroup && (
                   <p className="text-xs text-muted">{it.muscleGroup}</p>
@@ -149,7 +156,7 @@ export default function RoutineEditorPage({
               </div>
               <button
                 onClick={() => removeItem(it.id)}
-                className="text-muted p-1"
+                className="shrink-0 p-1 text-muted"
                 aria-label="Remove"
               >
                 <Trash2 size={18} />

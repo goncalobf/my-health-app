@@ -7,9 +7,10 @@ import { apiGet } from "@/lib/api";
 import { est1RM, formatDuration, round } from "@/lib/utils";
 import PageHeader from "@/components/PageHeader";
 import WorkoutCoach from "@/components/WorkoutCoach";
+import ExerciseImage from "@/components/ExerciseImage";
 
-interface SetRow { exerciseId: number; exerciseName: string; muscleGroup: string | null; weightKg: number; reps: number; completedAt: string | null; isWarmup: boolean; }
-interface Plan { exerciseId: number; name: string; muscleGroup: string | null; targetSets: number; minReps: number; maxReps: number; weightIncrementKg: number; }
+interface SetRow { exerciseId: number; exerciseName: string; exerciseImageUrl: string | null; muscleGroup: string | null; weightKg: number; reps: number; completedAt: string | null; isWarmup: boolean; }
+interface Plan { exerciseId: number; name: string; imageUrl: string | null; muscleGroup: string | null; targetSets: number; minReps: number; maxReps: number; weightIncrementKg: number; }
 interface Data {
   session: { name: string; startedAt: string; finishedAt: string | null };
   plan: Plan[];
@@ -71,7 +72,7 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
 
       <h2 className="text-sm font-semibold text-muted mb-2">Exercise recap & next target</h2>
       <div className="flex flex-col gap-3">
-        {(data.plan.length ? data.plan : [...new Map(summary.sets.map((s) => [s.exerciseId, { exerciseId: s.exerciseId, name: s.exerciseName, muscleGroup: s.muscleGroup, targetSets: 1, minReps: 0, maxReps: 0, weightIncrementKg: 2.5 }])).values()]).map((p) => {
+        {(data.plan.length ? data.plan : [...new Map(summary.sets.map((s) => [s.exerciseId, { exerciseId: s.exerciseId, name: s.exerciseName, imageUrl: s.exerciseImageUrl, muscleGroup: s.muscleGroup, targetSets: 1, minReps: 0, maxReps: 0, weightIncrementKg: 2.5 }])).values()]).map((p) => {
           const sets = summary.sets.filter((s) => s.exerciseId === p.exerciseId);
           if (!sets.length) return null;
           const weight = Math.max(...sets.map((s) => s.weightKg));
@@ -80,8 +81,9 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
           const next = completedTop ? round(weight + p.weightIncrementKg, 1) : weight;
           return (
             <div key={p.exerciseId} className="card p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div><p className="font-semibold">{p.name}</p><p className="text-xs text-muted">{sets.map((s) => `${s.weightKg}×${s.reps}`).join(" · ")}</p></div>
+              <div className="flex items-start gap-3">
+                <ExerciseImage name={p.name} imageUrl={p.imageUrl} className="h-14 w-14" />
+                <div className="min-w-0 flex-1"><p className="font-semibold">{p.name}</p><p className="text-xs text-muted">{sets.map((s) => `${s.weightKg}×${s.reps}`).join(" · ")}</p></div>
                 <TrendingUp size={19} className={completedTop ? "text-accent" : "text-muted"} />
               </div>
               <p className={`text-sm mt-2 ${completedTop ? "text-accent" : "text-muted"}`}>

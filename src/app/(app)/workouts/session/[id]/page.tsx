@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { Check, Plus, Trash2, Flag, X, Dumbbell } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import ExercisePicker from "@/components/ExercisePicker";
+import ExerciseImage from "@/components/ExerciseImage";
 import RestTimer from "@/components/RestTimer";
 
 interface PlanItem {
   exerciseId: number;
   name: string;
+  imageUrl: string | null;
   targetSets: number;
   targetReps: number;
   minReps: number;
@@ -49,6 +51,7 @@ interface LocalSet {
 interface Block {
   exerciseId: number;
   name: string;
+  imageUrl: string | null;
   targetReps: number;
   restSeconds: number;
   lastSets: { weightKg: number; reps: number }[];
@@ -79,9 +82,11 @@ export default function SessionPage({
   const load = useCallback(async () => {
     const [data, exercises] = await Promise.all([
       apiGet<SessionData>(`/api/sessions/${id}`),
-      apiGet<{ id: number; name: string }[]>("/api/exercises"),
+      apiGet<{ id: number; name: string; imageUrl: string | null }[]>(
+        "/api/exercises"
+      ),
     ]);
-    const exMap = new Map(exercises.map((e) => [e.id, e.name]));
+    const exMap = new Map(exercises.map((exercise) => [exercise.id, exercise]));
     if (data.session.finishedAt) {
       router.replace(`/workouts/session/${id}/summary`);
       return;
@@ -93,7 +98,12 @@ export default function SessionPage({
 
     const makeBlock = (
       exerciseId: number,
-      opts: { name: string; targetReps: number; restSeconds: number }
+      opts: {
+        name: string;
+        imageUrl: string | null;
+        targetReps: number;
+        restSeconds: number;
+      }
     ): Block => {
       const logged = data.loggedSets
         .filter((s) => s.exerciseId === exerciseId)
@@ -126,6 +136,7 @@ export default function SessionPage({
       return {
         exerciseId,
         name: opts.name,
+        imageUrl: opts.imageUrl,
         targetReps: opts.targetReps,
         restSeconds: opts.restSeconds,
         lastSets: last,
@@ -139,6 +150,7 @@ export default function SessionPage({
       built.push(
         makeBlock(p.exerciseId, {
           name: p.name,
+          imageUrl: p.imageUrl,
           targetReps: p.targetReps,
           restSeconds: p.restSeconds,
           ...({ targetSets: p.targetSets } as object),
@@ -148,9 +160,11 @@ export default function SessionPage({
     for (const s of data.loggedSets) {
       if (seen.has(s.exerciseId)) continue;
       seen.add(s.exerciseId);
+      const exercise = exMap.get(s.exerciseId);
       built.push(
         makeBlock(s.exerciseId, {
-          name: exMap.get(s.exerciseId) ?? "Exercise",
+          name: exercise?.name ?? "Exercise",
+          imageUrl: exercise?.imageUrl ?? null,
           targetReps: 0,
           restSeconds: 120,
         })
@@ -259,15 +273,16 @@ export default function SessionPage({
 
   async function addExercise(exerciseId: number) {
     setPicking(false);
-    const exercises = await apiGet<{ id: number; name: string }[]>(
-      "/api/exercises"
-    );
+    const exercises = await apiGet<
+      { id: number; name: string; imageUrl: string | null }[]
+    >("/api/exercises");
     const ex = exercises.find((e) => e.id === exerciseId);
     setBlocks((bs) => [
       ...bs,
       {
         exerciseId,
         name: ex?.name ?? "Exercise",
+        imageUrl: ex?.imageUrl ?? null,
         targetReps: 0,
         restSeconds: 120,
         lastSets: [],
@@ -358,22 +373,31 @@ export default function SessionPage({
             key={`${b.exerciseId}-${exIdx}`}
             className="card min-w-0 overflow-hidden p-3 sm:p-4"
           >
-            <div className="flex items-start justify-between gap-3">
-              <p className="min-w-0 break-words font-semibold leading-snug">
-                {b.name}
-              </p>
-              <span className="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[11px] text-muted tabular-nums">
-                {b.sets.filter((set) => set.completed).length}/{b.sets.length}
-              </span>
+            <div className="flex items-start gap-3">
+              <ExerciseImage
+                name={b.name}
+                imageUrl={b.imageUrl}
+                className="h-14 w-14"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="min-w-0 break-words font-semibold leading-snug">
+                    {b.name}
+                  </p>
+                  <span className="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[11px] text-muted tabular-nums">
+                    {b.sets.filter((set) => set.completed).length}/{b.sets.length}
+                  </span>
+                </div>
+                {b.recommendation && (
+                  <p className={`mt-1 text-xs ${
+                    b.recommendation.action === "increase" ? "text-accent" :
+                    b.recommendation.action === "reduce" ? "text-warn" : "text-muted"
+                  }`}>
+                    {b.recommendation.message}
+                  </p>
+                )}
+              </div>
             </div>
-            {b.recommendation && (
-              <p className={`mt-1 text-xs ${
-                b.recommendation.action === "increase" ? "text-accent" :
-                b.recommendation.action === "reduce" ? "text-warn" : "text-muted"
-              }`}>
-                {b.recommendation.message}
-              </p>
-            )}
 
             <div className="mt-4 grid grid-cols-[1.5rem_minmax(0,1fr)_minmax(0,0.72fr)_2.75rem] items-center gap-2 px-1 text-center text-[10px] uppercase tracking-wide text-muted">
               <span className="text-left">Set</span>

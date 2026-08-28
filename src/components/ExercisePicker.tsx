@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Search, Plus, X } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
+import ExerciseImage from "@/components/ExerciseImage";
 
 interface Exercise {
   id: number;
@@ -10,6 +11,7 @@ interface Exercise {
   muscleGroup: string | null;
   equipment: string | null;
   category: string | null;
+  imageUrl: string | null;
 }
 
 const RESULT_LIMIT = 100;
@@ -82,9 +84,14 @@ export default function ExercisePicker({
             <button
               key={x.id}
               onClick={() => onPick(x.id)}
-              className="card px-4 py-3 flex items-center gap-3 text-left active:scale-[0.98] transition"
+              className="card flex items-center gap-3 p-2 text-left transition active:scale-[0.98]"
             >
-              <div className="flex-1">
+              <ExerciseImage
+                name={x.name}
+                imageUrl={x.imageUrl}
+                className="h-16 w-16"
+              />
+              <div className="min-w-0 flex-1">
                 <p className="font-medium">{x.name}</p>
                 {(x.muscleGroup || x.equipment) && (
                   <p className="text-xs text-muted">

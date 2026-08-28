@@ -30,6 +30,7 @@ export async function GET(
           exerciseId: routineExercises.exerciseId,
           name: exercises.name,
           muscleGroup: exercises.muscleGroup,
+          imageUrl: exercises.imageUrl,
           targetSets: routineExercises.targetSets,
           targetReps: routineExercises.targetReps,
           minReps: routineExercises.minReps,
@@ -58,6 +59,7 @@ export async function GET(
       completedAt: sessionSets.completedAt,
       exerciseName: exercises.name,
       muscleGroup: exercises.muscleGroup,
+      exerciseImageUrl: exercises.imageUrl,
     })
     .from(sessionSets)
     .innerJoin(exercises, eq(exercises.id, sessionSets.exerciseId))
