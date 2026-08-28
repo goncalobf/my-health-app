@@ -15,6 +15,11 @@ deployed on Vercel.
 - **Adaptive targets** — enter Garmin total calories daily; after enough food,
   expenditure, and weight data, Fitlog proposes a conservative two-week target
   update for a recomposition goal.
+- **Fitlog Coach** — optional private AI guidance using aggregated workout,
+  nutrition, bodyweight, and Garmin data: daily insights, weekly reviews,
+  post-workout analysis, macro-aware meal ideas, and chat. Suggestions never
+  change routines or targets without your review. Progress photos and private
+  measurement notes are not sent to the model.
 - **Progress** — bodyweight, measurements, private progress photos, workout
   volume, and per-exercise PRs (estimated 1RM) over time.
 - **PWA** — installable on your iPhone home screen, fullscreen, offline shell.
@@ -35,6 +40,8 @@ Next.js (App Router) · TypeScript · Tailwind · Drizzle ORM · Vercel Postgres
    - `APP_PASSWORD` — the password you'll type to unlock the app.
    - `AUTH_SECRET` — a long random string. Generate one with:
      `openssl rand -base64 32`
+   - `OPENAI_API_KEY` — optional; enables Fitlog Coach. Keep this server-only.
+   - `OPENAI_MODEL` — optional model override (defaults to `gpt-5-mini`).
 4. **Create the tables.** From your machine, with the DB URL available locally:
    ```bash
    npm install

@@ -6,6 +6,7 @@ import { Award, BarChart3, Clock, Dumbbell, Home, TrendingUp } from "lucide-reac
 import { apiGet } from "@/lib/api";
 import { est1RM, formatDuration, round } from "@/lib/utils";
 import PageHeader from "@/components/PageHeader";
+import WorkoutCoach from "@/components/WorkoutCoach";
 
 interface SetRow { exerciseId: number; exerciseName: string; muscleGroup: string | null; weightKg: number; reps: number; completedAt: string | null; isWarmup: boolean; }
 interface Plan { exerciseId: number; name: string; muscleGroup: string | null; targetSets: number; minReps: number; maxReps: number; weightIncrementKg: number; }
@@ -91,6 +92,7 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
         })}
       </div>
 
+      <WorkoutCoach sessionId={Number(id)} />
       <Link href="/" className="btn-primary w-full mt-5"><Home size={18} /> Back to dashboard</Link>
     </div>
   );

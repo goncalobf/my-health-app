@@ -7,6 +7,7 @@ import { getTargets } from "@/lib/server-data";
 import { todayISO, formatDate } from "@/lib/utils";
 import MacroSummary from "@/components/MacroSummary";
 import DailyPlan from "@/components/DailyPlan";
+import CoachDashboardCard from "@/components/CoachDashboardCard";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,8 @@ export default async function DashboardPage() {
         activeSessionId={lastSession && !lastSession.finishedAt ? lastSession.id : null}
         garminCalories={todayBurn?.totalCalories ?? null}
       />
+
+      <CoachDashboardCard />
 
       <section className="grid grid-cols-2 gap-3">
         <Link

@@ -165,6 +165,25 @@ export const measurementLogs = pgTable("measurement_logs", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// AI output is cached in Fitlog so dashboard reads never require a model call.
+// Only aggregated inputs are sent to OpenAI; photos and private notes are excluded.
+export const coachInsights = pgTable("coach_insights", {
+  id: serial("id").primaryKey(),
+  kind: text("kind").notNull(), // daily | weekly | post_workout | meal
+  sourceKey: text("source_key"),
+  payloadJson: text("payload_json").notNull(),
+  model: text("model").notNull(),
+  dismissedAt: timestamp("dismissed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const coachMessages = pgTable("coach_messages", {
+  id: serial("id").primaryKey(),
+  role: text("role").notNull(), // user | assistant
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export type Exercise = typeof exercises.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
 export type RoutineExercise = typeof routineExercises.$inferSelect;
@@ -177,3 +196,5 @@ export type ExpenditureLog = typeof expenditureLogs.$inferSelect;
 export type SavedFood = typeof savedFoods.$inferSelect;
 export type MealTemplate = typeof mealTemplates.$inferSelect;
 export type MeasurementLog = typeof measurementLogs.$inferSelect;
+export type CoachInsight = typeof coachInsights.$inferSelect;
+export type CoachMessage = typeof coachMessages.$inferSelect;
