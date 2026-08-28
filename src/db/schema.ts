@@ -7,16 +7,30 @@ import {
   boolean,
   timestamp,
   date,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-// A user-built library of exercises.
-export const exercises = pgTable("exercises", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  muscleGroup: text("muscle_group"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+// Built-in and user-created exercise library.
+export const exercises = pgTable(
+  "exercises",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    muscleGroup: text("muscle_group"),
+    equipment: text("equipment"),
+    category: text("category"),
+    source: text("source"),
+    externalId: text("external_id"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("exercises_source_external_id_unique").on(
+      table.source,
+      table.externalId
+    ),
+  ]
+);
 
 // A saved workout plan (e.g. "Push A", "Legs").
 export const routines = pgTable("routines", {

@@ -12,7 +12,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "icons": "node scripts/generate-icons.mjs",
-    "seed": "node --env-file=.env.local scripts/seed.mjs"
+    "seed": "node --env-file=.env.local scripts/seed.mjs",
+    "sync:exercises": "node --env-file=.env.local scripts/sync-exercises.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",

@@ -30,7 +30,7 @@ Prefer observed Garmin and weight-trend evidence over a generic activity multipl
 For body recomposition, prioritize a modest sustainable deficit and enough protein to support resistance training. Do not recommend crash dieting or compensatory restriction.
 The calories implied by protein*4 + carbs*4 + fat*9 must be within 8% of targetCalories. Return whole-number daily targets and concise rationale bullets.`,
       data: snapshot,
-      maxOutputTokens: 1400,
+      maxOutputTokens: 2400,
     });
 
     const macroCalories =

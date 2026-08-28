@@ -8,7 +8,11 @@ interface Exercise {
   id: number;
   name: string;
   muscleGroup: string | null;
+  equipment: string | null;
+  category: string | null;
 }
+
+const RESULT_LIMIT = 100;
 
 export default function ExercisePicker({
   onPick,
@@ -28,9 +32,13 @@ export default function ExercisePicker({
     load();
   }, []);
 
+  const query = q.trim().toLowerCase();
   const filtered = list.filter((x) =>
-    x.name.toLowerCase().includes(q.toLowerCase())
+    [x.name, x.muscleGroup, x.equipment, x.category]
+      .filter(Boolean)
+      .some((value) => value!.toLowerCase().includes(query))
   );
+  const visible = filtered.slice(0, RESULT_LIMIT);
 
   async function createAndPick() {
     if (!q.trim()) return;
@@ -70,7 +78,7 @@ export default function ExercisePicker({
           </div>
         </div>
         <div className="overflow-y-auto px-4 pb-4 flex flex-col gap-2">
-          {filtered.map((x) => (
+          {visible.map((x) => (
             <button
               key={x.id}
               onClick={() => onPick(x.id)}
@@ -78,8 +86,10 @@ export default function ExercisePicker({
             >
               <div className="flex-1">
                 <p className="font-medium">{x.name}</p>
-                {x.muscleGroup && (
-                  <p className="text-xs text-muted">{x.muscleGroup}</p>
+                {(x.muscleGroup || x.equipment) && (
+                  <p className="text-xs text-muted">
+                    {[x.muscleGroup, x.equipment].filter(Boolean).join(" · ")}
+                  </p>
                 )}
               </div>
               <Plus size={18} className="text-accent" />
@@ -97,6 +107,12 @@ export default function ExercisePicker({
                 <Plus size={18} /> Create &ldquo;{q.trim()}&rdquo;
               </button>
             )}
+          {filtered.length > RESULT_LIMIT && (
+            <p className="text-muted text-xs text-center py-2">
+              Showing {RESULT_LIMIT} of {filtered.length}. Search by exercise,
+              muscle, or equipment to narrow the list.
+            </p>
+          )}
           {list.length === 0 && !q && (
             <p className="text-muted text-sm text-center py-4">
               No exercises yet — type a name above to create one.

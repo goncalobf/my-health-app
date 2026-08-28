@@ -1,6 +1,7 @@
 // Seeds a starter exercise library and default settings.
 // Run after `npm run db:push` with DATABASE_URL set: `npm run seed`.
 import { neon } from "@neondatabase/serverless";
+import { syncExerciseLibrary } from "./sync-exercises.mjs";
 
 const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 if (!url) {
@@ -66,15 +67,22 @@ const ROUTINES = [
 ];
 
 async function main() {
-  const [{ count }] = await sql`SELECT count(*)::int AS count FROM exercises`;
-  if (count > 0) {
-    console.log(`Exercises already present (${count}) — skipping seed.`);
-  } else {
-    for (const [name, muscle] of EXERCISES) {
-      await sql`INSERT INTO exercises (name, muscle_group) VALUES (${name}, ${muscle})`;
-    }
-    console.log(`Seeded ${EXERCISES.length} exercises.`);
+  for (const [name, muscle] of EXERCISES) {
+    await sql`
+      INSERT INTO exercises (name, muscle_group)
+      SELECT ${name}, ${muscle}
+      WHERE NOT EXISTS (
+        SELECT 1 FROM exercises WHERE lower(name) = lower(${name})
+      )
+    `;
   }
+  console.log(`Ensured ${EXERCISES.length} starter exercises.`);
+
+  const library = await syncExerciseLibrary(sql);
+  console.log(
+    `Exercise library synced: ${library.total} source records, ` +
+      `${library.inserted} added, ${library.updated} refreshed.`
+  );
   await sql`INSERT INTO settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING`;
   await sql`
     UPDATE settings

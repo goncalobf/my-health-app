@@ -9,7 +9,11 @@ interface Exercise {
   id: number;
   name: string;
   muscleGroup: string | null;
+  equipment: string | null;
+  category: string | null;
 }
+
+const RESULT_LIMIT = 100;
 
 const MUSCLES = [
   "Chest",
@@ -59,9 +63,13 @@ export default function ExercisesPage() {
     setList((l) => l.filter((x) => x.id !== id));
   }
 
+  const query = q.trim().toLowerCase();
   const filtered = list.filter((x) =>
-    x.name.toLowerCase().includes(q.toLowerCase())
+    [x.name, x.muscleGroup, x.equipment, x.category]
+      .filter(Boolean)
+      .some((value) => value!.toLowerCase().includes(query))
   );
+  const visible = filtered.slice(0, RESULT_LIMIT);
 
   return (
     <div>
@@ -103,7 +111,7 @@ export default function ExercisesPage() {
           />
           <input
             className="input pl-10"
-            placeholder="Search"
+            placeholder="Search exercise, muscle, or equipment"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -111,12 +119,14 @@ export default function ExercisesPage() {
       )}
 
       <div className="flex flex-col gap-2">
-        {filtered.map((x) => (
+        {visible.map((x) => (
           <div key={x.id} className="card px-4 py-3 flex items-center gap-3">
             <div className="flex-1">
               <p className="font-medium">{x.name}</p>
-              {x.muscleGroup && (
-                <p className="text-xs text-muted">{x.muscleGroup}</p>
+              {(x.muscleGroup || x.equipment) && (
+                <p className="text-xs text-muted">
+                  {[x.muscleGroup, x.equipment].filter(Boolean).join(" · ")}
+                </p>
               )}
             </div>
             <button
@@ -128,6 +138,12 @@ export default function ExercisesPage() {
             </button>
           </div>
         ))}
+        {filtered.length > RESULT_LIMIT && (
+          <p className="text-muted text-xs text-center py-3">
+            Showing {RESULT_LIMIT} of {filtered.length}. Use search to narrow the
+            catalog.
+          </p>
+        )}
         {list.length === 0 && (
           <p className="text-muted text-sm text-center py-6">
             No exercises yet. Add your first above.
