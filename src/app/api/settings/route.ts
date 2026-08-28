@@ -21,6 +21,8 @@ export async function PATCH(req: Request) {
   await getOrCreate();
   const body = await req.json().catch(() => ({}));
   const set: Record<string, unknown> = {};
+  const nullableNumber = (value: unknown) =>
+    value === "" || value == null ? null : Number(value);
   if (body.targetCalories !== undefined)
     set.targetCalories = Number(body.targetCalories);
   if (body.targetProteinG !== undefined)
@@ -35,7 +37,57 @@ export async function PATCH(req: Request) {
     set.adaptiveTargets = !!body.adaptiveTargets;
   if (body.reviewAdaptiveTarget === true) set.lastTargetReviewAt = new Date();
   if (body.goalWeightKg !== undefined)
-    set.goalWeightKg = body.goalWeightKg === "" || body.goalWeightKg == null ? null : Number(body.goalWeightKg);
+    set.goalWeightKg = nullableNumber(body.goalWeightKg);
+  if (body.currentWeightKg !== undefined)
+    set.currentWeightKg = nullableNumber(body.currentWeightKg);
+  if (body.heightCm !== undefined)
+    set.heightCm = nullableNumber(body.heightCm);
+  if (body.ageYears !== undefined)
+    set.ageYears = nullableNumber(body.ageYears);
+  if (body.biologicalSex !== undefined) {
+    const sex = String(body.biologicalSex);
+    set.biologicalSex = ["male", "female", "unspecified"].includes(sex)
+      ? sex
+      : "unspecified";
+  }
+
+  const invalid = Object.values(set).some(
+    (value) => typeof value === "number" && !Number.isFinite(value)
+  );
+  if (invalid) {
+    return NextResponse.json({ error: "Enter valid numeric values." }, { status: 400 });
+  }
+
+  const outOfRange = (
+    key: string,
+    min: number,
+    max: number
+  ) =>
+    typeof set[key] === "number" &&
+    ((set[key] as number) < min || (set[key] as number) > max);
+  if (
+    outOfRange("currentWeightKg", 30, 400) ||
+    outOfRange("goalWeightKg", 30, 400) ||
+    outOfRange("heightCm", 100, 250) ||
+    outOfRange("ageYears", 18, 100)
+  ) {
+    return NextResponse.json(
+      { error: "Check the profile values and try again." },
+      { status: 400 }
+    );
+  }
+  if (
+    outOfRange("targetCalories", 1200, 6000) ||
+    outOfRange("targetProteinG", 0, 350) ||
+    outOfRange("targetCarbsG", 0, 900) ||
+    outOfRange("targetFatG", 20, 250) ||
+    outOfRange("targetWeeklyChangePct", -2, 2)
+  ) {
+    return NextResponse.json(
+      { error: "Check the goal and target values and try again." },
+      { status: 400 }
+    );
+  }
 
   const [row] = await db
     .update(settings)

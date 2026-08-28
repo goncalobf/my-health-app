@@ -11,7 +11,11 @@ const DEFAULT_TARGETS = {
   targetWeeklyChangePct: -0.25,
   adaptiveTargets: true,
   lastTargetReviewAt: null,
+  currentWeightKg: null,
   goalWeightKg: null,
+  heightCm: null,
+  ageYears: null,
+  biologicalSex: "unspecified",
 };
 
 export async function getTargets() {

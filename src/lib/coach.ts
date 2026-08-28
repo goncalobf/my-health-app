@@ -35,6 +35,17 @@ export interface CoachMealPayload {
   caution: string | null;
 }
 
+export interface CoachTargetPayload {
+  targetCalories: number;
+  targetProteinG: number;
+  targetCarbsG: number;
+  targetFatG: number;
+  summary: string;
+  rationale: string[];
+  dataQuality: "low" | "medium" | "high";
+  caution: string | null;
+}
+
 export const insightSchema = {
   type: "object",
   additionalProperties: false,
@@ -97,6 +108,36 @@ export const mealSchema = {
         },
       },
     },
+    caution: { type: ["string", "null"] },
+  },
+} as const;
+
+export const targetSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "targetCalories",
+    "targetProteinG",
+    "targetCarbsG",
+    "targetFatG",
+    "summary",
+    "rationale",
+    "dataQuality",
+    "caution",
+  ],
+  properties: {
+    targetCalories: { type: "integer" },
+    targetProteinG: { type: "integer" },
+    targetCarbsG: { type: "integer" },
+    targetFatG: { type: "integer" },
+    summary: { type: "string" },
+    rationale: {
+      type: "array",
+      minItems: 2,
+      maxItems: 5,
+      items: { type: "string" },
+    },
+    dataQuality: { type: "string", enum: ["low", "medium", "high"] },
     caution: { type: ["string", "null"] },
   },
 } as const;

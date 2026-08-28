@@ -103,7 +103,11 @@ export const settings = pgTable("settings", {
     .default(-0.25),
   adaptiveTargets: boolean("adaptive_targets").notNull().default(true),
   lastTargetReviewAt: timestamp("last_target_review_at"),
+  currentWeightKg: real("current_weight_kg"),
   goalWeightKg: real("goal_weight_kg"),
+  heightCm: real("height_cm"),
+  ageYears: integer("age_years"),
+  biologicalSex: text("biological_sex").notNull().default("unspecified"),
 });
 
 // Bodyweight measurements over time.

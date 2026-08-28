@@ -173,6 +173,8 @@ export default async function DashboardPage() {
               <p className="text-xs text-muted">
                 {latestWeight
                   ? `${latestWeight.weightKg} kg${targets.goalWeightKg ? ` → ${targets.goalWeightKg} kg goal` : ""} · ${formatDate(latestWeight.day)}`
+                  : targets.currentWeightKg
+                    ? `${targets.currentWeightKg} kg${targets.goalWeightKg ? ` → ${targets.goalWeightKg} kg goal` : ""} · profile`
                   : "No entries yet"}
               </p>
             </div>

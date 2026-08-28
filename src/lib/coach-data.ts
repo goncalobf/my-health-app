@@ -121,6 +121,14 @@ export async function getCoachSnapshot({
     goal: setting?.goal ?? "recomposition",
     targetWeeklyChangePct: setting?.targetWeeklyChangePct ?? -0.25,
     goalWeightKg: setting?.goalWeightKg ?? null,
+    profile: {
+      currentWeightKg:
+        setting?.currentWeightKg ?? weights[weights.length - 1]?.weightKg ?? null,
+      goalWeightKg: setting?.goalWeightKg ?? null,
+      heightCm: setting?.heightCm ?? null,
+      ageYears: setting?.ageYears ?? null,
+      biologicalSex: setting?.biologicalSex ?? "unspecified",
+    },
     targets,
     today: {
       nutrition: todayNutrition,

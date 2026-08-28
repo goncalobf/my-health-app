@@ -1,16 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, Check, Flame, Play, RefreshCw } from "lucide-react";
-import { apiGet, apiPatch, apiPost } from "@/lib/api";
-
-interface Proposal {
-  ready: boolean; message?: string;
-  proposed?: { targetCalories: number; targetProteinG: number; targetCarbsG: number; targetFatG: number };
-  current?: { targetCalories: number };
-  evidence?: { averageGarminCalories: number; averageIntake: number; observedWeeklyKg: number; desiredWeeklyKg: number };
-}
+import { Activity, Check, Flame, Play } from "lucide-react";
+import { apiPost } from "@/lib/api";
 
 export default function DailyPlan({ day, routine, activeSessionId, garminCalories }: {
   day: string;
@@ -22,10 +15,6 @@ export default function DailyPlan({ day, routine, activeSessionId, garminCalorie
   const [burn, setBurn] = useState(garminCalories ? String(garminCalories) : "");
   const [burnSaved, setBurnSaved] = useState(!!garminCalories);
   const [starting, setStarting] = useState(false);
-  const [proposal, setProposal] = useState<Proposal | null>(null);
-  const [accepted, setAccepted] = useState(false);
-
-  useEffect(() => { apiGet<Proposal>("/api/adaptive-targets").then(setProposal).catch(() => null); }, []);
 
   async function start() {
     if (activeSessionId) { router.push(`/workouts/session/${activeSessionId}`); return; }
@@ -40,12 +29,6 @@ export default function DailyPlan({ day, routine, activeSessionId, garminCalorie
   async function saveBurn() {
     await apiPost("/api/expenditure", { day, totalCalories: Number(burn) });
     setBurnSaved(true); router.refresh();
-  }
-
-  async function acceptTarget() {
-    if (!proposal?.proposed) return;
-    await apiPatch("/api/settings", { ...proposal.proposed, reviewAdaptiveTarget: true });
-    setAccepted(true); router.refresh();
   }
 
   return (
@@ -69,14 +52,6 @@ export default function DailyPlan({ day, routine, activeSessionId, garminCalorie
         <p className="text-[11px] text-muted mt-2">Copy the Total Calories value from your Forerunner 165 / Garmin Connect.</p>
       </div>
 
-      {proposal?.ready && proposal.proposed && proposal.current && proposal.proposed.targetCalories !== proposal.current.targetCalories && (
-        <div className="card p-4 border-accent/40">
-          <div className="flex items-center gap-2"><RefreshCw size={17} className="text-accent" /><p className="font-semibold">Two-week target review</p></div>
-          <p className="text-sm mt-2">Suggested target: <strong>{proposal.proposed.targetCalories} kcal</strong> · {proposal.proposed.targetProteinG}P · {proposal.proposed.targetCarbsG}C · {proposal.proposed.targetFatG}F</p>
-          {proposal.evidence && <p className="text-xs text-muted mt-1">Garmin avg {proposal.evidence.averageGarminCalories} kcal · weight trend {proposal.evidence.observedWeeklyKg > 0 ? "+" : ""}{proposal.evidence.observedWeeklyKg} kg/week</p>}
-          <button onClick={acceptTarget} disabled={accepted} className="btn-primary w-full mt-3">{accepted ? <><Check size={18} /> Applied</> : "Apply recommendation"}</button>
-        </div>
-      )}
     </div>
   );
 }

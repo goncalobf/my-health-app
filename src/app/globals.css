@@ -19,6 +19,18 @@ body {
     sans-serif;
 }
 
+/* Keep every area scrollable without showing browser scrollbars. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Respect the iPhone notch / home indicator. */
 .safe-top {
   padding-top: env(safe-area-inset-top);

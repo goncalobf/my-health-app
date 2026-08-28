@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { bodyweightLogs } from "@/db/schema";
+import { bodyweightLogs, settings } from "@/db/schema";
 import { todayISO } from "@/lib/utils";
 
 export async function GET() {
@@ -22,5 +22,9 @@ export async function POST(req: Request) {
     .insert(bodyweightLogs)
     .values({ day: body.day || todayISO(), weightKg })
     .returning();
+  await db
+    .update(settings)
+    .set({ currentWeightKg: weightKg })
+    .where(eq(settings.id, 1));
   return NextResponse.json(row, { status: 201 });
 }
