@@ -24,10 +24,13 @@ export default async function AppLayout({
 
   return (
     <div className="app-shell min-h-dvh">
+      {/* BottomNav lives in this same z-10 context so its z-40 competes
+          directly against a modal's z-50, instead of the whole wrapper
+          losing to it as one unit from outside. */}
       <div className="relative z-10 mx-auto max-w-xl px-3 pb-32 pt-4 min-[360px]:px-4 min-[520px]:px-6 safe-top">
         {children}
+        <BottomNav />
       </div>
-      <BottomNav />
     </div>
   );
 }
