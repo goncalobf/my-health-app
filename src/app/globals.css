@@ -113,6 +113,17 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* iOS/Safari centers the date value and sizes it off its own font metrics
+   instead of the input's padding, so it looks off-centre next to every
+   other .input field. (.input already sets min-height itself.) */
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  margin-inline-start: 0.5rem;
+  opacity: 0.7;
+}
+
 @layer components {
   .card {
     @apply relative border border-border bg-surface;

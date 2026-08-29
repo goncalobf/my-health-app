@@ -209,7 +209,7 @@ export default function FoodLogger({
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60">
       <div className="mx-auto flex max-h-[calc(100dvh_-_env(safe-area-inset-top))] w-full max-w-lg flex-col rounded-t-2xl border-t border-border bg-surface safe-bottom">
         {/* Header */}
-        <div className="flex items-center gap-2 p-4 border-b border-border">
+        <div className="shrink-0 flex items-center gap-2 p-4 border-b border-border">
           {selected ? (
             <button
               onClick={() => setSelected(null)}
@@ -227,7 +227,7 @@ export default function FoodLogger({
         </div>
 
         {selected ? (
-          <div className="p-4 flex flex-col gap-4 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 flex flex-col gap-4">
             <div className="flex items-center gap-3">
               {selected.imageUrl && (
                 <Image
@@ -288,7 +288,7 @@ export default function FoodLogger({
         ) : (
           <>
             {/* Tabs */}
-            <div className="grid grid-cols-4 gap-1.5 p-3 pb-0 min-[360px]:gap-2 min-[360px]:p-4 min-[360px]:pb-0">
+            <div className="shrink-0 grid grid-cols-4 gap-1.5 p-3 pb-0 min-[360px]:gap-2 min-[360px]:p-4 min-[360px]:pb-0">
               <TabBtn
                 active={tab === "quick"}
                 onClick={() => setTab("quick")}
@@ -316,7 +316,7 @@ export default function FoodLogger({
             </div>
 
             {tab === "quick" ? (
-              <div className="p-4 overflow-y-auto flex flex-col gap-4">
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 flex flex-col gap-4">
                 {meals.length > 0 && <QuickSection title="Saved meals" icon={<Utensils size={15} />}>
                   {meals.map((m) => <button key={m.id} onClick={() => logMeal(m.id)} disabled={saving} className="card px-3 py-3 text-left">
                     <p className="font-medium">{m.name}</p><p className="text-xs text-muted">{m.items.map((x) => x.name).join(" · ")}</p>
@@ -331,7 +331,7 @@ export default function FoodLogger({
                 {!meals.length && !quick.favorites.length && !quick.recent.length && <p className="text-sm text-muted text-center py-8">Recent foods, favourites and saved meals will appear here.</p>}
               </div>
             ) : tab === "search" ? (
-              <div className="flex flex-col overflow-hidden">
+              <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
                 <div className="p-4">
                   <div className="relative">
                     <Search
@@ -347,7 +347,7 @@ export default function FoodLogger({
                     />
                   </div>
                 </div>
-                <div className="overflow-y-auto px-4 pb-4 flex flex-col gap-2">
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 flex flex-col gap-2">
                   {searching && (
                     <p className="text-muted text-sm text-center py-2">
                       Searching…
@@ -399,7 +399,7 @@ export default function FoodLogger({
                 </div>
               </div>
             ) : (
-              <div className="p-4 flex flex-col gap-3 overflow-y-auto">
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 flex flex-col gap-3">
                 <input
                   className="input"
                   placeholder="Food name"
