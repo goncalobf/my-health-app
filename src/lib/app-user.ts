@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { and, eq, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
@@ -32,7 +33,7 @@ async function initializeUserData(userId: number) {
     .onConflictDoNothing();
 }
 
-export async function getAppUser() {
+export const getAppUser = cache(async function getAppUser() {
   const { data: session } = await auth.getSession();
   const authUser = session?.user;
   if (!authUser?.id || !authUser.email) return null;
@@ -75,7 +76,7 @@ export async function getAppUser() {
   }
 
   return appUser;
-}
+});
 
 export async function requireAppUser() {
   const user = await getAppUser();

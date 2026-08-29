@@ -23,12 +23,76 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const user = await requireAppUser();
   const today = todayISO();
-  const targets = await getTargets(user.id);
-
-  const todayLogs = await db
-    .select()
-    .from(nutritionLogs)
-    .where(and(eq(nutritionLogs.userId, user.id), eq(nutritionLogs.day, today)));
+  const dayOfWeek = dayOfWeekISO(today);
+  const weekStartDay = shiftISODate(today, -6);
+  const weekStart = startOfAppDay(weekStartDay);
+  const [
+    targets,
+    todayLogs,
+    lastSessions,
+    latestWeights,
+    scheduledRoutines,
+    todayBurns,
+    trainingRows,
+    nutritionDayRows,
+  ] = await Promise.all([
+    getTargets(user.id),
+    db
+      .select()
+      .from(nutritionLogs)
+      .where(
+        and(eq(nutritionLogs.userId, user.id), eq(nutritionLogs.day, today))
+      ),
+    db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.userId, user.id))
+      .orderBy(desc(sessions.startedAt))
+      .limit(1),
+    db
+      .select()
+      .from(bodyweightLogs)
+      .where(eq(bodyweightLogs.userId, user.id))
+      .orderBy(desc(bodyweightLogs.day))
+      .limit(1),
+    db
+      .select({ id: routines.id, name: routines.name })
+      .from(workoutSchedule)
+      .innerJoin(routines, eq(routines.id, workoutSchedule.routineId))
+      .where(
+        and(
+          eq(workoutSchedule.userId, user.id),
+          eq(workoutSchedule.dayOfWeek, dayOfWeek)
+        )
+      ),
+    db
+      .select()
+      .from(expenditureLogs)
+      .where(
+        and(eq(expenditureLogs.userId, user.id), eq(expenditureLogs.day, today))
+      ),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(sessions)
+      .where(
+        and(eq(sessions.userId, user.id), gte(sessions.finishedAt, weekStart))
+      ),
+    db
+      .select({ count: sql<number>`count(distinct ${nutritionLogs.day})::int` })
+      .from(nutritionLogs)
+      .where(
+        and(
+          eq(nutritionLogs.userId, user.id),
+          gte(nutritionLogs.day, weekStartDay)
+        )
+      ),
+  ]);
+  const lastSession = lastSessions[0];
+  const latestWeight = latestWeights[0];
+  let scheduled = scheduledRoutines[0];
+  const todayBurn = todayBurns[0];
+  const training = trainingRows[0];
+  const nutritionDays = nutritionDayRows[0];
   const totals = todayLogs.reduce(
     (a, r) => ({
       calories: a.calories + r.calories,
@@ -39,37 +103,11 @@ export default async function DashboardPage() {
     { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 }
   );
 
-  const [lastSession] = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.userId, user.id))
-    .orderBy(desc(sessions.startedAt))
-    .limit(1);
-
-  const [latestWeight] = await db
-    .select()
-    .from(bodyweightLogs)
-    .where(eq(bodyweightLogs.userId, user.id))
-    .orderBy(desc(bodyweightLogs.day))
-    .limit(1);
-
-  const dayOfWeek = dayOfWeekISO(today);
-  let [scheduled] = await db.select({ id: routines.id, name: routines.name })
-    .from(workoutSchedule)
-    .innerJoin(routines, eq(routines.id, workoutSchedule.routineId))
-    .where(and(eq(workoutSchedule.userId, user.id), eq(workoutSchedule.dayOfWeek, dayOfWeek)));
   if (!scheduled && dayOfWeek <= 6) {
     const term = dayOfWeek % 3 === 1 ? "push" : dayOfWeek % 3 === 2 ? "pull" : "leg";
     [scheduled] = await db.select({ id: routines.id, name: routines.name })
       .from(routines).where(and(eq(routines.userId, user.id), ilike(routines.name, `%${term}%`))).limit(1);
   }
-  const [todayBurn] = await db.select().from(expenditureLogs).where(and(eq(expenditureLogs.userId, user.id), eq(expenditureLogs.day, today)));
-  const weekStartDay = shiftISODate(today, -6);
-  const weekStart = startOfAppDay(weekStartDay);
-  const [[training], [nutritionDays]] = await Promise.all([
-    db.select({ count: sql<number>`count(*)::int` }).from(sessions).where(and(eq(sessions.userId, user.id), gte(sessions.finishedAt, weekStart))),
-    db.select({ count: sql<number>`count(distinct ${nutritionLogs.day})::int` }).from(nutritionLogs).where(and(eq(nutritionLogs.userId, user.id), gte(nutritionLogs.day, weekStartDay))),
-  ]);
 
   const hour = hourInAppTimeZone();
   const greeting =

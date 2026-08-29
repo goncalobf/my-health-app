@@ -30,6 +30,7 @@ export default function BottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
+              prefetch={true}
               className={`min-w-0 px-0.5 flex flex-col items-center gap-1 py-2.5 text-[10px] min-[360px]:text-[11px] font-medium transition ${
                 active ? "text-accent" : "text-muted"
               }`}
