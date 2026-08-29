@@ -22,6 +22,7 @@ export async function GET() {
     .where(
       and(
         eq(sessionSets.isWarmup, false),
+        eq(sessionSets.isDropSet, false),
         eq(sessions.userId, user.id),
         gt(sessionSets.reps, 0),
         gt(sessionSets.weightKg, 0),

@@ -10,7 +10,7 @@ import WorkoutCoach from "@/components/WorkoutCoach";
 import ExerciseImage from "@/components/ExerciseImage";
 import { getProgressionRecommendation } from "@/lib/progressive-overload";
 
-interface SetRow { exerciseId: number; exerciseName: string; exerciseImageUrl: string | null; muscleGroup: string | null; weightKg: number; reps: number; rir: number | null; completedAt: string | null; isWarmup: boolean; }
+interface SetRow { exerciseId: number; exerciseName: string; exerciseImageUrl: string | null; muscleGroup: string | null; weightKg: number; reps: number; rir: number | null; completedAt: string | null; isWarmup: boolean; isDropSet: boolean; }
 interface Plan { exerciseId: number; name: string; imageUrl: string | null; muscleGroup: string | null; targetSets: number; minReps: number; maxReps: number; weightIncrementKg: number; targetRirMin: number | null; targetRirMax: number | null; deloadMode: boolean; }
 interface Data {
   session: { name: string; startedAt: string; finishedAt: string | null };
@@ -26,8 +26,12 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
 
   const summary = useMemo(() => {
     if (!data) return null;
-    const sets = data.loggedSets.filter((s) => s.completedAt && !s.isWarmup);
-    const volume = sets.reduce((n, s) => n + s.weightKg * s.reps, 0);
+    // Drops are real work, so they count toward volume, but they are not
+    // working sets and must stay out of set counts, records and progression.
+    const performed = data.loggedSets.filter((s) => s.completedAt && !s.isWarmup);
+    const sets = performed.filter((s) => !s.isDropSet);
+    const dropCount = performed.length - sets.length;
+    const volume = performed.reduce((n, s) => n + s.weightKg * s.reps, 0);
     const duration = data.session.finishedAt
       ? Math.max(0, Math.round((new Date(data.session.finishedAt).getTime() - new Date(data.session.startedAt).getTime()) / 1000))
       : 0;
@@ -43,7 +47,7 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
     const averageRir = loggedRir.length
       ? round(loggedRir.reduce((total, set) => total + set.rir!, 0) / loggedRir.length, 1)
       : null;
-    return { sets, volume, duration, prs, volumeChangePct, muscles, averageRir };
+    return { sets, performed, dropCount, volume, duration, prs, volumeChangePct, muscles, averageRir };
   }, [data]);
 
   if (!data || !summary) return <p className="text-muted text-sm">Building summary…</p>;
@@ -66,7 +70,7 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
       <div className="card p-4 mb-4">
         <p className="text-xs text-muted uppercase tracking-wide">Compared with previous performance</p>
         <p className="font-semibold mt-1">{summary.volumeChangePct == null ? "Your first volume baseline is saved." : `${summary.volumeChangePct >= 0 ? "+" : ""}${summary.volumeChangePct}% training volume`}</p>
-        <div className="flex flex-wrap gap-2 mt-3">{summary.muscles.map(([name, sets]) => <span key={name} className="px-2.5 py-1 rounded-full bg-surface-2 text-xs text-muted">{name} · {sets} sets</span>)}</div>
+        <div className="flex flex-wrap gap-2 mt-3">{summary.muscles.map(([name, sets]) => <span key={name} className="px-2.5 py-1 rounded-full bg-surface-2 text-xs text-muted">{name} · {sets} sets</span>)}{summary.dropCount > 0 && <span className="px-2.5 py-1 rounded-full bg-warn/15 text-xs text-warn">{summary.dropCount} drop{summary.dropCount === 1 ? "" : "s"}</span>}</div>
       </div>
 
       {summary.prs.length > 0 && (
@@ -80,6 +84,7 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
       <div className="flex flex-col gap-3">
         {(data.plan.length ? data.plan : [...new Map(summary.sets.map((s) => [s.exerciseId, { exerciseId: s.exerciseId, name: s.exerciseName, imageUrl: s.exerciseImageUrl, muscleGroup: s.muscleGroup, targetSets: 1, minReps: 0, maxReps: 0, weightIncrementKg: 2.5, targetRirMin: null, targetRirMax: null, deloadMode: false } satisfies Plan])).values()]).map((p) => {
           const sets = summary.sets.filter((s) => s.exerciseId === p.exerciseId);
+          const efforts = summary.performed.filter((s) => s.exerciseId === p.exerciseId);
           if (!sets.length) return null;
           const planned = data.plan.length > 0;
           const recommendation = planned && !p.deloadMode
@@ -92,7 +97,7 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
             <div key={p.exerciseId} className="card p-4">
               <div className="flex items-start gap-3">
                 <ExerciseImage name={p.name} imageUrl={p.imageUrl} className="h-14 w-14" />
-                <div className="min-w-0 flex-1"><p className="font-semibold">{p.name}</p><p className="text-xs text-muted">{sets.map((s) => `${s.weightKg}×${s.reps}${s.rir == null ? "" : ` @${s.rir}RIR`}`).join(" · ")}</p></div>
+                <div className="min-w-0 flex-1"><p className="font-semibold">{p.name}</p><p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted">{efforts.map((s, i) => <span key={i} className={s.isDropSet ? "text-warn" : undefined}>{i > 0 && <span className="text-muted">{s.isDropSet ? "→ " : "· "}</span>}{s.weightKg}×{s.reps}{s.rir == null ? "" : ` @${s.rir}RIR`}</span>)}</p></div>
                 <TrendingUp size={19} className={`shrink-0 ${recommendation?.action === "increase" ? "text-accent" : recommendation?.action === "reduce" ? "text-warn" : "text-muted"}`} />
               </div>
               <p className={`text-sm mt-2 ${recommendation?.action === "increase" ? "text-accent" : recommendation?.action === "reduce" ? "text-warn" : "text-muted"}`}>

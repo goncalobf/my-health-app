@@ -2,11 +2,24 @@
 
 import { useEffect, useState, use, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Plus, Trash2, Flag, X, Dumbbell } from "lucide-react";
+import {
+  Check,
+  Plus,
+  Minus,
+  Trash2,
+  Flag,
+  X,
+  Dumbbell,
+  ChevronDown,
+  LayoutList,
+  TrendingDown,
+} from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import ExercisePicker from "@/components/ExercisePicker";
 import ExerciseImage from "@/components/ExerciseImage";
 import RestTimer from "@/components/RestTimer";
+import { normalizeDecimalInput, parseDecimalInput } from "@/lib/decimal-input";
+import { prefillSet, suggestDropWeight } from "@/lib/set-prefill";
 
 interface PlanItem {
   exerciseId: number;
@@ -35,27 +48,38 @@ interface LoggedSet {
   reps: number;
   rir: number | null;
   isWarmup: boolean;
+  isDropSet: boolean;
   completedAt: string | null;
+}
+interface Recommendation {
+  action: "start" | "increase" | "repeat" | "reduce";
+  weightKg: number | null;
+  message: string;
+  reason: string;
 }
 interface SessionData {
   session: { id: number; name: string; startedAt: string; finishedAt: string | null };
   plan: PlanItem[];
   loggedSets: LoggedSet[];
   lastSets: Record<number, { weightKg: number; reps: number; rir: number | null }[]>;
-  recommendations: Record<number, {
-    action: "start" | "increase" | "repeat" | "reduce";
-    weightKg: number | null;
-    message: string;
-    reason: string;
-  }>;
+  recommendations: Record<number, Recommendation>;
 }
 
-interface LocalSet {
+/** One persisted row: the working effort, or a drop taken straight after it. */
+interface SetEntry {
   key: string;
   dbId?: number;
   weight: string;
   reps: string;
   rir: string;
+  isDrop: boolean;
+}
+/** A set as the lifter thinks of it: one effort plus any drops hanging off it. */
+interface LocalSet {
+  key: string;
+  /** Stable across removals: every entry of this set persists under it. */
+  setNumber: number;
+  entries: SetEntry[];
   completed: boolean;
 }
 interface Block {
@@ -65,6 +89,7 @@ interface Block {
   targetReps: number;
   minReps: number;
   maxReps: number;
+  weightIncrementKg: number;
   restSeconds: number;
   targetRirMin: number | null;
   targetRirMax: number | null;
@@ -74,8 +99,13 @@ interface Block {
   isAnchor: boolean;
   deloadMode: boolean;
   lastSets: { weightKg: number; reps: number; rir: number | null }[];
-  recommendation?: SessionData["recommendations"][number];
+  recommendation?: Recommendation;
   sets: LocalSet[];
+}
+
+interface Cursor {
+  exIdx: number;
+  setKey: string;
 }
 
 let keyc = 0;
@@ -84,6 +114,10 @@ const nk = () => `s${keyc++}`;
 function rirTarget(min: number | null, max: number | null) {
   if (min == null) return null;
   return min === max || max == null ? `RIR ${min}` : `RIR ${min}–${max}`;
+}
+
+function numberText(value: number) {
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
 }
 
 export default function SessionPage({
@@ -97,8 +131,11 @@ export default function SessionPage({
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
   const [picking, setPicking] = useState(false);
+  const [overview, setOverview] = useState(false);
+  const [showWhy, setShowWhy] = useState(false);
+  const [cursor, setCursor] = useState<Cursor | null>(null);
   const [rest, setRest] = useState<{
-    startedAt: number;
+    seq: number;
     target: number;
     label: string;
   } | null>(null);
@@ -129,6 +166,7 @@ export default function SessionPage({
         targetReps: number;
         minReps: number;
         maxReps: number;
+        weightIncrementKg: number;
         restSeconds: number;
         targetRirMin: number | null;
         targetRirMax: number | null;
@@ -141,29 +179,57 @@ export default function SessionPage({
     ): Block => {
       const logged = data.loggedSets
         .filter((s) => s.exerciseId === exerciseId)
-        .sort((a, b) => a.setNumber - b.setNumber);
+        .sort((a, b) => a.setNumber - b.setNumber || a.id - b.id);
       const last = data.lastSets[exerciseId] ?? [];
+      const recommendation = data.recommendations[exerciseId];
+
       let sets: LocalSet[];
       if (logged.length) {
-        sets = logged.map((s) => ({
+        // Rows sharing a set number are one set: the effort plus its drops.
+        const grouped = new Map<number, LoggedSet[]>();
+        for (const row of logged) {
+          grouped.set(row.setNumber, [...(grouped.get(row.setNumber) ?? []), row]);
+        }
+        sets = [...grouped.values()].map((rows) => ({
           key: nk(),
-          dbId: s.id,
-          weight: s.weightKg ? String(s.weightKg) : "",
-          reps: s.reps ? String(s.reps) : "",
-          rir: s.rir == null ? "" : String(s.rir),
-          completed: !!s.completedAt,
+          setNumber: rows[0].setNumber,
+          completed: !!rows[0].completedAt,
+          entries: rows.map((row) => ({
+            key: nk(),
+            dbId: row.id,
+            weight: numberText(row.weightKg),
+            reps: String(row.reps),
+            rir: row.rir == null ? "" : String(row.rir),
+            isDrop: row.isDropSet,
+          })),
         }));
       } else {
         const count = Math.max(1, opts.targetSets);
-        sets = Array.from({ length: count }, (_, i) => ({
-          key: nk(),
-          weight: data.recommendations[exerciseId]?.weightKg != null
-            ? String(data.recommendations[exerciseId].weightKg)
-            : last[i]?.weightKg ? String(last[i].weightKg) : "",
-          reps: last[i]?.reps ? String(last[i].reps) : String(opts.minReps),
-          rir: "",
-          completed: false,
-        }));
+        sets = Array.from({ length: count }, (_, i) => {
+          const filled = prefillSet(
+            {
+              minReps: opts.minReps,
+              maxReps: opts.maxReps,
+              recommendedWeightKg: recommendation?.weightKg ?? null,
+              recommendationAction: recommendation?.action ?? null,
+            },
+            last[i] ?? last[last.length - 1] ?? null
+          );
+          return {
+            key: nk(),
+            setNumber: i + 1,
+            completed: false,
+            entries: [
+              {
+                key: nk(),
+                weight: filled.weightKg ? numberText(filled.weightKg) : "",
+                reps: filled.reps ? String(filled.reps) : "",
+                rir: opts.targetRirMin == null ? "" : String(opts.targetRirMin),
+                isDrop: false,
+              },
+            ],
+          };
+        });
       }
       return {
         exerciseId,
@@ -172,6 +238,7 @@ export default function SessionPage({
         targetReps: opts.targetReps,
         minReps: opts.minReps,
         maxReps: opts.maxReps,
+        weightIncrementKg: opts.weightIncrementKg,
         restSeconds: opts.restSeconds,
         targetRirMin: opts.targetRirMin,
         targetRirMax: opts.targetRirMax,
@@ -181,7 +248,7 @@ export default function SessionPage({
         isAnchor: opts.isAnchor,
         deloadMode: opts.deloadMode,
         lastSets: last,
-        recommendation: data.recommendations[exerciseId],
+        recommendation,
         sets,
       };
     };
@@ -196,6 +263,7 @@ export default function SessionPage({
           targetReps: p.targetReps,
           minReps: p.minReps,
           maxReps: p.maxReps,
+          weightIncrementKg: p.weightIncrementKg,
           restSeconds: p.restSeconds,
           targetRirMin: p.targetRirMin,
           targetRirMax: p.targetRirMax,
@@ -219,6 +287,7 @@ export default function SessionPage({
           targetReps: 0,
           minReps: 0,
           maxReps: 0,
+          weightIncrementKg: 2.5,
           restSeconds: 120,
           targetRirMin: null,
           targetRirMax: null,
@@ -232,6 +301,7 @@ export default function SessionPage({
     }
 
     setBlocks(built);
+    setCursor(firstIncomplete(built));
     setLoading(false);
   }, [id, router]);
 
@@ -239,100 +309,185 @@ export default function SessionPage({
     load();
   }, [load]);
 
-  function patchSet(exIdx: number, setKey: string, patch: Partial<LocalSet>) {
+  function patchEntry(
+    exIdx: number,
+    setKey: string,
+    entryKey: string,
+    patch: Partial<SetEntry>
+  ) {
     setBlocks((bs) =>
       bs.map((b, i) =>
-        i === exIdx
-          ? {
+        i !== exIdx
+          ? b
+          : {
               ...b,
               sets: b.sets.map((s) =>
-                s.key === setKey ? { ...s, ...patch } : s
+                s.key !== setKey
+                  ? s
+                  : {
+                      ...s,
+                      entries: s.entries.map((e) =>
+                        e.key === entryKey ? { ...e, ...patch } : e
+                      ),
+                    }
               ),
             }
-          : b
       )
     );
   }
 
-  async function commitValues(exIdx: number, s: LocalSet) {
-    if (!s.dbId) return;
-    await apiPatch(`/api/sessions/${id}/sets/${s.dbId}`, {
-      weightKg: Number(s.weight) || 0,
-      reps: Number(s.reps) || 0,
-      rir: s.rir,
+  async function persistEntry(
+    block: Block,
+    set: LocalSet,
+    entry: SetEntry,
+    completed: boolean
+  ) {
+    const payload = {
+      weightKg: parseDecimalInput(entry.weight),
+      reps: Number(entry.reps) || 0,
+      rir: entry.rir,
+      completed,
+    };
+    if (entry.dbId) {
+      await apiPatch(`/api/sessions/${id}/sets/${entry.dbId}`, payload);
+      return entry.dbId;
+    }
+    const created = await apiPost<{ id: number }>(`/api/sessions/${id}/sets`, {
+      ...payload,
+      exerciseId: block.exerciseId,
+      setNumber: set.setNumber,
+      isDropSet: entry.isDrop,
     });
+    return created.id;
   }
 
-  async function toggleComplete(exIdx: number, setKey: string) {
-    const block = blocks[exIdx];
-    const idx = block.sets.findIndex((s) => s.key === setKey);
-    const s = block.sets[idx];
-    const nextCompleted = !s.completed;
+  async function logSet() {
+    if (!active) return;
+    const { block, exIdx, set, entry } = active;
+    const dbId = await persistEntry(block, set, entry, true);
+    patchEntry(exIdx, set.key, entry.key, { dbId });
+    setBlocks((bs) =>
+      bs.map((b, i) =>
+        i !== exIdx
+          ? b
+          : {
+              ...b,
+              sets: b.sets.map((s) =>
+                s.key === set.key ? { ...s, completed: true } : s
+              ),
+            }
+      )
+    );
 
-    if (!s.dbId) {
-      const created = await apiPost<{ id: number }>(
-        `/api/sessions/${id}/sets`,
-        {
-          exerciseId: block.exerciseId,
-          setNumber: idx + 1,
-          weightKg: Number(s.weight) || 0,
-          reps: Number(s.reps) || 0,
-          rir: s.rir,
-          completed: nextCompleted,
-        }
-      );
-      patchSet(exIdx, setKey, { dbId: created.id, completed: nextCompleted });
-    } else {
-      await apiPatch(`/api/sessions/${id}/sets/${s.dbId}`, {
-        weightKg: Number(s.weight) || 0,
-        reps: Number(s.reps) || 0,
-        rir: s.rir,
-        completed: nextCompleted,
-      });
-      patchSet(exIdx, setKey, { completed: nextCompleted });
-    }
+    const upcoming = nextIncomplete(blocks, exIdx, set.key);
+    setRest((prev) => ({
+      seq: (prev?.seq ?? 0) + 1,
+      target: block.restSeconds,
+      label: upcoming ? describe(blocks, upcoming) : "Last set done",
+    }));
+    setCursor(upcoming);
+    setShowWhy(false);
+  }
 
-    if (nextCompleted) {
-      setRest({
-        startedAt: Date.now(),
-        target: block.restSeconds,
-        label: block.name,
-      });
-    }
+  /** Ends the current effort and opens a lighter one under the same set. */
+  async function addDrop() {
+    if (!active) return;
+    const { block, exIdx, set, entry } = active;
+    const dbId = await persistEntry(block, set, entry, true);
+    const dropWeight = suggestDropWeight(
+      parseDecimalInput(entry.weight),
+      block.weightIncrementKg
+    );
+    setBlocks((bs) =>
+      bs.map((b, i) =>
+        i !== exIdx
+          ? b
+          : {
+              ...b,
+              sets: b.sets.map((s) =>
+                s.key !== set.key
+                  ? s
+                  : {
+                      ...s,
+                      entries: [
+                        ...s.entries.map((e) =>
+                          e.key === entry.key ? { ...e, dbId } : e
+                        ),
+                        {
+                          key: nk(),
+                          weight: dropWeight ? numberText(dropWeight) : "",
+                          reps: entry.reps,
+                          rir: "",
+                          isDrop: true,
+                        },
+                      ],
+                    }
+              ),
+            }
+      )
+    );
+  }
+
+  async function discardDrop() {
+    if (!active || active.set.entries.length < 2) return;
+    const { exIdx, set, entry } = active;
+    if (entry.dbId) await apiDelete(`/api/sessions/${id}/sets/${entry.dbId}`);
+    setBlocks((bs) =>
+      bs.map((b, i) =>
+        i !== exIdx
+          ? b
+          : {
+              ...b,
+              sets: b.sets.map((s) =>
+                s.key !== set.key
+                  ? s
+                  : { ...s, entries: s.entries.filter((e) => e.key !== entry.key) }
+              ),
+            }
+      )
+    );
   }
 
   function addSet(exIdx: number) {
+    const block = blocks[exIdx];
+    const previous = block.sets[block.sets.length - 1]?.entries[0];
+    const created: LocalSet = {
+      key: nk(),
+      setNumber: Math.max(0, ...block.sets.map((s) => s.setNumber)) + 1,
+      completed: false,
+      entries: [
+        {
+          key: nk(),
+          weight: previous?.weight ?? "",
+          reps: previous?.reps ?? (block.minReps ? String(block.minReps) : ""),
+          rir: block.targetRirMin == null ? "" : String(block.targetRirMin),
+          isDrop: false,
+        },
+      ],
+    };
     setBlocks((bs) =>
-      bs.map((b, i) => {
-        if (i !== exIdx) return b;
-        const prev = b.sets[b.sets.length - 1];
-        return {
-          ...b,
-          sets: [
-            ...b.sets,
-            {
-              key: nk(),
-              weight: prev?.weight ?? "",
-              reps: prev?.reps ?? (b.minReps ? String(b.minReps) : ""),
-              rir: "",
-              completed: false,
-            },
-          ],
-        };
-      })
+      bs.map((b, i) => (i === exIdx ? { ...b, sets: [...b.sets, created] } : b))
     );
+    setCursor({ exIdx, setKey: created.key });
   }
 
   async function removeSet(exIdx: number, setKey: string) {
-    const s = blocks[exIdx].sets.find((x) => x.key === setKey);
-    if (s?.dbId) await apiDelete(`/api/sessions/${id}/sets/${s.dbId}`);
+    const set = blocks[exIdx].sets.find((s) => s.key === setKey);
+    if (!set) return;
+    for (const entry of set.entries) {
+      if (entry.dbId) await apiDelete(`/api/sessions/${id}/sets/${entry.dbId}`);
+    }
+    const remaining = blocks[exIdx].sets.filter((s) => s.key !== setKey);
     setBlocks((bs) =>
-      bs.map((b, i) =>
-        i === exIdx
-          ? { ...b, sets: b.sets.filter((x) => x.key !== setKey) }
-          : b
-      )
+      bs.map((b, i) => (i === exIdx ? { ...b, sets: remaining } : b))
     );
+    if (cursor?.setKey === setKey) {
+      setCursor(
+        remaining.length
+          ? { exIdx, setKey: remaining[remaining.length - 1].key }
+          : firstIncomplete(blocks)
+      );
+    }
   }
 
   async function addExercise(exerciseId: number) {
@@ -341,28 +496,36 @@ export default function SessionPage({
       { id: number; name: string; imageUrl: string | null }[]
     >("/api/exercises");
     const ex = exercises.find((e) => e.id === exerciseId);
-    setBlocks((bs) => [
-      ...bs,
-      {
-        exerciseId,
-        name: ex?.name ?? "Exercise",
-        imageUrl: ex?.imageUrl ?? null,
-        targetReps: 0,
-        minReps: 0,
-        maxReps: 0,
-        restSeconds: 120,
-        targetRirMin: null,
-        targetRirMax: null,
-        avoidFailure: false,
-        instruction: null,
-        supersetGroup: null,
-        isAnchor: false,
-        deloadMode: false,
-        lastSets: [],
-        recommendation: undefined,
-        sets: [{ key: nk(), weight: "", reps: "", rir: "", completed: false }],
-      },
-    ]);
+    const created: Block = {
+      exerciseId,
+      name: ex?.name ?? "Exercise",
+      imageUrl: ex?.imageUrl ?? null,
+      targetReps: 0,
+      minReps: 0,
+      maxReps: 0,
+      weightIncrementKg: 2.5,
+      restSeconds: 120,
+      targetRirMin: null,
+      targetRirMax: null,
+      avoidFailure: false,
+      instruction: null,
+      supersetGroup: null,
+      isAnchor: false,
+      deloadMode: false,
+      lastSets: [],
+      recommendation: undefined,
+      sets: [
+        {
+          key: nk(),
+          setNumber: 1,
+          completed: false,
+          entries: [{ key: nk(), weight: "", reps: "", rir: "", isDrop: false }],
+        },
+      ],
+    };
+    setBlocks((bs) => [...bs, created]);
+    setCursor({ exIdx: blocks.length, setKey: created.sets[0].key });
+    setOverview(false);
   }
 
   async function finish() {
@@ -376,12 +539,14 @@ export default function SessionPage({
     router.replace("/workouts");
   }
 
+  const totalSets = blocks.reduce((total, b) => total + b.sets.length, 0);
   const completedCount = blocks.reduce(
-    (a, b) => a + b.sets.filter((s) => s.completed).length,
+    (total, b) => total + b.sets.filter((s) => s.completed).length,
     0
   );
-  const totalSets = blocks.reduce((total, block) => total + block.sets.length, 0);
   const progress = totalSets ? Math.round((completedCount / totalSets) * 100) : 0;
+
+  const active = resolve(blocks, cursor);
 
   if (loading) {
     return (
@@ -392,7 +557,7 @@ export default function SessionPage({
   }
 
   return (
-    <div className={rest ? "min-w-0 pb-32" : "min-w-0 pb-6"}>
+    <div className={rest ? "min-w-0 pb-32" : "min-w-0 pb-8"}>
       <header className="sticky top-[env(safe-area-inset-top)] z-30 -mx-3 mb-5 border-b border-border bg-bg/95 px-3 py-3 backdrop-blur min-[360px]:-mx-4 min-[360px]:px-4">
         <div className="flex items-center gap-2">
           <button
@@ -402,26 +567,13 @@ export default function SessionPage({
           >
             <X size={22} />
           </button>
-          <div className="min-w-0 flex-1">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => apiPatch(`/api/sessions/${id}`, { name })}
-              aria-label="Workout name"
-              className="w-full truncate bg-transparent text-lg font-bold outline-none focus:text-accent"
-            />
-            <div className="mt-1 flex items-center gap-2">
-              <p className="shrink-0 text-[11px] text-muted tabular-nums">
-                {completedCount} of {totalSets} sets
-              </p>
-              <div className="h-1 min-w-8 flex-1 overflow-hidden rounded-full bg-surface-2">
-                <div
-                  className="h-full rounded-full bg-accent transition-[width]"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          </div>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => apiPatch(`/api/sessions/${id}`, { name })}
+            aria-label="Workout name"
+            className="min-w-0 flex-1 truncate bg-transparent text-lg font-bold outline-none focus:text-accent"
+          />
           <button
             onClick={finish}
             className="btn-primary h-10 shrink-0 px-3 py-0 text-sm"
@@ -429,199 +581,99 @@ export default function SessionPage({
             <Flag size={15} /> Finish
           </button>
         </div>
+        <div className="mt-2 flex items-center gap-2">
+          <p className="shrink-0 text-[11px] text-muted tabular-nums">
+            {completedCount} of {totalSets} sets
+          </p>
+          <div className="h-1 min-w-8 flex-1 overflow-hidden rounded-full bg-surface-2">
+            <div
+              className="h-full rounded-full bg-accent transition-[width]"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
       </header>
 
-      {blocks.length === 0 && (
+      {blocks.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-6 text-center">
           <Dumbbell className="text-muted" size={32} />
-          <p className="text-muted text-sm">
+          <p className="text-sm text-muted">
             Empty workout. Add an exercise to get started.
           </p>
+          <button onClick={() => setPicking(true)} className="btn-primary w-full">
+            <Plus size={18} /> Add exercise
+          </button>
         </div>
+      ) : !active ? (
+        <div className="card flex flex-col items-center gap-3 p-6 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/15 text-accent">
+            <Check size={28} strokeWidth={3} />
+          </div>
+          <p className="font-semibold">Every set is logged</p>
+          <p className="text-sm text-muted">
+            {completedCount} sets done. Finish up to see your summary and next targets.
+          </p>
+          <button onClick={finish} className="btn-primary w-full">
+            <Flag size={18} /> Finish workout
+          </button>
+        </div>
+      ) : (
+        <ActiveSet
+          key={active.entry.key}
+          block={active.block}
+          set={active.set}
+          setIdx={active.setIdx}
+          entry={active.entry}
+          showWhy={showWhy}
+          onToggleWhy={() => setShowWhy((v) => !v)}
+          onChange={(patch) =>
+            patchEntry(active.exIdx, active.set.key, active.entry.key, patch)
+          }
+          onCommit={() => {
+            if (active.entry.dbId) {
+              persistEntry(
+                active.block,
+                active.set,
+                active.entry,
+                active.set.completed
+              );
+            }
+          }}
+          onLog={() => logSet()}
+          onDrop={() => addDrop()}
+          onDiscardDrop={() => discardDrop()}
+          onJump={(setKey) => {
+            setCursor({ exIdx: active.exIdx, setKey });
+            setShowWhy(false);
+          }}
+          onAddSet={() => addSet(active.exIdx)}
+          onRemoveSet={() => removeSet(active.exIdx, active.set.key)}
+        />
       )}
 
-      <div className="flex flex-col gap-4">
-        {blocks.map((b, exIdx) => (
-          <section
-            key={`${b.exerciseId}-${exIdx}`}
-            className="card min-w-0 overflow-hidden p-3 sm:p-4"
-          >
-            <div className="flex items-start gap-3">
-              <ExerciseImage
-                name={b.name}
-                imageUrl={b.imageUrl}
-                className="h-14 w-14"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 break-words font-semibold leading-snug">
-                    {b.name}
-                  </p>
-                  <span className="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[11px] text-muted tabular-nums">
-                    {b.sets.filter((set) => set.completed).length}/{b.sets.length}
-                  </span>
-                </div>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {b.maxReps > 0 && (
-                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-muted">
-                      {b.minReps}–{b.maxReps} reps
-                    </span>
-                  )}
-                  {rirTarget(b.targetRirMin, b.targetRirMax) && (
-                    <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
-                      {rirTarget(b.targetRirMin, b.targetRirMax)}
-                    </span>
-                  )}
-                  {b.isAnchor && (
-                    <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] text-warn">Anchor</span>
-                  )}
-                  {b.avoidFailure && (
-                    <span className="rounded-full bg-danger/15 px-2 py-0.5 text-[10px] text-danger">Never to failure</span>
-                  )}
-                  {b.supersetGroup && (
-                    <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] text-warn">Superset</span>
-                  )}
-                </div>
-                {b.recommendation && (
-                  <div className="mt-2">
-                    <p className={`text-xs font-medium ${
-                      b.recommendation.action === "increase" ? "text-accent" :
-                      b.recommendation.action === "reduce" ? "text-warn" : "text-muted"
-                    }`}>
-                      {b.recommendation.message}
-                    </p>
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
-                      Why: {b.recommendation.reason}
-                    </p>
-                  </div>
-                )}
-                {b.instruction && (
-                  <p className="mt-2 rounded-lg border border-border bg-surface-2 px-2.5 py-2 text-[11px] leading-relaxed text-muted">
-                    {b.instruction}
-                  </p>
-                )}
-              </div>
-            </div>
+      {blocks.length > 0 && (
+        <button
+          onClick={() => setOverview(true)}
+          className="btn-ghost mt-4 w-full"
+        >
+          <LayoutList size={18} /> Workout overview
+        </button>
+      )}
 
-            <div className="mt-4 grid grid-cols-[1.25rem_minmax(0,1fr)_minmax(0,0.72fr)_3rem_2.75rem] items-center gap-1.5 px-1 text-center text-[10px] uppercase tracking-wide text-muted min-[360px]:gap-2">
-              <span className="text-left">Set</span>
-              <span>kg</span>
-              <span>reps</span>
-              <span>RIR</span>
-              <span className="sr-only">Complete</span>
-            </div>
-
-            <div className="mt-1 flex flex-col gap-2">
-              {b.sets.map((s, si) => (
-                <div
-                  key={s.key}
-                  className={`grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)_minmax(0,0.72fr)_3rem_2.75rem] items-center gap-1.5 rounded-xl p-1 transition min-[360px]:gap-2 ${
-                    s.completed ? "bg-accent/10 ring-1 ring-inset ring-accent/15" : ""
-                  }`}
-                >
-                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs tabular-nums ${
-                    s.completed ? "bg-accent/15 text-accent" : "text-muted"
-                  }`}>
-                    {si + 1}
-                  </span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step={0.5}
-                    placeholder={
-                      b.lastSets[si]?.weightKg
-                        ? String(b.lastSets[si].weightKg)
-                        : "0"
-                    }
-                    value={s.weight}
-                    min={0}
-                    aria-label={`${b.name}, set ${si + 1}, weight in kilograms`}
-                    onChange={(e) =>
-                      patchSet(exIdx, s.key, { weight: e.target.value })
-                    }
-                    onBlur={() => commitValues(exIdx, s)}
-                    className="min-w-0 w-full rounded-lg border border-border bg-surface-2 px-1 py-2.5 text-center text-base tabular-nums outline-none focus:border-accent"
-                  />
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    placeholder={
-                      b.lastSets[si]?.reps
-                        ? String(b.lastSets[si].reps)
-                        : b.minReps
-                          ? String(b.minReps)
-                          : "0"
-                    }
-                    value={s.reps}
-                    aria-label={`${b.name}, set ${si + 1}, repetitions`}
-                    onChange={(e) =>
-                      patchSet(exIdx, s.key, { reps: e.target.value })
-                    }
-                    onBlur={() => commitValues(exIdx, s)}
-                    className="min-w-0 w-full rounded-lg border border-border bg-surface-2 px-1 py-2.5 text-center text-base tabular-nums outline-none focus:border-accent"
-                  />
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={10}
-                    placeholder={b.targetRirMin == null ? "–" : String(b.targetRirMin)}
-                    value={s.rir}
-                    aria-label={`${b.name}, set ${si + 1}, reps in reserve`}
-                    onChange={(e) => patchSet(exIdx, s.key, { rir: e.target.value })}
-                    onBlur={() => commitValues(exIdx, s)}
-                    className="min-w-0 w-full rounded-lg border border-border bg-surface-2 px-1 py-2.5 text-center text-sm tabular-nums outline-none focus:border-accent"
-                  />
-                  <button
-                    onClick={() => toggleComplete(exIdx, s.key)}
-                    className={`flex h-11 w-11 items-center justify-center rounded-lg transition active:scale-95 ${
-                      s.completed
-                        ? "bg-accent text-bg"
-                        : "bg-surface-2 border border-border text-muted"
-                    }`}
-                    aria-label="Complete set"
-                  >
-                    <Check size={18} strokeWidth={3} />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 flex gap-2">
-              <button
-                onClick={() => addSet(exIdx)}
-                className="btn-ghost min-w-0 flex-1 py-2 text-sm"
-              >
-                <Plus size={16} /> Add set
-              </button>
-              {b.sets.length > 0 && (
-                <button
-                  onClick={() => removeSet(exIdx, b.sets[b.sets.length - 1].key)}
-                  className="btn-ghost h-10 w-11 shrink-0 px-0 py-0 text-sm"
-                  aria-label="Remove last set"
-                >
-                  <Trash2 size={16} />
-                </button>
-              )}
-            </div>
-          </section>
-        ))}
-      </div>
-
-      <button
-        onClick={() => setPicking(true)}
-        className="btn-ghost mt-4 w-full"
-      >
-        <Plus size={18} /> Add exercise
-      </button>
-
-      <button
-        onClick={discard}
-        className="mt-5 w-full py-2 text-center text-sm text-danger"
-      >
-        Discard workout
-      </button>
+      {overview && (
+        <Overview
+          blocks={blocks}
+          activeExIdx={active?.exIdx ?? -1}
+          onJump={(exIdx, setKey) => {
+            setCursor({ exIdx, setKey });
+            setShowWhy(false);
+            setOverview(false);
+          }}
+          onAddExercise={() => setPicking(true)}
+          onDiscard={discard}
+          onClose={() => setOverview(false)}
+        />
+      )}
 
       {picking && (
         <ExercisePicker onPick={addExercise} onClose={() => setPicking(false)} />
@@ -629,12 +681,483 @@ export default function SessionPage({
 
       {rest && (
         <RestTimer
-          startedAt={rest.startedAt}
+          key={rest.seq}
           targetSeconds={rest.target}
           label={rest.label}
           onEnd={() => setRest(null)}
         />
       )}
+    </div>
+  );
+}
+
+function firstIncomplete(blocks: Block[]): Cursor | null {
+  for (let exIdx = 0; exIdx < blocks.length; exIdx++) {
+    const set = blocks[exIdx].sets.find((s) => !s.completed);
+    if (set) return { exIdx, setKey: set.key };
+  }
+  return null;
+}
+
+/** Next unlogged set after the current one, wrapping back to earlier gaps. */
+function nextIncomplete(
+  blocks: Block[],
+  exIdx: number,
+  setKey: string
+): Cursor | null {
+  const order: Cursor[] = [];
+  blocks.forEach((block, i) =>
+    block.sets.forEach((set) => order.push({ exIdx: i, setKey: set.key }))
+  );
+  const at = order.findIndex((p) => p.exIdx === exIdx && p.setKey === setKey);
+  const rotated = at === -1 ? order : [...order.slice(at + 1), ...order.slice(0, at)];
+  return (
+    rotated.find((p) => {
+      const set = blocks[p.exIdx].sets.find((s) => s.key === p.setKey);
+      return set && !set.completed;
+    }) ?? null
+  );
+}
+
+function resolve(blocks: Block[], cursor: Cursor | null) {
+  if (!cursor) return null;
+  const block = blocks[cursor.exIdx];
+  if (!block) return null;
+  const setIdx = block.sets.findIndex((s) => s.key === cursor.setKey);
+  if (setIdx === -1) return null;
+  const set = block.sets[setIdx];
+  const entry = set.entries[set.entries.length - 1];
+  if (!entry) return null;
+  return { block, exIdx: cursor.exIdx, set, setIdx, entry };
+}
+
+function describe(blocks: Block[], cursor: Cursor) {
+  const block = blocks[cursor.exIdx];
+  const setIdx = block.sets.findIndex((s) => s.key === cursor.setKey);
+  return `${block.name} · set ${setIdx + 1}`;
+}
+
+function ActiveSet({
+  block,
+  set,
+  setIdx,
+  entry,
+  showWhy,
+  onToggleWhy,
+  onChange,
+  onCommit,
+  onLog,
+  onDrop,
+  onDiscardDrop,
+  onJump,
+  onAddSet,
+  onRemoveSet,
+}: {
+  block: Block;
+  set: LocalSet;
+  setIdx: number;
+  entry: SetEntry;
+  showWhy: boolean;
+  onToggleWhy: () => void;
+  onChange: (patch: Partial<SetEntry>) => void;
+  onCommit: () => void;
+  onLog: () => void;
+  onDrop: () => void;
+  onDiscardDrop: () => void;
+  onJump: (setKey: string) => void;
+  onAddSet: () => void;
+  onRemoveSet: () => void;
+}) {
+  const previousEntries = set.entries.slice(0, -1);
+  const dropIndex = entry.isDrop ? previousEntries.length : 0;
+  const reference = block.lastSets[setIdx] ?? block.lastSets[block.lastSets.length - 1];
+  const canLog = (Number(entry.reps) || 0) > 0;
+
+  return (
+    <div className="min-w-0">
+      <div className="card min-w-0 p-3 min-[360px]:p-4">
+        <div className="flex items-start gap-3">
+          <ExerciseImage
+            name={block.name}
+            imageUrl={block.imageUrl}
+            className="h-14 w-14"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="min-w-0 break-words font-semibold leading-snug">
+              {block.name}
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {block.maxReps > 0 && (
+                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-muted">
+                  {block.minReps}–{block.maxReps} reps
+                </span>
+              )}
+              {rirTarget(block.targetRirMin, block.targetRirMax) && (
+                <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
+                  {rirTarget(block.targetRirMin, block.targetRirMax)}
+                </span>
+              )}
+              {block.isAnchor && (
+                <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] text-warn">
+                  Anchor
+                </span>
+              )}
+              {block.avoidFailure && (
+                <span className="rounded-full bg-danger/15 px-2 py-0.5 text-[10px] text-danger">
+                  Never to failure
+                </span>
+              )}
+              {block.supersetGroup && (
+                <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] text-warn">
+                  Superset
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {block.recommendation && (
+          <div className="mt-3">
+            <button
+              onClick={onToggleWhy}
+              className="flex w-full items-start gap-1.5 text-left"
+            >
+              <span
+                className={`min-w-0 flex-1 text-xs font-medium ${
+                  block.recommendation.action === "increase"
+                    ? "text-accent"
+                    : block.recommendation.action === "reduce"
+                      ? "text-warn"
+                      : "text-muted"
+                }`}
+              >
+                {block.recommendation.message}
+              </span>
+              <ChevronDown
+                size={14}
+                className={`mt-0.5 shrink-0 text-muted transition ${showWhy ? "rotate-180" : ""}`}
+              />
+            </button>
+            {showWhy && (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+                {block.recommendation.reason}
+              </p>
+            )}
+          </div>
+        )}
+
+        {block.instruction && (
+          <p className="mt-2 rounded-lg border border-border bg-surface-2 px-2.5 py-2 text-[11px] leading-relaxed text-muted">
+            {block.instruction}
+          </p>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <p className="font-semibold">
+            {entry.isDrop ? (
+              <span className="text-warn">Drop {dropIndex}</span>
+            ) : (
+              `Set ${setIdx + 1} of ${block.sets.length}`
+            )}
+          </p>
+          {reference && (
+            <p className="text-[11px] text-muted tabular-nums">
+              Last time: {numberText(reference.weightKg)} × {reference.reps}
+            </p>
+          )}
+        </div>
+
+        {previousEntries.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            {previousEntries.map((done, i) => (
+              <span key={done.key} className="flex items-center gap-1">
+                {i > 0 && <span className="text-[10px] text-muted">→</span>}
+                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted tabular-nums">
+                  {done.weight || 0} × {done.reps || 0}
+                </span>
+              </span>
+            ))}
+            <span className="text-[10px] text-muted">→</span>
+            <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[11px] font-medium text-warn">
+              now
+            </span>
+          </div>
+        )}
+
+        <div className="mt-3 flex flex-col gap-2">
+          <Stepper
+            label="Weight"
+            unit="kg"
+            value={entry.weight}
+            step={block.weightIncrementKg || 2.5}
+            decimal
+            onChange={(weight) => onChange({ weight })}
+            onCommit={onCommit}
+          />
+          <Stepper
+            label="Reps"
+            unit="reps"
+            value={entry.reps}
+            step={1}
+            onChange={(reps) => onChange({ reps })}
+            onCommit={onCommit}
+          />
+        </div>
+
+        <div className="mt-3">
+          <p className="label">Reps in reserve</p>
+          <div className="mt-1.5 flex gap-1.5">
+            {["0", "1", "2", "3", "4", "5"].map((value) => {
+              const selected = entry.rir === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => {
+                    onChange({ rir: selected ? "" : value });
+                    onCommit();
+                  }}
+                  className={`min-w-0 flex-1 rounded-lg py-2.5 text-sm font-medium tabular-nums transition active:scale-95 ${
+                    selected
+                      ? "bg-accent text-bg"
+                      : "border border-border bg-surface-2 text-muted"
+                  }`}
+                  aria-pressed={selected}
+                  aria-label={`Reps in reserve ${value}`}
+                >
+                  {value}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <button
+          onClick={onLog}
+          disabled={!canLog}
+          className="btn-primary mt-4 w-full py-3.5 text-base"
+        >
+          <Check size={19} strokeWidth={3} />
+          {canLog ? "Log set" : "Add reps to log"}
+        </button>
+
+        <div className="mt-2 flex gap-2">
+          <button
+            onClick={onDrop}
+            disabled={!canLog}
+            className="btn-ghost min-w-0 flex-1 py-2 text-sm text-warn"
+          >
+            <TrendingDown size={16} /> Drop set
+          </button>
+          {entry.isDrop && (
+            <button
+              onClick={onDiscardDrop}
+              className="btn-ghost h-10 w-11 shrink-0 px-0 py-0"
+              aria-label="Discard this drop"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+          Drop keeps you on this set: it saves what you just did, strips the weight
+          and skips the rest so you can carry on lighter.
+        </p>
+      </div>
+
+      <div className="mt-3 flex items-center gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+          {block.sets.map((s, i) => {
+            const current = s.key === set.key;
+            const drops = s.entries.length - 1;
+            return (
+              <button
+                key={s.key}
+                onClick={() => onJump(s.key)}
+                aria-label={`Go to set ${i + 1}`}
+                aria-current={current}
+                className={`relative flex h-9 w-9 items-center justify-center rounded-xl text-sm font-medium tabular-nums transition active:scale-95 ${
+                  current
+                    ? "bg-accent text-bg"
+                    : s.completed
+                      ? "bg-accent/15 text-accent"
+                      : "border border-border bg-surface-2 text-muted"
+                }`}
+              >
+                {s.completed && !current ? <Check size={15} strokeWidth={3} /> : i + 1}
+                {drops > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-warn text-[9px] font-bold text-bg">
+                    {drops}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          onClick={onAddSet}
+          className="btn-ghost h-9 w-10 shrink-0 px-0 py-0"
+          aria-label="Add a set to this exercise"
+        >
+          <Plus size={16} />
+        </button>
+        {block.sets.length > 1 && (
+          <button
+            onClick={onRemoveSet}
+            className="btn-ghost h-9 w-10 shrink-0 px-0 py-0"
+            aria-label="Remove this set"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Stepper({
+  label,
+  unit,
+  value,
+  step,
+  decimal = false,
+  onChange,
+  onCommit,
+}: {
+  label: string;
+  unit: string;
+  value: string;
+  step: number;
+  decimal?: boolean;
+  onChange: (value: string) => void;
+  onCommit: () => void;
+}) {
+  const current = decimal ? parseDecimalInput(value) : Number(value) || 0;
+
+  function nudge(delta: number) {
+    const next = Math.max(0, Math.round((current + delta) * 100) / 100);
+    onChange(decimal ? numberText(next) : String(Math.round(next)));
+    onCommit();
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface-2 p-2.5">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => nudge(-step)}
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text transition active:scale-95"
+          aria-label={`Decrease ${label}`}
+        >
+          <Minus size={20} />
+        </button>
+        <div className="min-w-0 flex-1">
+          <input
+            inputMode="decimal"
+            value={value}
+            placeholder="0"
+            aria-label={label}
+            onChange={(e) =>
+              onChange(
+                decimal
+                  ? normalizeDecimalInput(e.target.value)
+                  : e.target.value.replace(/[^\d]/g, "")
+              )
+            }
+            onBlur={onCommit}
+            className="w-full bg-transparent text-center text-3xl font-bold tabular-nums outline-none placeholder:text-muted"
+          />
+          <p className="text-center text-[11px] text-muted">{unit}</p>
+        </div>
+        <button
+          onClick={() => nudge(step)}
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text transition active:scale-95"
+          aria-label={`Increase ${label}`}
+        >
+          <Plus size={20} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Overview({
+  blocks,
+  activeExIdx,
+  onJump,
+  onAddExercise,
+  onDiscard,
+  onClose,
+}: {
+  blocks: Block[];
+  activeExIdx: number;
+  onJump: (exIdx: number, setKey: string) => void;
+  onAddExercise: () => void;
+  onDiscard: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-bg/95 backdrop-blur">
+      <div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-3 min-[360px]:px-4">
+        <div className="flex shrink-0 items-center gap-2 py-3 safe-top">
+          <h2 className="min-w-0 flex-1 text-lg font-bold">Workout overview</h2>
+          <button
+            onClick={onClose}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition active:scale-95"
+            aria-label="Close overview"
+          >
+            <X size={22} />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+          <div className="flex flex-col gap-2">
+            {blocks.map((block, exIdx) => {
+              const done = block.sets.filter((s) => s.completed).length;
+              const target =
+                block.sets.find((s) => !s.completed) ?? block.sets[block.sets.length - 1];
+              return (
+                <button
+                  key={`${block.exerciseId}-${exIdx}`}
+                  onClick={() => target && onJump(exIdx, target.key)}
+                  className={`card flex items-center gap-3 p-3 text-left transition active:scale-[0.99] ${
+                    exIdx === activeExIdx ? "border-accent/40" : ""
+                  }`}
+                >
+                  <ExerciseImage
+                    name={block.name}
+                    imageUrl={block.imageUrl}
+                    className="h-11 w-11"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{block.name}</p>
+                    <p className="text-[11px] text-muted tabular-nums">
+                      {done} of {block.sets.length} sets
+                    </p>
+                  </div>
+                  {done === block.sets.length ? (
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
+                      <Check size={15} strokeWidth={3} />
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-[11px] text-muted tabular-nums">
+                      {block.sets.length - done} left
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <button onClick={onAddExercise} className="btn-ghost mt-4 w-full">
+            <Plus size={18} /> Add exercise
+          </button>
+          <button
+            onClick={onDiscard}
+            className="mt-2 w-full py-2 text-center text-sm text-danger"
+          >
+            Discard workout
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
