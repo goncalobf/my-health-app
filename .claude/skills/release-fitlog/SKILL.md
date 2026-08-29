@@ -25,7 +25,7 @@ disable-model-invocation: true
 1. Push the authorized ref. Update `main` only when explicitly requested. Production deploys from `main` through the Vercel Git integration, so merging is what ships; do not deploy a branch with `vercel --prod`.
 2. Apply an authorized production migration before or after deployment according to backward-compatibility needs; prefer an expand/migrate/contract rollout for breaking schema changes.
 3. Deploy through the linked Vercel project and wait for READY/failed status. Do not treat upload completion as a successful deployment.
-4. Smoke-test the production alias `https://my-health-app-phi.vercel.app`: public auth page, protected redirect/session behavior, changed API/UI path, and a safe failure case. Never create fake production health data merely to smoke-test.
+4. Smoke-test the canonical production domain `https://fitlog.site`: public auth page, protected redirect/session behavior, changed API/UI path, and a safe failure case. Never create fake production health data merely to smoke-test.
 5. Preview URLs stay behind Vercel Authentication; reach them with the protection bypass secret in an `x-vercel-protection-bypass` header rather than disabling protection.
 5. For Neon Auth changes, verify the production origin remains in the branch's trusted-domain list.
 6. Report commit SHA, pushed branch/main status, migration details, deployment URL/ID, smoke results, and any residual risk.

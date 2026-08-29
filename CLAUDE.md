@@ -86,7 +86,8 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 - Auth is constructed lazily. Importing `src/lib/auth.ts` must never throw, so a build succeeds without
   secrets; a deployment missing configuration fails closed with `503` rather than serving anything.
 - A new account is redirected to `/onboarding` until `settings.onboarded_at` is set.
-- Production Neon Auth must trust the exact production origin, currently `https://my-health-app-phi.vercel.app`.
+- Production Neon Auth must trust the canonical production origin `https://fitlog.site`. The `www`
+  origin is also trusted while `https://www.fitlog.site` remains attached to the Vercel project.
 
 ## Data ownership invariants
 
