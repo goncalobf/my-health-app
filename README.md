@@ -85,4 +85,5 @@ database.
 | `npm run db:push` | Sync schema → database (create/update tables) |
 | `npm run db:studio` | Drizzle Studio (browse your data) |
 | `npm run seed` | Insert a starter exercise library |
+| `npm run plan:ppl` | Apply the six-day Push/Pull/Legs A/B plan |
 | `npm run icons` | Regenerate PWA icons from the SVG mark |

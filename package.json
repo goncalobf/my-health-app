@@ -13,6 +13,7 @@
     "db:studio": "drizzle-kit studio",
     "icons": "node scripts/generate-icons.mjs",
     "seed": "node --env-file=.env.local scripts/seed.mjs",
+    "plan:ppl": "node --env-file=.env.local scripts/apply-ppl-plan.mjs",
     "sync:exercises": "node --env-file=.env.local scripts/sync-exercises.mjs"
   },
   "dependencies": {
