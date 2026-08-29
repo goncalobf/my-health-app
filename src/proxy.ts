@@ -1,6 +1,21 @@
-import { auth } from "@/lib/auth";
+import { NextResponse, type NextRequest } from "next/server";
+import { auth, isAuthConfigured } from "@/lib/auth";
 
-export default auth.middleware({ loginUrl: "/auth/sign-in" });
+let handler: ReturnType<typeof auth.middleware> | null = null;
+
+export default function proxy(request: NextRequest) {
+  // A deployment without Neon Auth configuration, such as a preview build with
+  // no secrets, has no way to identify anyone. Refuse every request rather than
+  // letting one through unauthenticated.
+  if (!isAuthConfigured()) {
+    return new NextResponse(
+      "This deployment has no Neon Auth configuration, so Fitlog cannot sign anyone in or serve any data.",
+      { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } }
+    );
+  }
+  handler ??= auth.middleware({ loginUrl: "/auth/sign-in" });
+  return handler(request);
+}
 
 export const config = {
   matcher: [
