@@ -5,12 +5,14 @@ import { CoachMealPayload, mealSchema } from "@/lib/coach";
 import { getCoachSnapshot } from "@/lib/coach-data";
 import { COACH_MODEL, isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
 import { todayISO } from "@/lib/utils";
+import { requireAppUser } from "@/lib/app-user";
 
 export async function POST(req: Request) {
+  const user = await requireAppUser();
   if (!isCoachConfigured()) return NextResponse.json({ error: "Add OPENAI_API_KEY in Vercel to enable Fitlog Coach." }, { status: 503 });
   const body = await req.json().catch(() => ({}));
   const meal = String(body.meal || "next meal").slice(0, 40);
-  const snapshot = await getCoachSnapshot({ days: 14 });
+  const snapshot = await getCoachSnapshot({ userId: user.id, days: 14 });
   try {
     const payload = await structuredCoachResponse<CoachMealPayload>({
       name: "fitlog_meal_ideas", schema: mealSchema,
@@ -18,6 +20,7 @@ export async function POST(req: Request) {
       data: snapshot,
     });
     await db.insert(coachInsights).values({
+      userId: user.id,
       kind: "meal", sourceKey: `meal:${todayISO()}:${Date.now()}`,
       payloadJson: JSON.stringify(payload), model: COACH_MODEL,
     });

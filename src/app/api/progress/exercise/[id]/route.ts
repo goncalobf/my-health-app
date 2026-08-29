@@ -1,21 +1,25 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, gt, isNotNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { sessionSets, sessions, exercises } from "@/db/schema";
 import { est1RM } from "@/lib/utils";
+import { requireAppUser } from "@/lib/app-user";
 
 // Per-session best estimated 1RM for one exercise, oldest first (for charting).
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await requireAppUser();
   const { id } = await params;
   const exerciseId = Number(id);
 
   const [ex] = await db
     .select({ name: exercises.name })
     .from(exercises)
-    .where(eq(exercises.id, exerciseId));
+    .where(and(eq(exercises.id, exerciseId), or(isNull(exercises.ownerUserId), eq(exercises.ownerUserId, user.id))));
+
+  if (!ex) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const rows = await db
     .select({
@@ -29,6 +33,7 @@ export async function GET(
     .where(
       and(
         eq(sessionSets.exerciseId, exerciseId),
+        eq(sessions.userId, user.id),
         eq(sessionSets.isWarmup, false),
         gt(sessionSets.reps, 0),
         gt(sessionSets.weightKg, 0),
@@ -58,7 +63,7 @@ export async function GET(
   }
 
   return NextResponse.json({
-    name: ex?.name ?? "Exercise",
+    name: ex.name,
     points: [...bySession.values()],
   });
 }

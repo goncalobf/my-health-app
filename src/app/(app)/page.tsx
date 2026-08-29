@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq, ilike, gte, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, gte, sql } from "drizzle-orm";
 import { Dumbbell, Apple, Settings, ChevronRight, Scale } from "lucide-react";
 import { db } from "@/db";
 import { nutritionLogs, sessions, bodyweightLogs, workoutSchedule, routines, expenditureLogs } from "@/db/schema";
@@ -16,17 +16,19 @@ import MacroSummary from "@/components/MacroSummary";
 import DailyPlan from "@/components/DailyPlan";
 import CoachDashboardCard from "@/components/CoachDashboardCard";
 import NutritionPhaseCard from "@/components/NutritionPhaseCard";
+import { requireAppUser } from "@/lib/app-user";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const user = await requireAppUser();
   const today = todayISO();
-  const targets = await getTargets();
+  const targets = await getTargets(user.id);
 
   const todayLogs = await db
     .select()
     .from(nutritionLogs)
-    .where(eq(nutritionLogs.day, today));
+    .where(and(eq(nutritionLogs.userId, user.id), eq(nutritionLogs.day, today)));
   const totals = todayLogs.reduce(
     (a, r) => ({
       calories: a.calories + r.calories,
@@ -40,12 +42,14 @@ export default async function DashboardPage() {
   const [lastSession] = await db
     .select()
     .from(sessions)
+    .where(eq(sessions.userId, user.id))
     .orderBy(desc(sessions.startedAt))
     .limit(1);
 
   const [latestWeight] = await db
     .select()
     .from(bodyweightLogs)
+    .where(eq(bodyweightLogs.userId, user.id))
     .orderBy(desc(bodyweightLogs.day))
     .limit(1);
 
@@ -53,18 +57,18 @@ export default async function DashboardPage() {
   let [scheduled] = await db.select({ id: routines.id, name: routines.name })
     .from(workoutSchedule)
     .innerJoin(routines, eq(routines.id, workoutSchedule.routineId))
-    .where(eq(workoutSchedule.dayOfWeek, dayOfWeek));
+    .where(and(eq(workoutSchedule.userId, user.id), eq(workoutSchedule.dayOfWeek, dayOfWeek)));
   if (!scheduled && dayOfWeek <= 6) {
     const term = dayOfWeek % 3 === 1 ? "push" : dayOfWeek % 3 === 2 ? "pull" : "leg";
     [scheduled] = await db.select({ id: routines.id, name: routines.name })
-      .from(routines).where(ilike(routines.name, `%${term}%`)).limit(1);
+      .from(routines).where(and(eq(routines.userId, user.id), ilike(routines.name, `%${term}%`))).limit(1);
   }
-  const [todayBurn] = await db.select().from(expenditureLogs).where(eq(expenditureLogs.day, today));
+  const [todayBurn] = await db.select().from(expenditureLogs).where(and(eq(expenditureLogs.userId, user.id), eq(expenditureLogs.day, today)));
   const weekStartDay = shiftISODate(today, -6);
   const weekStart = startOfAppDay(weekStartDay);
   const [[training], [nutritionDays]] = await Promise.all([
-    db.select({ count: sql<number>`count(*)::int` }).from(sessions).where(gte(sessions.finishedAt, weekStart)),
-    db.select({ count: sql<number>`count(distinct ${nutritionLogs.day})::int` }).from(nutritionLogs).where(gte(nutritionLogs.day, weekStartDay)),
+    db.select({ count: sql<number>`count(*)::int` }).from(sessions).where(and(eq(sessions.userId, user.id), gte(sessions.finishedAt, weekStart))),
+    db.select({ count: sql<number>`count(distinct ${nutritionLogs.day})::int` }).from(nutritionLogs).where(and(eq(nutritionLogs.userId, user.id), gte(nutritionLogs.day, weekStartDay))),
   ]);
 
   const hour = hourInAppTimeZone();

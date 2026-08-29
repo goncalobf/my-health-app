@@ -9,18 +9,20 @@ import {
   trainingPlanState,
 } from "@/db/schema";
 import { getProgressionRecommendation } from "@/lib/progressive-overload";
+import { requireAppUser } from "@/lib/app-user";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await requireAppUser();
   const { id } = await params;
   const sessionId = Number(id);
 
   const [session] = await db
     .select()
     .from(sessions)
-    .where(eq(sessions.id, sessionId));
+    .where(and(eq(sessions.id, sessionId), eq(sessions.userId, user.id)));
   if (!session) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -56,7 +58,7 @@ export async function GET(
   const [planState] = await db
     .select({ isDeload: trainingPlanState.isDeload })
     .from(trainingPlanState)
-    .where(eq(trainingPlanState.id, 1));
+    .where(eq(trainingPlanState.userId, user.id));
   const deloadMode = planState?.isDeload ?? false;
   const plan = deloadMode
     ? basePlan.map((item) => ({
@@ -117,6 +119,7 @@ export async function GET(
       .where(
         and(
           eq(sessionSets.exerciseId, exId),
+          eq(sessions.userId, user.id),
           ne(sessionSets.sessionId, sessionId),
           isNotNull(sessions.finishedAt),
           isNotNull(sessionSets.completedAt),
@@ -164,6 +167,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await requireAppUser();
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
   const set: Record<string, unknown> = {};
@@ -176,7 +180,7 @@ export async function PATCH(
   const [row] = await db
     .update(sessions)
     .set(set)
-    .where(eq(sessions.id, Number(id)))
+    .where(and(eq(sessions.id, Number(id)), eq(sessions.userId, user.id)))
     .returning();
   return NextResponse.json(row);
 }
@@ -185,7 +189,8 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await requireAppUser();
   const { id } = await params;
-  await db.delete(sessions).where(eq(sessions.id, Number(id)));
+  await db.delete(sessions).where(and(eq(sessions.id, Number(id)), eq(sessions.userId, user.id)));
   return NextResponse.json({ ok: true });
 }

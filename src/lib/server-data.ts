@@ -19,7 +19,7 @@ const DEFAULT_TARGETS = {
   biologicalSex: "unspecified",
 };
 
-export async function getTargets() {
-  const [row] = await db.select().from(settings).where(eq(settings.id, 1));
-  return row ?? { id: 1, ...DEFAULT_TARGETS };
+export async function getTargets(userId: number) {
+  const [row] = await db.select().from(settings).where(eq(settings.userId, userId));
+  return row ?? { id: 0, userId, ...DEFAULT_TARGETS };
 }

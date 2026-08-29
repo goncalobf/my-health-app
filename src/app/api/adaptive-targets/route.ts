@@ -4,14 +4,16 @@ import { db } from "@/db";
 import { bodyweightLogs, expenditureLogs, nutritionLogs, settings } from "@/db/schema";
 import { shiftISODate, todayISO } from "@/lib/utils";
 import { calculateMacroTargets } from "@/lib/macro-targets";
+import { requireAppUser } from "@/lib/app-user";
 
 const average = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
 
 export async function GET() {
-  const [setting] = await db.select().from(settings).where(eq(settings.id, 1));
-  const weights = await db.select().from(bodyweightLogs).orderBy(asc(bodyweightLogs.day));
-  const burns = await db.select().from(expenditureLogs).orderBy(asc(expenditureLogs.day));
-  const intake = await db.select().from(nutritionLogs).orderBy(asc(nutritionLogs.day));
+  const user = await requireAppUser();
+  const [setting] = await db.select().from(settings).where(eq(settings.userId, user.id));
+  const weights = await db.select().from(bodyweightLogs).where(eq(bodyweightLogs.userId, user.id)).orderBy(asc(bodyweightLogs.day));
+  const burns = await db.select().from(expenditureLogs).where(eq(expenditureLogs.userId, user.id)).orderBy(asc(expenditureLogs.day));
+  const intake = await db.select().from(nutritionLogs).where(eq(nutritionLogs.userId, user.id)).orderBy(asc(nutritionLogs.day));
   const cutoff = shiftISODate(todayISO(), -13);
   const recentBurns = burns.filter((x) => x.day >= cutoff);
   const recentIntake = intake.filter((x) => x.day >= cutoff);

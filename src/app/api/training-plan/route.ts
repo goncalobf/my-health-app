@@ -12,24 +12,26 @@ import {
 } from "@/db/schema";
 import { shiftISODate, todayISO } from "@/lib/utils";
 import { buildTrainingPlanStatus, findDecliningAnchors } from "@/lib/training-plan";
+import { requireAppUser } from "@/lib/app-user";
 
-async function ensureState() {
+async function ensureState(userId: number) {
   await db
     .insert(trainingPlanState)
-    .values({ id: 1, planName: "PPL 6-day A/B", blockStartedOn: todayISO() })
-    .onConflictDoNothing();
+    .values({ userId, planName: "My training plan", blockStartedOn: todayISO() })
+    .onConflictDoNothing({ target: trainingPlanState.userId });
 }
 
 export async function GET() {
-  await ensureState();
+  const user = await requireAppUser();
+  await ensureState(user.id);
   const [state] = await db
     .select()
     .from(trainingPlanState)
-    .where(eq(trainingPlanState.id, 1));
+    .where(eq(trainingPlanState.userId, user.id));
   const [latestCheckin] = await db
     .select()
     .from(trainingCheckins)
-    .where(gte(trainingCheckins.day, shiftISODate(todayISO(), -6)))
+    .where(and(eq(trainingCheckins.userId, user.id), gte(trainingCheckins.day, shiftISODate(todayISO(), -6))))
     .orderBy(desc(trainingCheckins.day), desc(trainingCheckins.id))
     .limit(1);
   const routineRows = await db
@@ -53,7 +55,7 @@ export async function GET() {
     .from(routines)
     .innerJoin(routineExercises, eq(routineExercises.routineId, routines.id))
     .innerJoin(exercises, eq(exercises.id, routineExercises.exerciseId))
-    .where(eq(routines.archived, false))
+    .where(and(eq(routines.userId, user.id), eq(routines.archived, false)))
     .orderBy(asc(routines.position), asc(routineExercises.position));
 
   const anchorIds = [
@@ -77,6 +79,7 @@ export async function GET() {
         .where(
           and(
             inArray(sessionSets.exerciseId, anchorIds),
+            eq(sessions.userId, user.id),
             isNotNull(sessionSets.completedAt),
             isNotNull(sessions.finishedAt),
             eq(sessionSets.isWarmup, false)
@@ -152,7 +155,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  await ensureState();
+  const user = await requireAppUser();
+  await ensureState(user.id);
   const body = await req.json().catch(() => ({}));
   const action = String(body.action ?? "");
   const today = todayISO();
@@ -161,6 +165,7 @@ export async function PATCH(req: Request) {
     const [row] = await db
       .insert(trainingCheckins)
       .values({
+        userId: user.id,
         day: today,
         sleepPoor: !!body.sleepPoor,
         appetiteLow: !!body.appetiteLow,
@@ -168,7 +173,7 @@ export async function PATCH(req: Request) {
         notes: body.notes ? String(body.notes).slice(0, 1000) : null,
       })
       .onConflictDoUpdate({
-        target: trainingCheckins.day,
+        target: [trainingCheckins.userId, trainingCheckins.day],
         set: {
           sleepPoor: !!body.sleepPoor,
           appetiteLow: !!body.appetiteLow,
@@ -184,7 +189,7 @@ export async function PATCH(req: Request) {
     const [row] = await db
       .update(trainingPlanState)
       .set({ isDeload: true, deloadStartedOn: today, updatedAt: new Date() })
-      .where(eq(trainingPlanState.id, 1))
+      .where(eq(trainingPlanState.userId, user.id))
       .returning();
     return NextResponse.json(row);
   }
@@ -198,7 +203,7 @@ export async function PATCH(req: Request) {
         deloadStartedOn: null,
         updatedAt: new Date(),
       })
-      .where(eq(trainingPlanState.id, 1))
+      .where(eq(trainingPlanState.userId, user.id))
       .returning();
     return NextResponse.json(row);
   }

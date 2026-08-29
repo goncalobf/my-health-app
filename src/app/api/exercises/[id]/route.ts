@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { exercises } from "@/db/schema";
+import { requireAppUser } from "@/lib/app-user";
 
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await requireAppUser();
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
   const [row] = await db
@@ -20,7 +22,7 @@ export async function PATCH(
         ? { notes: body.notes ? String(body.notes) : null }
         : {}),
     })
-    .where(eq(exercises.id, Number(id)))
+    .where(and(eq(exercises.id, Number(id)), eq(exercises.ownerUserId, user.id)))
     .returning();
   return NextResponse.json(row);
 }
@@ -29,7 +31,8 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await requireAppUser();
   const { id } = await params;
-  await db.delete(exercises).where(eq(exercises.id, Number(id)));
+  await db.delete(exercises).where(and(eq(exercises.id, Number(id)), eq(exercises.ownerUserId, user.id)));
   return NextResponse.json({ ok: true });
 }

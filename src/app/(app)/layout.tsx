@@ -1,10 +1,14 @@
 import BottomNav from "@/components/BottomNav";
+import { requireAppUser } from "@/lib/app-user";
 
-export default function AppLayout({
+export const dynamic = "force-dynamic";
+
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await requireAppUser();
   return (
     <div className="min-h-dvh">
       <div className="mx-auto max-w-lg px-3 pb-28 pt-4 min-[360px]:px-4 safe-top">

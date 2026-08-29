@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { nutritionLogs } from "@/db/schema";
 import { todayISO } from "@/lib/utils";
+import { requireAppUser } from "@/lib/app-user";
 
 export async function GET(req: Request) {
+  const user = await requireAppUser();
   const { searchParams } = new URL(req.url);
   const day = searchParams.get("day") || todayISO();
   const rows = await db
     .select()
     .from(nutritionLogs)
-    .where(eq(nutritionLogs.day, day))
+    .where(and(eq(nutritionLogs.userId, user.id), eq(nutritionLogs.day, day)))
     .orderBy(asc(nutritionLogs.createdAt));
 
   const totals = rows.reduce(
@@ -27,6 +29,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const user = await requireAppUser();
   const body = await req.json().catch(() => ({}));
   const name = String(body.name ?? "").trim();
   if (!name) {
@@ -35,6 +38,7 @@ export async function POST(req: Request) {
   const [row] = await db
     .insert(nutritionLogs)
     .values({
+      userId: user.id,
       day: body.day || todayISO(),
       meal: body.meal || "snack",
       name,

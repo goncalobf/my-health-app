@@ -8,7 +8,21 @@ import {
   timestamp,
   date,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
+
+// Application access is invitation-controlled. Neon Auth owns credentials and
+// sessions; this table maps a Neon user to their private Fitlog data.
+export const appUsers = pgTable("app_users", {
+  id: serial("id").primaryKey(),
+  authUserId: text("auth_user_id").unique(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  role: text("role").notNull().default("member"),
+  status: text("status").notNull().default("invited"),
+  invitedAt: timestamp("invited_at").notNull().defaultNow(),
+  joinedAt: timestamp("joined_at"),
+});
 
 // Built-in and user-created exercise library.
 export const exercises = pgTable(
@@ -23,6 +37,9 @@ export const exercises = pgTable(
     externalId: text("external_id"),
     imageUrl: text("image_url"),
     notes: text("notes"),
+    ownerUserId: integer("owner_user_id").references(() => appUsers.id, {
+      onDelete: "cascade",
+    }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -36,6 +53,9 @@ export const exercises = pgTable(
 // A saved workout plan (e.g. "Push A", "Legs").
 export const routines = pgTable("routines", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   notes: text("notes"),
   archived: boolean("archived").notNull().default(false),
@@ -71,6 +91,9 @@ export const routineExercises = pgTable("routine_exercises", {
 // A performed workout instance.
 export const sessions = pgTable("sessions", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
   routineId: integer("routine_id").references(() => routines.id, {
     onDelete: "set null",
   }),
@@ -100,6 +123,9 @@ export const sessionSets = pgTable("session_sets", {
 // A logged food entry.
 export const nutritionLogs = pgTable("nutrition_logs", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
   day: date("day").notNull(),
   meal: text("meal").notNull().default("snack"), // breakfast | lunch | dinner | snack
   name: text("name").notNull(),
@@ -114,7 +140,11 @@ export const nutritionLogs = pgTable("nutrition_logs", {
 
 // A single-row settings table (id is always 1).
 export const settings = pgTable("settings", {
-  id: integer("id").primaryKey().default(1),
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .unique()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
   targetCalories: real("target_calories").notNull().default(2200),
   targetProteinG: real("target_protein_g").notNull().default(160),
   targetCarbsG: real("target_carbs_g").notNull().default(220),
@@ -136,21 +166,35 @@ export const settings = pgTable("settings", {
 // Bodyweight measurements over time.
 export const bodyweightLogs = pgTable("bodyweight_logs", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
   day: date("day").notNull(),
   weightKg: real("weight_kg").notNull(),
 });
 
 // Fixed Monday-Sunday training plan. Sunday can intentionally have no routine.
-export const workoutSchedule = pgTable("workout_schedule", {
-  dayOfWeek: integer("day_of_week").primaryKey(), // 1 = Monday, 7 = Sunday
-  routineId: integer("routine_id").references(() => routines.id, {
-    onDelete: "set null",
-  }),
-});
+export const workoutSchedule = pgTable(
+  "workout_schedule",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    dayOfWeek: integer("day_of_week").notNull(), // 1 = Monday, 7 = Sunday
+    routineId: integer("routine_id").references(() => routines.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.dayOfWeek] })]
+);
 
 // State for the current training block and its autoregulated deload week.
 export const trainingPlanState = pgTable("training_plan_state", {
-  id: integer("id").primaryKey().default(1),
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .unique()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
   planName: text("plan_name").notNull().default("PPL 6-day A/B"),
   blockStartedOn: date("block_started_on").notNull(),
   isDeload: boolean("is_deload").notNull().default(false),
@@ -162,6 +206,9 @@ export const trainingCheckins = pgTable(
   "training_checkins",
   {
     id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
     day: date("day").notNull(),
     sleepPoor: boolean("sleep_poor").notNull().default(false),
     appetiteLow: boolean("appetite_low").notNull().default(false),
@@ -169,20 +216,32 @@ export const trainingCheckins = pgTable(
     notes: text("notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("training_checkins_day_unique").on(table.day)]
+  (table) => [
+    uniqueIndex("training_checkins_user_day_unique").on(table.userId, table.day),
+  ]
 );
 
 // Daily energy expenditure copied from Garmin Connect.
-export const expenditureLogs = pgTable("expenditure_logs", {
-  day: date("day").primaryKey(),
-  totalCalories: real("total_calories").notNull(),
-  activeCalories: real("active_calories"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const expenditureLogs = pgTable(
+  "expenditure_logs",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    totalCalories: real("total_calories").notNull(),
+    activeCalories: real("active_calories"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.day] })]
+);
 
 // Reusable foods keep gram-based nutrition while also supporting a serving label.
 export const savedFoods = pgTable("saved_foods", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   barcode: text("barcode"),
   servingName: text("serving_name"),
@@ -198,6 +257,9 @@ export const savedFoods = pgTable("saved_foods", {
 // recipes whose items are copied into the daily log when used.
 export const mealTemplates = pgTable("meal_templates", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   itemsJson: text("items_json").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -205,6 +267,9 @@ export const mealTemplates = pgTable("meal_templates", {
 
 export const measurementLogs = pgTable("measurement_logs", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
   day: date("day").notNull(),
   waistCm: real("waist_cm"),
   chestCm: real("chest_cm"),
@@ -220,6 +285,9 @@ export const measurementLogs = pgTable("measurement_logs", {
 // Only aggregated inputs are sent to OpenAI; photos and private notes are excluded.
 export const coachInsights = pgTable("coach_insights", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
   kind: text("kind").notNull(), // daily | weekly | post_workout | meal
   sourceKey: text("source_key"),
   payloadJson: text("payload_json").notNull(),
@@ -230,12 +298,16 @@ export const coachInsights = pgTable("coach_insights", {
 
 export const coachMessages = pgTable("coach_messages", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
   role: text("role").notNull(), // user | assistant
   content: text("content").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type Exercise = typeof exercises.$inferSelect;
+export type AppUser = typeof appUsers.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
 export type RoutineExercise = typeof routineExercises.$inferSelect;
 export type Session = typeof sessions.$inferSelect;

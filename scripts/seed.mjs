@@ -35,6 +35,10 @@ const EXERCISES = [
 ];
 
 async function main() {
+  const ownerEmail = (process.env.OWNER_EMAIL || "barrosferreira2000@gmail.com").toLowerCase();
+  const [owner] = await sql`SELECT id FROM app_users WHERE email = ${ownerEmail}`;
+  if (!owner) throw new Error(`Invite the owner email first: ${ownerEmail}`);
+  const userId = owner.id;
   for (const [name, muscle] of EXERCISES) {
     await sql`
       INSERT INTO exercises (name, muscle_group)
@@ -52,22 +56,22 @@ async function main() {
       `${library.inserted} added, ${library.updated} refreshed, ` +
       `${library.aliased} local names linked.`
   );
-  await sql`INSERT INTO settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING`;
+  await sql`INSERT INTO settings (user_id) VALUES (${userId}) ON CONFLICT (user_id) DO NOTHING`;
   await sql`
     UPDATE settings
     SET current_weight_kg = (
-      SELECT weight_kg FROM bodyweight_logs
+      SELECT weight_kg FROM bodyweight_logs WHERE user_id = ${userId}
       ORDER BY day DESC, id DESC LIMIT 1
     )
-    WHERE current_weight_kg IS NULL
+    WHERE user_id = ${userId} AND current_weight_kg IS NULL
   `;
   console.log("Ensured settings row.");
 
   const [{ count: routineCount }] = await sql`
-    SELECT count(*)::int AS count FROM routines WHERE archived = false
+    SELECT count(*)::int AS count FROM routines WHERE user_id = ${userId} AND archived = false
   `;
   if (routineCount === 0) {
-    const plan = await applyPplPlan(sql);
+    const plan = await applyPplPlan(sql, userId);
     console.log("Applied Push / Pull / Legs A/B plan:", plan);
   } else {
     console.log("Existing routines found; left them unchanged.");

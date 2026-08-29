@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, Check, Sparkles } from "lucide-react";
+import { LogOut, Check, Sparkles, Users, ChevronRight } from "lucide-react";
 import { apiGet, apiPatch, api, apiPost } from "@/lib/api";
 import type { CoachTargetPayload } from "@/lib/coach";
 import PageHeader from "@/components/PageHeader";
+import { authClient } from "@/lib/auth-client";
 
 interface Targets {
   targetCalories: number;
@@ -101,8 +103,8 @@ export default function SettingsPage() {
   }
 
   async function logout() {
-    await api("/api/auth", { method: "DELETE" });
-    router.replace("/unlock");
+    await authClient.signOut();
+    router.replace("/auth/sign-in");
     router.refresh();
   }
 
@@ -118,6 +120,12 @@ export default function SettingsPage() {
   return (
     <div>
       <PageHeader title="Settings" back="/" />
+
+      <Link href="/settings/friends" className="card mb-6 flex items-center gap-3 p-4 active:scale-[0.99] transition">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"><Users size={20} /></div>
+        <div className="min-w-0 flex-1"><p className="font-semibold">Accounts & friends</p><p className="text-xs text-muted">Your account, invitations and access</p></div>
+        <ChevronRight size={19} className="shrink-0 text-muted" />
+      </Link>
 
       <h2 className="text-sm font-semibold text-muted mb-2">Your profile</h2>
       <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
@@ -316,7 +324,7 @@ export default function SettingsPage() {
       </div>
 
       <button onClick={logout} className="btn-ghost w-full mt-6">
-        <LogOut size={18} /> Lock app
+        <LogOut size={18} /> Sign out
       </button>
     </div>
   );

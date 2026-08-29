@@ -1,23 +1,26 @@
 import { NextResponse } from "next/server";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { coachMessages } from "@/db/schema";
 import { CoachChatPayload, chatSchema } from "@/lib/coach";
 import { getCoachSnapshot } from "@/lib/coach-data";
 import { isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
+import { requireAppUser } from "@/lib/app-user";
 
 export async function GET() {
-  const recent = await db.select().from(coachMessages).orderBy(desc(coachMessages.createdAt)).limit(30);
+  const user = await requireAppUser();
+  const recent = await db.select().from(coachMessages).where(eq(coachMessages.userId, user.id)).orderBy(desc(coachMessages.createdAt)).limit(30);
   return NextResponse.json({ configured: isCoachConfigured(), messages: recent.reverse() });
 }
 
 export async function POST(req: Request) {
+  const user = await requireAppUser();
   if (!isCoachConfigured()) return NextResponse.json({ error: "Add OPENAI_API_KEY in Vercel to enable Fitlog Coach." }, { status: 503 });
   const body = await req.json().catch(() => ({}));
   const message = String(body.message ?? "").trim();
   if (!message || message.length > 1200) return NextResponse.json({ error: "Enter a question up to 1200 characters." }, { status: 400 });
-  const history = await db.select().from(coachMessages).orderBy(desc(coachMessages.createdAt)).limit(10);
-  const snapshot = await getCoachSnapshot({ days: 28 });
+  const history = await db.select().from(coachMessages).where(eq(coachMessages.userId, user.id)).orderBy(desc(coachMessages.createdAt)).limit(10);
+  const snapshot = await getCoachSnapshot({ userId: user.id, days: 28 });
   try {
     const payload = await structuredCoachResponse<CoachChatPayload>({
       name: "fitlog_coach_chat", schema: chatSchema,
@@ -25,8 +28,8 @@ export async function POST(req: Request) {
       data: { question: message, recentConversation: history.reverse().map((x) => ({ role: x.role, content: x.content })), snapshot },
     });
     await db.insert(coachMessages).values([
-      { role: "user", content: message },
-      { role: "assistant", content: JSON.stringify(payload) },
+      { userId: user.id, role: "user", content: message },
+      { userId: user.id, role: "assistant", content: JSON.stringify(payload) },
     ]);
     return NextResponse.json(payload, { status: 201 });
   } catch (error) {
@@ -35,6 +38,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE() {
-  await db.delete(coachMessages);
+  const user = await requireAppUser();
+  await db.delete(coachMessages).where(eq(coachMessages.userId, user.id));
   return NextResponse.json({ ok: true });
 }

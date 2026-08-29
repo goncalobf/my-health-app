@@ -6,22 +6,25 @@ import { getCoachSnapshot } from "@/lib/coach-data";
 import { CoachInsightPayload, insightSchema } from "@/lib/coach";
 import { COACH_MODEL, isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
 import { todayISO } from "@/lib/utils";
+import { requireAppUser } from "@/lib/app-user";
 
 function publicRow(row: typeof coachInsights.$inferSelect) {
   return { ...row, payload: JSON.parse(row.payloadJson) as CoachInsightPayload, payloadJson: undefined };
 }
 
 export async function GET(req: Request) {
+  const user = await requireAppUser();
   const kind = new URL(req.url).searchParams.get("kind");
   const where = kind
-    ? and(eq(coachInsights.kind, kind), isNull(coachInsights.dismissedAt))
-    : isNull(coachInsights.dismissedAt);
+    ? and(eq(coachInsights.userId, user.id), eq(coachInsights.kind, kind), isNull(coachInsights.dismissedAt))
+    : and(eq(coachInsights.userId, user.id), isNull(coachInsights.dismissedAt));
   const rows = await db.select().from(coachInsights).where(where)
     .orderBy(desc(coachInsights.createdAt)).limit(12);
   return NextResponse.json({ configured: isCoachConfigured(), model: COACH_MODEL, insights: rows.map(publicRow) });
 }
 
 export async function POST(req: Request) {
+  const user = await requireAppUser();
   if (!isCoachConfigured()) return NextResponse.json({ error: "Add OPENAI_API_KEY in Vercel to enable Fitlog Coach." }, { status: 503 });
   const body = await req.json().catch(() => ({}));
   const kind = ["daily", "weekly", "post_workout"].includes(body.kind) ? String(body.kind) : "daily";
@@ -30,12 +33,12 @@ export async function POST(req: Request) {
   const sourceKey = kind === "post_workout" ? `session:${sessionId}` : `${kind}:${todayISO()}`;
   if (!body.refresh) {
     const [cached] = await db.select().from(coachInsights)
-      .where(and(eq(coachInsights.kind, kind), eq(coachInsights.sourceKey, sourceKey), isNull(coachInsights.dismissedAt)))
+      .where(and(eq(coachInsights.userId, user.id), eq(coachInsights.kind, kind), eq(coachInsights.sourceKey, sourceKey), isNull(coachInsights.dismissedAt)))
       .orderBy(desc(coachInsights.createdAt)).limit(1);
     if (cached) return NextResponse.json(publicRow(cached));
   }
 
-  const snapshot = await getCoachSnapshot({ days: kind === "weekly" ? 28 : 14, sessionId });
+  const snapshot = await getCoachSnapshot({ userId: user.id, days: kind === "weekly" ? 28 : 14, sessionId });
   const tasks: Record<string, string> = {
     daily: "Create 1-3 useful coaching insights for today. Prioritize any nutrition-phase check-in that is due, adherence, remaining macros, scheduled training, and recent trends. State the cutting week only when nutritionPhase is active. Do not invent missing data.",
     weekly: "Create a weekly recomposition review with 3-5 prioritized insights covering the current nutrition-phase duration and rate, training progression, nutrition consistency, Garmin expenditure, weight trend, and recovery signals inferred only from performance. There is no universal maximum cut length: use the supplied evidence rules and make diet breaks conditional on recovery, performance, symptoms, and adherence. Give concrete next-week actions.",
@@ -46,7 +49,7 @@ export async function POST(req: Request) {
       name: "fitlog_coach_insights", schema: insightSchema, task: tasks[kind], data: snapshot,
     });
     const [row] = await db.insert(coachInsights).values({
-      kind, sourceKey, payloadJson: JSON.stringify(payload), model: COACH_MODEL,
+      userId: user.id, kind, sourceKey, payloadJson: JSON.stringify(payload), model: COACH_MODEL,
     }).returning();
     return NextResponse.json(publicRow(row), { status: 201 });
   } catch (error) {
@@ -55,10 +58,11 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const user = await requireAppUser();
   const body = await req.json().catch(() => ({}));
   const id = Number(body.id);
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   const [row] = await db.update(coachInsights).set({ dismissedAt: new Date() })
-    .where(eq(coachInsights.id, id)).returning();
+    .where(and(eq(coachInsights.id, id), eq(coachInsights.userId, user.id))).returning();
   return NextResponse.json(row);
 }

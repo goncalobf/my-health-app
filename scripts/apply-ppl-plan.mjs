@@ -110,9 +110,9 @@ function externalId(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
-export async function applyPplPlan(sql) {
+export async function applyPplPlan(sql, userId = 1) {
   const active = await sql`
-    SELECT id FROM sessions WHERE finished_at IS NULL ORDER BY started_at DESC
+    SELECT id FROM sessions WHERE user_id = ${userId} AND finished_at IS NULL ORDER BY started_at DESC
   `;
   if (active.length > 0) {
     throw new Error("Finish or discard the active workout before replacing routines.");
@@ -220,6 +220,7 @@ export async function applyPplPlan(sql) {
       SELECT DISTINCT ON (lower(x.name)) r.id, x.name
       FROM input_routines x
       JOIN routines r ON lower(r.name) = lower(x.name) AND r.archived = false
+        AND r.user_id = ${userId}
       ORDER BY lower(x.name), r.id
     ),
     renamed_routines AS (
@@ -229,14 +230,15 @@ export async function applyPplPlan(sql) {
       WHERE x.legacy_name IS NOT NULL
         AND lower(r.name) = lower(x.legacy_name)
         AND r.archived = false
+        AND r.user_id = ${userId}
         AND NOT EXISTS (
           SELECT 1 FROM existing_routines e WHERE lower(e.name) = lower(x.name)
         )
       RETURNING r.id, r.name
     ),
     inserted_routines AS (
-      INSERT INTO routines (name, notes, archived, position)
-      SELECT x.name, x.notes, false, x.position
+      INSERT INTO routines (user_id, name, notes, archived, position)
+      SELECT ${userId}, x.name, x.notes, false, x.position
       FROM input_routines x
       WHERE NOT EXISTS (
         SELECT 1 FROM existing_routines e WHERE lower(e.name) = lower(x.name)
@@ -251,6 +253,7 @@ export async function applyPplPlan(sql) {
       SET notes = x.notes, position = x.position, archived = false
       FROM input_routines x
       WHERE lower(r.name) = lower(x.name)
+        AND r.user_id = ${userId}
       RETURNING r.id, r.name
     ),
     resolved_routines AS (
@@ -295,18 +298,18 @@ export async function applyPplPlan(sql) {
       AS x(day_of_week integer, routine_name text)
     ),
     updated_schedule AS (
-      INSERT INTO workout_schedule (day_of_week, routine_id)
-      SELECT s.day_of_week, r.id
+      INSERT INTO workout_schedule (user_id, day_of_week, routine_id)
+      SELECT ${userId}, s.day_of_week, r.id
       FROM input_schedule s
       LEFT JOIN resolved_routines r
         ON lower(r.name) = lower(s.routine_name)
-      ON CONFLICT (day_of_week) DO UPDATE SET routine_id = excluded.routine_id
+      ON CONFLICT (user_id, day_of_week) DO UPDATE SET routine_id = excluded.routine_id
       RETURNING day_of_week
     ),
     ensured_plan_state AS (
-      INSERT INTO training_plan_state (id, plan_name, block_started_on)
-      VALUES (1, 'PPL 6-day A/B', CURRENT_DATE)
-      ON CONFLICT (id) DO UPDATE SET plan_name = excluded.plan_name,
+      INSERT INTO training_plan_state (user_id, plan_name, block_started_on)
+      VALUES (${userId}, 'PPL 6-day A/B', CURRENT_DATE)
+      ON CONFLICT (user_id) DO UPDATE SET plan_name = excluded.plan_name,
         updated_at = now()
       RETURNING id
     )

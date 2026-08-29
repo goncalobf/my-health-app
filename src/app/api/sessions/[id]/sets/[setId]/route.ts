@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { sessionSets } from "@/db/schema";
+import { sessions, sessionSets } from "@/db/schema";
+import { requireAppUser } from "@/lib/app-user";
+
+async function ownsSet(userId: number, sessionId: number, setId: number) {
+  const [row] = await db
+    .select({ id: sessionSets.id })
+    .from(sessionSets)
+    .innerJoin(sessions, eq(sessions.id, sessionSets.sessionId))
+    .where(and(eq(sessionSets.id, setId), eq(sessionSets.sessionId, sessionId), eq(sessions.userId, userId)));
+  return !!row;
+}
 
 function parseRir(value: unknown) {
   if (value === "" || value == null) return null;
@@ -13,7 +23,11 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string; setId: string }> }
 ) {
-  const { setId } = await params;
+  const user = await requireAppUser();
+  const { id, setId } = await params;
+  if (!(await ownsSet(user.id, Number(id), Number(setId)))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const body = await req.json().catch(() => ({}));
   const set: Record<string, unknown> = {};
   if (body.weightKg !== undefined) set.weightKg = Number(body.weightKg);
@@ -37,7 +51,11 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string; setId: string }> }
 ) {
-  const { setId } = await params;
+  const user = await requireAppUser();
+  const { id, setId } = await params;
+  if (!(await ownsSet(user.id, Number(id), Number(setId)))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   await db.delete(sessionSets).where(eq(sessionSets.id, Number(setId)));
   return NextResponse.json({ ok: true });
 }

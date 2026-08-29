@@ -1,18 +1,20 @@
 import { NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { routines, routineExercises, exercises } from "@/db/schema";
+import { requireAppUser } from "@/lib/app-user";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await requireAppUser();
   const { id } = await params;
   const routineId = Number(id);
   const [routine] = await db
     .select()
     .from(routines)
-    .where(eq(routines.id, routineId));
+    .where(and(eq(routines.id, routineId), eq(routines.userId, user.id)));
   if (!routine) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -50,6 +52,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await requireAppUser();
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
   const [row] = await db
@@ -61,7 +64,7 @@ export async function PATCH(
         : {}),
       ...(body.archived !== undefined ? { archived: !!body.archived } : {}),
     })
-    .where(eq(routines.id, Number(id)))
+    .where(and(eq(routines.id, Number(id)), eq(routines.userId, user.id)))
     .returning();
   return NextResponse.json(row);
 }
@@ -70,7 +73,8 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await requireAppUser();
   const { id } = await params;
-  await db.delete(routines).where(eq(routines.id, Number(id)));
+  await db.delete(routines).where(and(eq(routines.id, Number(id)), eq(routines.userId, user.id)));
   return NextResponse.json({ ok: true });
 }

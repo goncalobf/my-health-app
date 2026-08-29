@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { nutritionLogs, savedFoods } from "@/db/schema";
+import { requireAppUser } from "@/lib/app-user";
 
 export async function GET() {
-  const favorites = await db.select().from(savedFoods).orderBy(desc(savedFoods.createdAt));
-  const logs = await db.select().from(nutritionLogs).orderBy(desc(nutritionLogs.createdAt)).limit(80);
+  const user = await requireAppUser();
+  const favorites = await db.select().from(savedFoods).where(eq(savedFoods.userId, user.id)).orderBy(desc(savedFoods.createdAt));
+  const logs = await db.select().from(nutritionLogs).where(eq(nutritionLogs.userId, user.id)).orderBy(desc(nutritionLogs.createdAt)).limit(80);
   const seen = new Set<string>();
   const recent = logs.filter((x) => {
     const key = x.name.toLowerCase();
@@ -22,9 +24,11 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const user = await requireAppUser();
   const body = await req.json().catch(() => ({}));
   if (!String(body.name ?? "").trim()) return NextResponse.json({ error: "Name required" }, { status: 400 });
   const [row] = await db.insert(savedFoods).values({
+    userId: user.id,
     name: String(body.name).trim(), barcode: body.barcode ? String(body.barcode) : null,
     servingName: body.servingName ? String(body.servingName) : null,
     servingGrams: Number(body.servingGrams) || 100,

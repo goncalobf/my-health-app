@@ -7,8 +7,10 @@ import {
 import { getCoachSnapshot } from "@/lib/coach-data";
 import { calculateMacroTargets } from "@/lib/macro-targets";
 import { isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
+import { requireAppUser } from "@/lib/app-user";
 
 export async function POST() {
+  const user = await requireAppUser();
   if (!isCoachConfigured()) {
     return NextResponse.json(
       { error: "Add OPENAI_API_KEY in Vercel to enable Fitlog Coach." },
@@ -16,7 +18,7 @@ export async function POST() {
     );
   }
 
-  const snapshot = await getCoachSnapshot({ days: 28 });
+  const snapshot = await getCoachSnapshot({ userId: user.id, days: 28 });
   const { profile } = snapshot;
   if (!profile.currentWeightKg || !profile.heightCm || !profile.ageYears) {
     return NextResponse.json(

@@ -1,19 +1,31 @@
 import { NextResponse } from "next/server";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { routineExercises } from "@/db/schema";
+import { exercises, routineExercises, routines } from "@/db/schema";
+import { requireAppUser } from "@/lib/app-user";
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await requireAppUser();
   const { id } = await params;
   const routineId = Number(id);
   const body = await req.json().catch(() => ({}));
+  const [ownedRoutine] = await db
+    .select({ id: routines.id })
+    .from(routines)
+    .where(and(eq(routines.id, routineId), eq(routines.userId, user.id)));
+  if (!ownedRoutine) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const exerciseId = Number(body.exerciseId);
   if (!exerciseId) {
     return NextResponse.json({ error: "exerciseId required" }, { status: 400 });
   }
+  const [availableExercise] = await db
+    .select({ id: exercises.id })
+    .from(exercises)
+    .where(and(eq(exercises.id, exerciseId), or(isNull(exercises.ownerUserId), eq(exercises.ownerUserId, user.id))));
+  if (!availableExercise) return NextResponse.json({ error: "Exercise not found" }, { status: 404 });
   const [{ max }] = await db
     .select({
       max: sql<number>`coalesce(max(${routineExercises.position}), 0)::int`,

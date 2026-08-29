@@ -3,9 +3,11 @@ import { and, eq, gt, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { sessionSets, exercises, sessions } from "@/db/schema";
 import { est1RM } from "@/lib/utils";
+import { requireAppUser } from "@/lib/app-user";
 
 // Best set per exercise, ranked by estimated 1RM.
 export async function GET() {
+  const user = await requireAppUser();
   const rows = await db
     .select({
       exerciseId: sessionSets.exerciseId,
@@ -20,6 +22,7 @@ export async function GET() {
     .where(
       and(
         eq(sessionSets.isWarmup, false),
+        eq(sessions.userId, user.id),
         gt(sessionSets.reps, 0),
         gt(sessionSets.weightKg, 0),
         isNotNull(sessionSets.completedAt)

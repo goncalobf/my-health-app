@@ -3,23 +3,26 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { settings } from "@/db/schema";
 import { shiftISODate, todayISO } from "@/lib/utils";
+import { requireAppUser } from "@/lib/app-user";
 
-async function getOrCreate() {
+async function getOrCreate(userId: number) {
   const [existing] = await db
     .select()
     .from(settings)
-    .where(eq(settings.id, 1));
+    .where(eq(settings.userId, userId));
   if (existing) return existing;
-  const [created] = await db.insert(settings).values({ id: 1 }).returning();
+  const [created] = await db.insert(settings).values({ userId }).returning();
   return created;
 }
 
 export async function GET() {
-  return NextResponse.json(await getOrCreate());
+  const user = await requireAppUser();
+  return NextResponse.json(await getOrCreate(user.id));
 }
 
 export async function PATCH(req: Request) {
-  await getOrCreate();
+  const user = await requireAppUser();
+  await getOrCreate(user.id);
   const body = await req.json().catch(() => ({}));
   const set: Record<string, unknown> = {};
   const nullableNumber = (value: unknown) =>
@@ -108,7 +111,7 @@ export async function PATCH(req: Request) {
   const [row] = await db
     .update(settings)
     .set(set)
-    .where(eq(settings.id, 1))
+    .where(eq(settings.userId, user.id))
     .returning();
   return NextResponse.json(row);
 }

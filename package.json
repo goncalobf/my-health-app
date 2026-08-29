@@ -17,6 +17,7 @@
     "sync:exercises": "node --env-file=.env.local scripts/sync-exercises.mjs"
   },
   "dependencies": {
+    "@neondatabase/auth": "0.5.0-beta",
     "@neondatabase/serverless": "^0.10.4",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",

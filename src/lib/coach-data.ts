@@ -27,28 +27,29 @@ function isoDaysAgo(days: number) {
 }
 
 export async function getCoachSnapshot({
+  userId,
   days = 28,
   sessionId,
-}: { days?: number; sessionId?: number } = {}) {
+}: { userId: number; days?: number; sessionId?: number }) {
   const fromDay = isoDaysAgo(days - 1);
   const fromTime = startOfAppDay(fromDay);
 
-  const [setting] = await db.select().from(settings).where(eq(settings.id, 1));
+  const [setting] = await db.select().from(settings).where(eq(settings.userId, userId));
   const [weights, expenditures, foods, sessionRows, setRows, schedule, routineTargets, planStates, checkins] =
     await Promise.all([
       db.select({ day: bodyweightLogs.day, weightKg: bodyweightLogs.weightKg })
-        .from(bodyweightLogs).where(gte(bodyweightLogs.day, fromDay)).orderBy(asc(bodyweightLogs.day)),
+        .from(bodyweightLogs).where(and(eq(bodyweightLogs.userId, userId), gte(bodyweightLogs.day, fromDay))).orderBy(asc(bodyweightLogs.day)),
       db.select({ day: expenditureLogs.day, totalCalories: expenditureLogs.totalCalories })
-        .from(expenditureLogs).where(gte(expenditureLogs.day, fromDay)).orderBy(asc(expenditureLogs.day)),
+        .from(expenditureLogs).where(and(eq(expenditureLogs.userId, userId), gte(expenditureLogs.day, fromDay))).orderBy(asc(expenditureLogs.day)),
       db.select({
         day: nutritionLogs.day, meal: nutritionLogs.meal, name: nutritionLogs.name,
         quantityG: nutritionLogs.quantityG, calories: nutritionLogs.calories,
         proteinG: nutritionLogs.proteinG, carbsG: nutritionLogs.carbsG, fatG: nutritionLogs.fatG,
-      }).from(nutritionLogs).where(gte(nutritionLogs.day, fromDay)).orderBy(asc(nutritionLogs.day)),
+      }).from(nutritionLogs).where(and(eq(nutritionLogs.userId, userId), gte(nutritionLogs.day, fromDay))).orderBy(asc(nutritionLogs.day)),
       db.select({
         id: sessions.id, name: sessions.name, startedAt: sessions.startedAt,
         finishedAt: sessions.finishedAt, routineId: sessions.routineId,
-      }).from(sessions).where(and(gte(sessions.startedAt, fromTime), isNotNull(sessions.finishedAt)))
+      }).from(sessions).where(and(eq(sessions.userId, userId), gte(sessions.startedAt, fromTime), isNotNull(sessions.finishedAt)))
         .orderBy(desc(sessions.startedAt)),
       db.select({
         sessionId: sessionSets.sessionId, exerciseId: sessionSets.exerciseId,
@@ -57,9 +58,10 @@ export async function getCoachSnapshot({
       }).from(sessionSets)
         .innerJoin(sessions, eq(sessions.id, sessionSets.sessionId))
         .innerJoin(exercises, eq(exercises.id, sessionSets.exerciseId))
-        .where(and(gte(sessions.startedAt, fromTime), isNotNull(sessions.finishedAt), isNotNull(sessionSets.completedAt), eq(sessionSets.isWarmup, false))),
+        .where(and(eq(sessions.userId, userId), gte(sessions.startedAt, fromTime), isNotNull(sessions.finishedAt), isNotNull(sessionSets.completedAt), eq(sessionSets.isWarmup, false))),
       db.select({ dayOfWeek: workoutSchedule.dayOfWeek, routine: routines.name })
         .from(workoutSchedule).leftJoin(routines, eq(routines.id, workoutSchedule.routineId))
+        .where(eq(workoutSchedule.userId, userId))
         .orderBy(asc(workoutSchedule.dayOfWeek)),
       db.select({
         routineId: routineExercises.routineId, exercise: exercises.name,
@@ -70,9 +72,12 @@ export async function getCoachSnapshot({
         avoidFailure: routineExercises.avoidFailure,
         isAnchor: routineExercises.isAnchor,
         instruction: routineExercises.instruction,
-      }).from(routineExercises).innerJoin(exercises, eq(exercises.id, routineExercises.exerciseId)),
-      db.select().from(trainingPlanState).where(eq(trainingPlanState.id, 1)).limit(1),
-      db.select().from(trainingCheckins).orderBy(desc(trainingCheckins.day)).limit(1),
+      }).from(routineExercises)
+        .innerJoin(routines, eq(routines.id, routineExercises.routineId))
+        .innerJoin(exercises, eq(exercises.id, routineExercises.exerciseId))
+        .where(eq(routines.userId, userId)),
+      db.select().from(trainingPlanState).where(eq(trainingPlanState.userId, userId)).limit(1),
+      db.select().from(trainingCheckins).where(eq(trainingCheckins.userId, userId)).orderBy(desc(trainingCheckins.day)).limit(1),
     ]);
 
   const nutritionByDay = new Map<string, { calories: number; proteinG: number; carbsG: number; fatG: number }>();
