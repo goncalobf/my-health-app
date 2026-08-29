@@ -27,6 +27,8 @@ test("normalize handles Search-a-licious food results", () => {
       carbsG: 4,
       fatG: 2,
       servingSize: "150 g",
+      source: "Open Food Facts",
+      sourceId: "123",
     }
   );
 });

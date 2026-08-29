@@ -74,13 +74,13 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-5">
       <header className="flex items-center justify-between">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-muted text-sm">{formatDate(today)}</p>
-          <h1 className="text-2xl font-bold">{greeting}</h1>
+          <h1 className="truncate text-xl font-bold min-[360px]:text-2xl">{greeting}</h1>
         </div>
         <Link
           href="/settings"
-          className="w-10 h-10 rounded-full bg-surface-2 border border-border flex items-center justify-center text-muted"
+          className="w-10 h-10 shrink-0 rounded-full bg-surface-2 border border-border flex items-center justify-center text-muted"
         >
           <Settings size={20} />
         </Link>
@@ -97,10 +97,10 @@ export default async function DashboardPage() {
 
       <CoachDashboardCard />
 
-      <section className="grid grid-cols-2 gap-3">
+      <section className="grid grid-cols-2 gap-2 min-[360px]:gap-3">
         <Link
           href="/workouts"
-          className="card p-4 flex flex-col gap-2 active:scale-[0.98] transition"
+          className="card min-w-0 p-3 min-[360px]:p-4 flex flex-col gap-2 active:scale-[0.98] transition"
         >
           <div className="w-10 h-10 rounded-xl bg-accent/15 flex items-center justify-center">
             <Dumbbell className="text-accent" size={20} />
@@ -110,7 +110,7 @@ export default async function DashboardPage() {
         </Link>
         <Link
           href="/nutrition"
-          className="card p-4 flex flex-col gap-2 active:scale-[0.98] transition"
+          className="card min-w-0 p-3 min-[360px]:p-4 flex flex-col gap-2 active:scale-[0.98] transition"
         >
           <div className="w-10 h-10 rounded-xl bg-warn/15 flex items-center justify-center">
             <Apple className="text-warn" size={20} />
@@ -146,8 +146,8 @@ export default async function DashboardPage() {
             }
             className="card p-4 flex items-center justify-between active:scale-[0.98] transition"
           >
-            <div>
-              <p className="font-semibold">{lastSession.name}</p>
+            <div className="min-w-0 flex-1">
+              <p className="break-words font-semibold">{lastSession.name}</p>
               <p className="text-xs text-muted">
                 {formatDate(
                   new Date(lastSession.startedAt).toISOString().slice(0, 10)
@@ -157,7 +157,7 @@ export default async function DashboardPage() {
                 )}
               </p>
             </div>
-            <ChevronRight className="text-muted" size={20} />
+            <ChevronRight className="shrink-0 text-muted" size={20} />
           </Link>
         </section>
       )}
@@ -167,13 +167,13 @@ export default async function DashboardPage() {
           href="/progress"
           className="card p-4 flex items-center justify-between active:scale-[0.98] transition"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-surface-2 flex items-center justify-center">
+          <div className="min-w-0 flex flex-1 items-center gap-3">
+            <div className="w-10 h-10 shrink-0 rounded-xl bg-surface-2 flex items-center justify-center">
               <Scale className="text-muted" size={20} />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="font-semibold">Bodyweight</p>
-              <p className="text-xs text-muted">
+              <p className="break-words text-xs text-muted">
                 {latestWeight
                   ? `${latestWeight.weightKg} kg${targets.goalWeightKg ? ` → ${targets.goalWeightKg} kg goal` : ""} · ${formatDate(latestWeight.day)}`
                   : targets.currentWeightKg
@@ -182,7 +182,7 @@ export default async function DashboardPage() {
               </p>
             </div>
           </div>
-          <ChevronRight className="text-muted" size={20} />
+          <ChevronRight className="shrink-0 text-muted" size={20} />
         </Link>
       </section>
     </div>

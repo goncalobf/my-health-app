@@ -13,7 +13,7 @@ export default function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <header className="flex items-center gap-2 mb-4 min-h-10">
+    <header className="mb-4 flex min-h-10 min-w-0 items-center gap-2">
       {back && (
         <Link
           href={back}
@@ -22,8 +22,10 @@ export default function PageHeader({
           <ChevronLeft size={24} />
         </Link>
       )}
-      <h1 className="text-2xl font-bold flex-1 truncate">{title}</h1>
-      {action}
+      <h1 className="min-w-0 flex-1 truncate text-xl font-bold min-[360px]:text-2xl">
+        {title}
+      </h1>
+      {action && <div className="shrink-0">{action}</div>}
     </header>
   );
 }

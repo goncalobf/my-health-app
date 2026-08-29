@@ -23,7 +23,7 @@ export default function NutritionPhaseCard() {
         <div className="w-10 h-10 rounded-xl bg-warn/15 text-warn flex items-center justify-center shrink-0">
           <CalendarDays size={20} />
         </div>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <p className="font-semibold">{phase.title}</p>
           <p className="text-xs text-muted mt-0.5">{phase.guidance}</p>
         </div>
@@ -38,11 +38,11 @@ export default function NutritionPhaseCard() {
         <div className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0">
           <CalendarDays size={20} />
         </div>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <p className="label">Nutrition phase</p>
           <p className="font-semibold">{phase.title}</p>
         </div>
-        <span className="text-xs text-muted tabular-nums">
+        <span className="shrink-0 text-xs text-muted tabular-nums">
           Day {phase.daysElapsed}
         </span>
       </div>

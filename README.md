@@ -8,8 +8,9 @@ deployed on Vercel.
   counts your rest and waits for you to end it. Rep ranges, per-exercise weight
   increments, progressive-overload suggestions, deload detection, a fixed
   weekly schedule, and post-workout summaries are built in.
-- **Nutrition** — native food logging via [Open Food Facts](https://world.openfoodfacts.org/)
-  (barcode scan + search, no API key needed) plus manual macro entry. Daily
+- **Nutrition** — cooked and generic food search via [USDA FoodData Central](https://fdc.nal.usda.gov/),
+  with packaged-product search and barcode scanning via [Open Food Facts](https://world.openfoodfacts.org/),
+  plus manual macro entry. Daily
   totals vs. your targets. Recent foods, favourites, gram/serving quantities,
   reusable meals, and recipes make repeat logging fast.
 - **Adaptive targets** — enter Garmin total calories daily; after enough food,
@@ -42,6 +43,8 @@ Next.js (App Router) · TypeScript · Tailwind · Drizzle ORM · Vercel Postgres
      `openssl rand -base64 32`
    - `OPENAI_API_KEY` — optional; enables Fitlog Coach. Keep this server-only.
    - `OPENAI_MODEL` — optional model override (defaults to `gpt-5-mini`).
+   - `FDC_API_KEY` — optional free data.gov key for higher USDA search limits;
+     the rate-limited USDA `DEMO_KEY` is used when omitted.
 4. **Create the tables.** From your machine, with the DB URL available locally:
    ```bash
    npm install

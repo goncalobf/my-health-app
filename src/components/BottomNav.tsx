@@ -30,12 +30,12 @@ export default function BottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition ${
+              className={`min-w-0 px-0.5 flex flex-col items-center gap-1 py-2.5 text-[10px] min-[360px]:text-[11px] font-medium transition ${
                 active ? "text-accent" : "text-muted"
               }`}
             >
               <Icon size={22} strokeWidth={active ? 2.4 : 2} />
-              {tab.label}
+              <span className="w-full truncate text-center">{tab.label}</span>
             </Link>
           );
         })}

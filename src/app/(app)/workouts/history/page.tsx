@@ -43,8 +43,8 @@ export default function HistoryPage() {
               href={s.finishedAt ? `/workouts/session/${s.id}/summary` : `/workouts/session/${s.id}`}
               className="card p-4 flex items-center justify-between active:scale-[0.98] transition"
             >
-              <div>
-                <p className="font-semibold">{s.name}</p>
+              <div className="min-w-0 flex-1">
+                <p className="break-words font-semibold">{s.name}</p>
                 <p className="text-xs text-muted">
                   {formatDate(
                     new Date(s.startedAt).toISOString().slice(0, 10)
@@ -54,7 +54,7 @@ export default function HistoryPage() {
                   )}
                 </p>
               </div>
-              <ChevronRight className="text-muted" size={20} />
+              <ChevronRight className="shrink-0 text-muted" size={20} />
             </Link>
           ))}
         </div>

@@ -48,11 +48,11 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
       <PageHeader title="Workout complete" back="/workouts/history" />
       <div className="text-center mb-5">
         <div className="w-14 h-14 rounded-full bg-accent/15 text-accent flex items-center justify-center mx-auto mb-2"><Award size={28} /></div>
-        <h1 className="text-2xl font-bold">{data.session.name}</h1>
+        <h1 className="break-words text-2xl font-bold">{data.session.name}</h1>
         <p className="text-sm text-muted">Strong work. Your next targets are ready.</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mb-5">
+      <div className="grid grid-cols-3 gap-1.5 mb-5 min-[360px]:gap-2">
         <Stat icon={<Clock size={17} />} value={formatDuration(summary.duration)} label="Duration" />
         <Stat icon={<Dumbbell size={17} />} value={String(summary.sets.length)} label="Sets" />
         <Stat icon={<BarChart3 size={17} />} value={`${round(summary.volume, 0)}kg`} label="Volume" />
@@ -84,7 +84,7 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
               <div className="flex items-start gap-3">
                 <ExerciseImage name={p.name} imageUrl={p.imageUrl} className="h-14 w-14" />
                 <div className="min-w-0 flex-1"><p className="font-semibold">{p.name}</p><p className="text-xs text-muted">{sets.map((s) => `${s.weightKg}×${s.reps}`).join(" · ")}</p></div>
-                <TrendingUp size={19} className={completedTop ? "text-accent" : "text-muted"} />
+                <TrendingUp size={19} className={`shrink-0 ${completedTop ? "text-accent" : "text-muted"}`} />
               </div>
               <p className={`text-sm mt-2 ${completedTop ? "text-accent" : "text-muted"}`}>
                 {!planned ? `Baseline saved at ${next}kg` : completedTop ? `Next time: ${next}kg for ${p.minReps}–${p.maxReps}` : `Next time: repeat ${next}kg and build toward ${p.maxReps} reps`}

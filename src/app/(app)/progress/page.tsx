@@ -162,7 +162,7 @@ export default function ProgressPage() {
 
       <section className="mb-6">
         <h2 className="text-sm font-semibold text-muted mb-2">Bodyweight</h2>
-        <div className="card p-4">
+        <div className="card min-w-0 p-3 min-[360px]:p-4">
           <Chart
             data={bw.map((b) => ({ date: b.day, weightKg: b.weightKg }))}
             dataKey="weightKg"
@@ -177,9 +177,9 @@ export default function ProgressPage() {
               placeholder="Today's weight (kg)"
               value={weightInput}
               onChange={(e) => setWeightInput(e.target.value)}
-              className="input flex-1"
+              className="input min-w-0 flex-1"
             />
-            <button className="btn-primary" disabled={!weightInput}>
+            <button className="btn-primary shrink-0" disabled={!weightInput}>
               <Plus size={18} /> Log
             </button>
           </form>
@@ -188,8 +188,8 @@ export default function ProgressPage() {
 
       <section className="mb-6">
         <h2 className="text-sm font-semibold text-muted mb-2">Measurements & photos</h2>
-        <form onSubmit={logMeasurements} className="card p-4 flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-2">
+        <form onSubmit={logMeasurements} className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
+          <div className="grid grid-cols-1 gap-2 min-[340px]:grid-cols-2">
             {([
               ["waistCm", "Waist (cm)"], ["chestCm", "Chest (cm)"],
               ["armsCm", "Arms (cm)"], ["thighsCm", "Thighs (cm)"],
@@ -210,8 +210,8 @@ export default function ProgressPage() {
         </form>
         {latestMeasurement && (
           <div className="card p-4 mt-3">
-            <div className="flex justify-between items-center mb-3"><p className="font-semibold">Latest check-in</p><span className="text-xs text-muted">{formatDate(latestMeasurement.day)}</span></div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-1"><p className="font-semibold">Latest check-in</p><span className="text-xs text-muted">{formatDate(latestMeasurement.day)}</span></div>
+            <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
               {([['waistCm', 'Waist'], ['chestCm', 'Chest'], ['armsCm', 'Arms'], ['thighsCm', 'Thighs'], ['bodyFatPct', 'Body fat']] as const).map(([key, label]) => latestMeasurement[key] != null ? (
                 <div key={key} className="bg-surface-2 rounded-xl p-2 text-center"><p className="font-bold tabular-nums">{latestMeasurement[key]}<span className="text-[10px] text-muted">{key === 'bodyFatPct' ? '%' : 'cm'}</span></p><p className="text-[10px] text-muted">{label}</p></div>
               ) : null)}
@@ -264,13 +264,13 @@ export default function ProgressPage() {
                       {pr.est1RM}kg 1RM
                     </p>
                   </div>
-                  <span className="text-lg font-bold tabular-nums text-accent">
+                  <span className="shrink-0 text-lg font-bold tabular-nums text-accent">
                     {pr.est1RM}
                     <span className="text-xs text-muted font-normal">kg</span>
                   </span>
                   <ChevronDown
                     size={18}
-                    className={`text-muted transition ${
+                    className={`shrink-0 text-muted transition ${
                       expanded === pr.exerciseId ? "rotate-180" : ""
                     }`}
                   />

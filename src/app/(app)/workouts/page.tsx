@@ -81,25 +81,25 @@ export default function WorkoutsPage() {
           href={`/workouts/session/${active.id}`}
           className="card p-4 mb-4 flex items-center justify-between border-accent/40 bg-accent/10"
         >
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-xs text-accent font-semibold uppercase tracking-wide">
               In progress
             </p>
-            <p className="font-semibold">{active.name}</p>
+            <p className="break-words font-semibold">{active.name}</p>
           </div>
-          <span className="btn-primary py-2 px-4">Resume</span>
+          <span className="btn-primary shrink-0 px-3 py-2 min-[360px]:px-4">Resume</span>
         </Link>
       )}
 
-      <div className="flex gap-3 mb-5">
+      <div className="grid grid-cols-2 gap-2 min-[360px]:gap-3 mb-5">
         <button
           onClick={() => startSession(undefined)}
           disabled={starting}
-          className="btn-ghost flex-1"
+          className="btn-ghost min-w-0 px-2 text-sm min-[360px]:px-4"
         >
           <Zap size={18} /> Quick workout
         </button>
-        <Link href="/workouts/exercises" className="btn-ghost flex-1">
+        <Link href="/workouts/exercises" className="btn-ghost min-w-0 px-2 text-sm min-[360px]:px-4">
           <ListChecks size={18} /> Exercises
         </Link>
       </div>
@@ -121,8 +121,8 @@ export default function WorkoutsPage() {
         <div className="flex flex-col gap-3">
           {routines.map((r) => (
             <div key={r.id} className="card p-4 flex items-center gap-3">
-              <Link href={`/workouts/routines/${r.id}`} className="flex-1">
-                <p className="font-semibold">{r.name}</p>
+              <Link href={`/workouts/routines/${r.id}`} className="min-w-0 flex-1">
+                <p className="break-words font-semibold">{r.name}</p>
                 <p className="text-xs text-muted">
                   {r.exerciseCount} exercise
                   {r.exerciseCount === 1 ? "" : "s"}
@@ -131,7 +131,7 @@ export default function WorkoutsPage() {
               <button
                 onClick={() => startSession(r.id)}
                 disabled={starting || r.exerciseCount === 0}
-                className="btn-primary py-2.5 px-4"
+                className="btn-primary shrink-0 px-3 py-2.5 min-[360px]:px-4"
               >
                 <Play size={18} /> Start
               </button>

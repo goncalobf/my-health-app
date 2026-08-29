@@ -62,8 +62,8 @@ export default function MacroSummary({
       ? Math.min(100, (totals.calories / targets.targetCalories) * 100)
       : 0;
   return (
-    <div className="card p-4 flex flex-col gap-4">
-      <div className="flex items-center gap-4">
+    <div className="card flex min-w-0 flex-col gap-4 p-3 min-[360px]:p-4">
+      <div className="flex min-w-0 items-center gap-3 min-[360px]:gap-4">
         <div
           className="relative w-20 h-20 rounded-full shrink-0"
           style={{
@@ -77,9 +77,9 @@ export default function MacroSummary({
             <span className="text-[10px] text-muted">kcal</span>
           </div>
         </div>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <p className="text-sm text-muted">Calories</p>
-          <p className="text-2xl font-bold tabular-nums">
+          <p className="break-words text-xl font-bold tabular-nums min-[360px]:text-2xl">
             {round(targets.targetCalories - totals.calories, 0)}
             <span className="text-sm font-normal text-muted"> left</span>
           </p>

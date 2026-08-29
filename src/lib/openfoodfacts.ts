@@ -13,6 +13,8 @@ export interface FoodResult {
   carbsG: number;
   fatG: number;
   servingSize: string | null;
+  source: string;
+  sourceId: string | null;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -36,6 +38,8 @@ export function normalize(p: any): FoodResult | null {
     carbsG: num(n["carbohydrates_100g"]),
     fatG: num(n["fat_100g"]),
     servingSize: p.serving_size || null,
+    source: "Open Food Facts",
+    sourceId: p.code ? String(p.code) : null,
   };
 }
 

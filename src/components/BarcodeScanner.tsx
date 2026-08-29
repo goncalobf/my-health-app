@@ -66,7 +66,7 @@ export default function BarcodeScanner({
         />
         {!error && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-64 h-40 border-2 border-accent rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]" />
+            <div className="h-40 w-[min(16rem,calc(100vw-2rem))] rounded-2xl border-2 border-accent shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]" />
           </div>
         )}
         {error && (
@@ -84,13 +84,13 @@ export default function BarcodeScanner({
         className="p-4 safe-bottom flex gap-2 bg-surface"
       >
         <input
-          className="input flex-1"
+          className="input min-w-0 flex-1"
           inputMode="numeric"
           placeholder="Or enter barcode number"
           value={manual}
           onChange={(e) => setManual(e.target.value)}
         />
-        <button className="btn-primary" disabled={!manual.trim()}>
+        <button className="btn-primary shrink-0" disabled={!manual.trim()}>
           Look up
         </button>
       </form>

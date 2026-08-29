@@ -141,7 +141,7 @@ export default function RoutineEditorPage({
 
       <div className="flex flex-col gap-3">
         {routine.exercises.map((it) => (
-          <div key={it.id} className="card p-4">
+          <div key={it.id} className="card p-3 min-[360px]:p-4">
             <div className="mb-3 flex items-start gap-3">
               <ExerciseImage
                 name={it.name}
@@ -162,8 +162,8 @@ export default function RoutineEditorPage({
                 <Trash2 size={18} />
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex items-center justify-between">
+            <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-2 min-[400px]:gap-3">
+              <label className="flex min-w-0 items-center justify-between gap-2">
                 <span className="text-sm text-muted">Sets</span>
                 <NumField
                   value={it.targetSets}
@@ -172,7 +172,7 @@ export default function RoutineEditorPage({
                   }
                 />
               </label>
-              <label className="flex items-center justify-between">
+              <label className="flex min-w-0 items-center justify-between gap-2">
                 <span className="text-sm text-muted">Min reps</span>
                 <NumField
                   value={it.minReps}
@@ -181,14 +181,14 @@ export default function RoutineEditorPage({
                   }
                 />
               </label>
-              <label className="flex items-center justify-between">
+              <label className="flex min-w-0 items-center justify-between gap-2">
                 <span className="text-sm text-muted">Max reps</span>
                 <NumField
                   value={it.maxReps}
                   onCommit={(v) => updateItem(it.id, { maxReps: Number(v) || 1 })}
                 />
               </label>
-              <label className="flex items-center justify-between">
+              <label className="flex min-w-0 items-center justify-between gap-2">
                 <span className="text-sm text-muted">Weight</span>
                 <NumField
                   value={it.targetWeightKg}
@@ -197,7 +197,7 @@ export default function RoutineEditorPage({
                   onCommit={(v) => updateItem(it.id, { targetWeightKg: v })}
                 />
               </label>
-              <label className="flex items-center justify-between">
+              <label className="flex min-w-0 items-center justify-between gap-2">
                 <span className="text-sm text-muted">Increment</span>
                 <NumField
                   value={it.weightIncrementKg}
@@ -206,7 +206,7 @@ export default function RoutineEditorPage({
                   onCommit={(v) => updateItem(it.id, { weightIncrementKg: Number(v) || 0.5 })}
                 />
               </label>
-              <label className="flex items-center justify-between">
+              <label className="flex min-w-0 items-center justify-between gap-2">
                 <span className="text-sm text-muted flex items-center gap-1">
                   <Timer size={14} /> Rest
                 </span>

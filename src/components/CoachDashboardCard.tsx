@@ -28,8 +28,8 @@ export default function CoachDashboardCard() {
   if (configured === null) return null;
   if (!configured) return (
     <Link href="/coach" className="card p-4 flex items-center gap-3 border-accent/30">
-      <div className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><Brain size={20} /></div>
-      <div className="flex-1"><p className="font-semibold">Fitlog Coach</p><p className="text-xs text-muted">Add an API key to enable personal insights</p></div><ChevronRight size={19} className="text-muted" />
+      <div className="w-10 h-10 shrink-0 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><Brain size={20} /></div>
+      <div className="min-w-0 flex-1"><p className="font-semibold">Fitlog Coach</p><p className="text-xs text-muted">Add an API key to enable personal insights</p></div><ChevronRight size={19} className="shrink-0 text-muted" />
     </Link>
   );
   if (row) return <div><CoachInsightCard row={row} compact /><Link href="/coach" className="text-sm text-accent flex items-center justify-center gap-1 mt-2">Open Coach <ChevronRight size={15} /></Link></div>;

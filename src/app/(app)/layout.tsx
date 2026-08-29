@@ -7,7 +7,9 @@ export default function AppLayout({
 }) {
   return (
     <div className="min-h-dvh">
-      <div className="max-w-lg mx-auto px-4 pt-4 pb-28 safe-top">{children}</div>
+      <div className="mx-auto max-w-lg px-3 pb-28 pt-4 min-[360px]:px-4 safe-top">
+        {children}
+      </div>
       <BottomNav />
     </div>
   );

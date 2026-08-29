@@ -93,8 +93,8 @@ export default function NutritionPage() {
         >
           <ChevronLeft size={20} />
         </button>
-        <div className="text-center">
-          <h1 className="text-lg font-bold">
+        <div className="min-w-0 flex-1 px-2 text-center">
+          <h1 className="truncate text-lg font-bold">
             {isToday ? "Today" : formatDate(day)}
           </h1>
           {!isToday && (
@@ -123,9 +123,9 @@ export default function NutritionPage() {
           const kcal = items.reduce((a, l) => a + l.calories, 0);
           return (
             <div key={meal}>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="font-semibold capitalize">{meal}</h2>
-                <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h2 className="min-w-0 flex-1 font-semibold capitalize">{meal}</h2>
+                <div className="flex shrink-0 items-center gap-2 min-[360px]:gap-3">
                   {kcal > 0 && (
                     <span className="text-sm text-muted tabular-nums">
                       {round(kcal, 0)} kcal
@@ -162,14 +162,14 @@ export default function NutritionPage() {
                       </div>
                       <button
                         onClick={() => editQuantity(l)}
-                        className="text-muted p-1.5"
+                        className="shrink-0 text-muted p-1.5"
                         aria-label="Edit grams"
                       >
                         <Pencil size={16} />
                       </button>
                       <button
                         onClick={() => remove(l.id)}
-                        className="text-muted p-1.5"
+                        className="shrink-0 text-muted p-1.5"
                         aria-label="Delete"
                       >
                         <Trash2 size={16} />

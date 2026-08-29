@@ -120,7 +120,7 @@ export default function SettingsPage() {
       <PageHeader title="Settings" back="/" />
 
       <h2 className="text-sm font-semibold text-muted mb-2">Your profile</h2>
-      <div className="card p-4 flex flex-col gap-3">
+      <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
         <ProfileNumber
           label="Current weight"
           detail="Updated when you log a weigh-in"
@@ -185,7 +185,7 @@ export default function SettingsPage() {
       </div>
 
       <h2 className="text-sm font-semibold text-muted mb-2 mt-6">Goal</h2>
-      <div className="card p-4 flex flex-col gap-3">
+      <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
         <label>
           <span className="label">Training goal</span>
           <select
@@ -213,13 +213,13 @@ export default function SettingsPage() {
             Used to track cut duration and schedule evidence-based check-ins. Backdate it if your current phase already started.
           </span>
         </label>
-        <label className="flex items-center justify-between gap-3">
-          <span>
+        <label className="flex items-center justify-between gap-2 min-[360px]:gap-3">
+          <span className="min-w-0 flex-1">
             <span className="font-medium block">Weekly weight change</span>
             <span className="text-xs text-muted">Percent of bodyweight</span>
           </span>
-          <div className="flex items-center gap-2">
-            <input type="number" step={0.05} className="w-24 input text-right"
+          <div className="flex shrink-0 items-center gap-2">
+            <input type="number" step={0.05} className="w-20 min-[360px]:w-24 input text-right"
               value={t.targetWeeklyChangePct}
               onChange={(e) => setT({ ...t, targetWeeklyChangePct: Number(e.target.value) })} />
             <span className="text-xs text-muted">%</span>
@@ -228,15 +228,15 @@ export default function SettingsPage() {
       </div>
 
       <h2 className="text-sm font-semibold text-muted mb-2 mt-6">Daily targets</h2>
-      <div className="card p-4 flex flex-col gap-3 mt-2">
+      <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3 mt-2">
         {fields.map((f) => (
-          <label key={f.key} className="flex items-center justify-between gap-3">
-            <span className="font-medium">{f.label}</span>
-            <div className="flex items-center gap-2">
+          <label key={f.key} className="flex items-center justify-between gap-2 min-[360px]:gap-3">
+            <span className="min-w-0 flex-1 font-medium">{f.label}</span>
+            <div className="flex shrink-0 items-center gap-2">
               <input
                 type="number"
                 inputMode="decimal"
-                className="w-24 bg-surface-2 border border-border rounded-lg px-3 py-2 text-right tabular-nums outline-none focus:border-accent"
+                className="w-20 min-[360px]:w-24 bg-surface-2 border border-border rounded-lg px-2 min-[360px]:px-3 py-2 text-right tabular-nums outline-none focus:border-accent"
                 value={t[f.key]}
                 onChange={(e) =>
                   setT({ ...t, [f.key]: Number(e.target.value) })
@@ -269,9 +269,9 @@ export default function SettingsPage() {
         {aiError && <p className="text-sm text-danger">{aiError}</p>}
         {recommendation && (
           <div className="bg-surface-2 border border-accent/30 rounded-xl p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="font-semibold">Coach recommendation</p>
-              <span className="text-[10px] uppercase text-muted">
+            <div className="flex items-start justify-between gap-2">
+              <p className="min-w-0 font-semibold">Coach recommendation</p>
+              <span className="shrink-0 text-[10px] uppercase text-muted">
                 {recommendation.dataQuality} data
               </span>
             </div>
@@ -301,11 +301,11 @@ export default function SettingsPage() {
       </div>
 
       <h2 className="text-sm font-semibold text-muted mb-2 mt-6">Weekly schedule</h2>
-      <div className="card p-4 flex flex-col gap-3">
+      <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
         {schedule.map((row) => (
-          <label key={row.dayOfWeek} className="flex items-center gap-3">
-            <span className="font-medium w-24">{row.day}</span>
-            <select className="input py-2 flex-1" value={row.routineId ?? ""}
+          <label key={row.dayOfWeek} className="flex min-w-0 items-center gap-2 min-[360px]:gap-3">
+            <span className="w-20 shrink-0 font-medium min-[400px]:w-24">{row.day}</span>
+            <select className="input min-w-0 flex-1 py-2" value={row.routineId ?? ""}
               onChange={(e) => setSchedule((days) => days.map((d) => d.dayOfWeek === row.dayOfWeek ? { ...d, routineId: e.target.value ? Number(e.target.value) : null } : d))}>
               <option value="">Rest</option>
               {routines.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -338,18 +338,18 @@ function ProfileNumber({
   onChange: (value: number | null) => void;
 }) {
   return (
-    <label className="flex items-center justify-between gap-3">
-      <span>
+    <label className="flex items-center justify-between gap-2 min-[360px]:gap-3">
+      <span className="min-w-0 flex-1">
         <span className="font-medium block">{label}</span>
         <span className="text-xs text-muted">{detail}</span>
       </span>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 min-[360px]:gap-2">
         <input
           type="number"
           inputMode="decimal"
           step={step}
           min={step}
-          className="w-24 input text-right"
+          className="w-20 min-[360px]:w-24 input text-right"
           value={value ?? ""}
           onChange={(e) =>
             onChange(e.target.value === "" ? null : Number(e.target.value))

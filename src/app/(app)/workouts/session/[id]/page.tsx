@@ -320,7 +320,7 @@ export default function SessionPage({
 
   return (
     <div className={rest ? "min-w-0 pb-32" : "min-w-0 pb-6"}>
-      <header className="sticky top-[env(safe-area-inset-top)] z-30 -mx-4 mb-5 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur">
+      <header className="sticky top-[env(safe-area-inset-top)] z-30 -mx-3 mb-5 border-b border-border bg-bg/95 px-3 py-3 backdrop-blur min-[360px]:-mx-4 min-[360px]:px-4">
         <div className="flex items-center gap-2">
           <button
             onClick={() => router.push("/workouts")}

@@ -33,19 +33,19 @@ export default function DailyPlan({ day, routine, activeSessionId, garminCalorie
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="card p-4">
+      <div className="card p-3 min-[360px]:p-4">
         <p className="label">Today&apos;s training</p>
         <div className="flex items-center gap-3 mt-2">
-          <div className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><Activity size={20} /></div>
-          <div className="flex-1"><p className="font-semibold">{activeSessionId ? "Workout in progress" : routine?.name ?? "Rest & recovery"}</p><p className="text-xs text-muted">{routine ? "Scheduled session" : "No workout scheduled"}</p></div>
-          {(routine || activeSessionId) && <button onClick={start} disabled={starting} className="btn-primary py-2 px-3"><Play size={16} /> {activeSessionId ? "Resume" : "Start"}</button>}
+          <div className="w-10 h-10 shrink-0 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><Activity size={20} /></div>
+          <div className="min-w-0 flex-1"><p className="break-words font-semibold leading-snug">{activeSessionId ? "Workout in progress" : routine?.name ?? "Rest & recovery"}</p><p className="text-xs text-muted">{routine ? "Scheduled session" : "No workout scheduled"}</p></div>
+          {(routine || activeSessionId) && <button onClick={start} disabled={starting} className="btn-primary shrink-0 py-2 px-2.5 min-[360px]:px-3"><Play size={16} /> {activeSessionId ? "Resume" : "Start"}</button>}
         </div>
       </div>
 
-      <div className="card p-4">
+      <div className="card p-3 min-[360px]:p-4">
         <div className="flex items-center gap-2 mb-2"><Flame size={18} className="text-warn" /><p className="font-semibold">Garmin total calories</p></div>
         <div className="flex gap-2">
-          <input type="number" inputMode="numeric" className="input flex-1" placeholder="Today’s total" value={burn}
+          <input type="number" inputMode="numeric" className="input min-w-0 flex-1" placeholder="Today’s total" value={burn}
             onChange={(e) => { setBurn(e.target.value); setBurnSaved(false); }} />
           <button onClick={saveBurn} disabled={!burn || burnSaved} className="btn-ghost px-3">{burnSaved ? <Check size={18} /> : "Save"}</button>
         </div>

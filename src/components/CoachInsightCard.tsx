@@ -38,7 +38,7 @@ export default function CoachInsightCard({ row, onDismiss, compact = false }: {
         {insights.map((insight, index) => {
           const Icon = categoryIcon[insight.category];
           return <div key={`${insight.title}-${index}`} className="bg-surface-2 rounded-xl p-3">
-            <div className="flex items-center gap-2"><Icon size={15} className="text-muted" /><p className="font-medium text-sm">{insight.title}</p><span className="ml-auto text-[10px] text-muted capitalize">{insight.confidence}</span></div>
+            <div className="flex items-start gap-2"><Icon size={15} className="mt-0.5 shrink-0 text-muted" /><p className="min-w-0 flex-1 break-words text-sm font-medium">{insight.title}</p><span className="shrink-0 text-[10px] text-muted capitalize">{insight.confidence}</span></div>
             <p className="text-sm text-muted mt-1.5">{insight.observation}</p>
             {insight.evidence.length > 0 && <ul className="mt-2 text-xs text-muted list-disc pl-4 space-y-1">{insight.evidence.map((item) => <li key={item}>{item}</li>)}</ul>}
             <p className="text-sm mt-2"><span className="text-accent font-medium">Try:</span> {insight.suggestion}</p>

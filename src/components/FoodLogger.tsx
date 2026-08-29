@@ -17,6 +17,8 @@ interface FoodResult {
   carbsG: number;
   fatG: number;
   servingSize: string | null;
+  source?: string | null;
+  sourceId?: string | null;
 }
 
 interface SavedFood {
@@ -68,7 +70,7 @@ export default function FoodLogger({
   }, []);
 
   useEffect(() => {
-    if (query.trim().length < 2) {
+    if (query.trim().length < 3) {
       setResults([]);
       setSearchError("");
       return;
@@ -93,7 +95,7 @@ export default function FoodLogger({
       } finally {
         if (!controller.signal.aborted) setSearching(false);
       }
-    }, 400);
+    }, 650);
     return () => {
       clearTimeout(t);
       controller.abort();
@@ -204,7 +206,7 @@ export default function FoodLogger({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60">
-      <div className="bg-surface rounded-t-2xl border-t border-border max-h-[88vh] flex flex-col safe-bottom">
+      <div className="mx-auto flex max-h-[calc(100dvh_-_env(safe-area-inset-top))] w-full max-w-lg flex-col rounded-t-2xl border-t border-border bg-surface safe-bottom">
         {/* Header */}
         <div className="flex items-center gap-2 p-4 border-b border-border">
           {selected ? (
@@ -215,7 +217,7 @@ export default function FoodLogger({
               <ChevronLeft size={22} />
             </button>
           ) : null}
-          <h3 className="font-semibold flex-1">
+          <h3 className="min-w-0 flex-1 truncate font-semibold">
             {selected ? selected.name : "Add food"}
           </h3>
           <button onClick={onClose} className="text-muted p-1">
@@ -232,15 +234,18 @@ export default function FoodLogger({
                   alt=""
                   width={56}
                   height={56}
-                  className="rounded-lg object-cover bg-surface-2"
+                  className="shrink-0 rounded-lg object-cover bg-surface-2"
                   unoptimized
                 />
               )}
-              <div>
+              <div className="min-w-0">
+                {selected.source && (
+                  <p className="text-[11px] font-medium text-accent">{selected.source}</p>
+                )}
                 {selected.brand && (
                   <p className="text-xs text-muted">{selected.brand}</p>
                 )}
-                <p className="text-sm text-muted">
+                <p className="break-words text-sm text-muted">
                   Per 100g: {selected.calories} kcal · {selected.proteinG}P{" "}
                   {selected.carbsG}C {selected.fatG}F
                 </p>
@@ -265,7 +270,7 @@ export default function FoodLogger({
             <MealPicker meal={meal} setMeal={setMeal} />
 
             {preview && (
-              <div className="grid grid-cols-4 gap-2 text-center">
+              <div className="grid grid-cols-4 gap-1.5 text-center min-[360px]:gap-2">
                 <Stat label="kcal" value={preview.calories} />
                 <Stat label="P" value={preview.proteinG} />
                 <Stat label="C" value={preview.carbsG} />
@@ -281,7 +286,7 @@ export default function FoodLogger({
         ) : (
           <>
             {/* Tabs */}
-            <div className="flex gap-2 p-4 pb-0">
+            <div className="grid grid-cols-4 gap-1.5 p-3 pb-0 min-[360px]:gap-2 min-[360px]:p-4 min-[360px]:pb-0">
               <TabBtn
                 active={tab === "quick"}
                 onClick={() => setTab("quick")}
@@ -334,7 +339,7 @@ export default function FoodLogger({
                     <input
                       autoFocus
                       className="input pl-10"
-                      placeholder="Search foods (e.g. greek yogurt)"
+                      placeholder="Search foods (e.g. cooked white rice)"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                     />
@@ -374,6 +379,7 @@ export default function FoodLogger({
                       <div className="min-w-0 flex-1">
                         <p className="font-medium truncate">{f.name}</p>
                         <p className="text-xs text-muted truncate">
+                          {f.source ? `${f.source} · ` : ""}
                           {f.brand ? `${f.brand} · ` : ""}
                           {f.calories} kcal / 100g
                         </p>
@@ -382,7 +388,7 @@ export default function FoodLogger({
                   ))}
                   {!searching &&
                     !searchError &&
-                    query.trim().length >= 2 &&
+                    query.trim().length >= 3 &&
                     results.length === 0 && (
                       <p className="text-muted text-sm text-center py-4">
                         No matches. Try the Manual tab.
@@ -398,7 +404,7 @@ export default function FoodLogger({
                   value={mName}
                   onChange={(e) => setMName(e.target.value)}
                 />
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 min-[340px]:grid-cols-2">
                   <Field label="Calories" v={mKcal} set={setMKcal} />
                   <Field label="Quantity (g)" v={qty} set={setQty} />
                   <Field label="Protein (g)" v={mP} set={setMP} />
@@ -436,14 +442,15 @@ function TabBtn({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium border ${
+      aria-label={label}
+      className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl border px-1 py-2 text-xs font-medium min-[360px]:text-sm ${
         active
           ? "bg-accent text-bg border-accent"
           : "bg-surface-2 text-muted border-border"
       }`}
     >
       {icon}
-      {label}
+      <span className="hidden min-[340px]:inline">{label}</span>
     </button>
   );
 }
@@ -458,12 +465,12 @@ function MealPicker({
   return (
     <div>
       <label className="label">Meal</label>
-      <div className="flex gap-2 mt-1">
+      <div className="mt-1 grid grid-cols-2 gap-2 min-[380px]:grid-cols-4">
         {MEALS.map((m) => (
           <button
             key={m}
             onClick={() => setMeal(m)}
-            className={`flex-1 py-2 rounded-lg text-sm capitalize border ${
+            className={`min-w-0 rounded-lg border py-2 text-sm capitalize ${
               meal === m
                 ? "bg-accent text-bg border-accent"
                 : "bg-surface-2 text-muted border-border"
@@ -479,8 +486,8 @@ function MealPicker({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-surface-2 rounded-lg py-2">
-      <p className="text-lg font-bold tabular-nums">{value}</p>
+    <div className="min-w-0 rounded-lg bg-surface-2 py-2">
+      <p className="truncate text-base font-bold tabular-nums min-[360px]:text-lg">{value}</p>
       <p className="text-xs text-muted">{label}</p>
     </div>
   );

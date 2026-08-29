@@ -77,7 +77,7 @@ export default function ExercisesPage() {
     <div>
       <PageHeader title="Exercises" back="/workouts" />
 
-      <form onSubmit={add} className="card p-4 flex flex-col gap-3 mb-4">
+      <form onSubmit={add} className="card p-3 min-[360px]:p-4 flex flex-col gap-3 mb-4">
         <input
           className="input"
           placeholder="Exercise name (e.g. Bench Press)"
@@ -129,7 +129,7 @@ export default function ExercisesPage() {
               className="h-16 w-16"
             />
             <div className="min-w-0 flex-1">
-              <p className="font-medium">{x.name}</p>
+              <p className="break-words font-medium">{x.name}</p>
               {(x.muscleGroup || x.equipment) && (
                 <p className="text-xs text-muted">
                   {[x.muscleGroup, x.equipment].filter(Boolean).join(" · ")}
@@ -138,7 +138,7 @@ export default function ExercisesPage() {
             </div>
             <button
               onClick={() => remove(x.id)}
-              className="text-muted p-2"
+              className="shrink-0 text-muted p-2"
               aria-label="Delete"
             >
               <Trash2 size={18} />
