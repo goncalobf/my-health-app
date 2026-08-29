@@ -164,6 +164,9 @@ export const settings = pgTable("settings", {
   heightCm: real("height_cm"),
   ageYears: integer("age_years"),
   biologicalSex: text("biological_sex").notNull().default("unspecified"),
+  // Null until the account finishes onboarding; existing accounts are
+  // backfilled so they are never sent through it.
+  onboardedAt: timestamp("onboarded_at"),
 });
 
 // Bodyweight measurements over time.
