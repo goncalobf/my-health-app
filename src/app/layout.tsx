@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ServiceWorker from "@/components/ServiceWorker";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title: "Fitlog",
@@ -35,6 +36,7 @@ export default function RootLayout({
       <body>
         {children}
         <ServiceWorker />
+        <Analytics />
       </body>
     </html>
   );
