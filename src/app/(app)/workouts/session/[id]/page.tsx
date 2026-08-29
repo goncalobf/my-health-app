@@ -19,6 +19,13 @@ interface PlanItem {
   targetWeightKg: number | null;
   weightIncrementKg: number;
   restSeconds: number;
+  targetRirMin: number | null;
+  targetRirMax: number | null;
+  avoidFailure: boolean;
+  instruction: string | null;
+  supersetGroup: string | null;
+  isAnchor: boolean;
+  deloadMode: boolean;
 }
 interface LoggedSet {
   id: number;
@@ -26,6 +33,7 @@ interface LoggedSet {
   setNumber: number;
   weightKg: number;
   reps: number;
+  rir: number | null;
   isWarmup: boolean;
   completedAt: string | null;
 }
@@ -33,11 +41,12 @@ interface SessionData {
   session: { id: number; name: string; startedAt: string; finishedAt: string | null };
   plan: PlanItem[];
   loggedSets: LoggedSet[];
-  lastSets: Record<number, { weightKg: number; reps: number }[]>;
+  lastSets: Record<number, { weightKg: number; reps: number; rir: number | null }[]>;
   recommendations: Record<number, {
     action: "start" | "increase" | "repeat" | "reduce";
     weightKg: number | null;
     message: string;
+    reason: string;
   }>;
 }
 
@@ -46,6 +55,7 @@ interface LocalSet {
   dbId?: number;
   weight: string;
   reps: string;
+  rir: string;
   completed: boolean;
 }
 interface Block {
@@ -53,14 +63,28 @@ interface Block {
   name: string;
   imageUrl: string | null;
   targetReps: number;
+  minReps: number;
+  maxReps: number;
   restSeconds: number;
-  lastSets: { weightKg: number; reps: number }[];
+  targetRirMin: number | null;
+  targetRirMax: number | null;
+  avoidFailure: boolean;
+  instruction: string | null;
+  supersetGroup: string | null;
+  isAnchor: boolean;
+  deloadMode: boolean;
+  lastSets: { weightKg: number; reps: number; rir: number | null }[];
   recommendation?: SessionData["recommendations"][number];
   sets: LocalSet[];
 }
 
 let keyc = 0;
 const nk = () => `s${keyc++}`;
+
+function rirTarget(min: number | null, max: number | null) {
+  if (min == null) return null;
+  return min === max || max == null ? `RIR ${min}` : `RIR ${min}–${max}`;
+}
 
 export default function SessionPage({
   params,
@@ -101,8 +125,18 @@ export default function SessionPage({
       opts: {
         name: string;
         imageUrl: string | null;
+        targetSets: number;
         targetReps: number;
+        minReps: number;
+        maxReps: number;
         restSeconds: number;
+        targetRirMin: number | null;
+        targetRirMax: number | null;
+        avoidFailure: boolean;
+        instruction: string | null;
+        supersetGroup: string | null;
+        isAnchor: boolean;
+        deloadMode: boolean;
       }
     ): Block => {
       const logged = data.loggedSets
@@ -116,20 +150,18 @@ export default function SessionPage({
           dbId: s.id,
           weight: s.weightKg ? String(s.weightKg) : "",
           reps: s.reps ? String(s.reps) : "",
+          rir: s.rir == null ? "" : String(s.rir),
           completed: !!s.completedAt,
         }));
       } else {
-        const count = Math.max(1, (opts as { targetSets?: number }).targetSets ?? 1);
+        const count = Math.max(1, opts.targetSets);
         sets = Array.from({ length: count }, (_, i) => ({
           key: nk(),
           weight: data.recommendations[exerciseId]?.weightKg != null
             ? String(data.recommendations[exerciseId].weightKg)
             : last[i]?.weightKg ? String(last[i].weightKg) : "",
-          reps: last[i]?.reps
-            ? String(last[i].reps)
-            : opts.targetReps
-              ? String(opts.targetReps)
-              : "",
+          reps: last[i]?.reps ? String(last[i].reps) : String(opts.minReps),
+          rir: "",
           completed: false,
         }));
       }
@@ -138,7 +170,16 @@ export default function SessionPage({
         name: opts.name,
         imageUrl: opts.imageUrl,
         targetReps: opts.targetReps,
+        minReps: opts.minReps,
+        maxReps: opts.maxReps,
         restSeconds: opts.restSeconds,
+        targetRirMin: opts.targetRirMin,
+        targetRirMax: opts.targetRirMax,
+        avoidFailure: opts.avoidFailure,
+        instruction: opts.instruction,
+        supersetGroup: opts.supersetGroup,
+        isAnchor: opts.isAnchor,
+        deloadMode: opts.deloadMode,
         lastSets: last,
         recommendation: data.recommendations[exerciseId],
         sets,
@@ -151,9 +192,18 @@ export default function SessionPage({
         makeBlock(p.exerciseId, {
           name: p.name,
           imageUrl: p.imageUrl,
+          targetSets: p.targetSets,
           targetReps: p.targetReps,
+          minReps: p.minReps,
+          maxReps: p.maxReps,
           restSeconds: p.restSeconds,
-          ...({ targetSets: p.targetSets } as object),
+          targetRirMin: p.targetRirMin,
+          targetRirMax: p.targetRirMax,
+          avoidFailure: p.avoidFailure,
+          instruction: p.instruction,
+          supersetGroup: p.supersetGroup,
+          isAnchor: p.isAnchor,
+          deloadMode: p.deloadMode,
         })
       );
     }
@@ -165,8 +215,18 @@ export default function SessionPage({
         makeBlock(s.exerciseId, {
           name: exercise?.name ?? "Exercise",
           imageUrl: exercise?.imageUrl ?? null,
+          targetSets: 1,
           targetReps: 0,
+          minReps: 0,
+          maxReps: 0,
           restSeconds: 120,
+          targetRirMin: null,
+          targetRirMax: null,
+          avoidFailure: false,
+          instruction: null,
+          supersetGroup: null,
+          isAnchor: false,
+          deloadMode: false,
         })
       );
     }
@@ -199,6 +259,7 @@ export default function SessionPage({
     await apiPatch(`/api/sessions/${id}/sets/${s.dbId}`, {
       weightKg: Number(s.weight) || 0,
       reps: Number(s.reps) || 0,
+      rir: s.rir,
     });
   }
 
@@ -216,6 +277,7 @@ export default function SessionPage({
           setNumber: idx + 1,
           weightKg: Number(s.weight) || 0,
           reps: Number(s.reps) || 0,
+          rir: s.rir,
           completed: nextCompleted,
         }
       );
@@ -224,6 +286,7 @@ export default function SessionPage({
       await apiPatch(`/api/sessions/${id}/sets/${s.dbId}`, {
         weightKg: Number(s.weight) || 0,
         reps: Number(s.reps) || 0,
+        rir: s.rir,
         completed: nextCompleted,
       });
       patchSet(exIdx, setKey, { completed: nextCompleted });
@@ -250,7 +313,8 @@ export default function SessionPage({
             {
               key: nk(),
               weight: prev?.weight ?? "",
-              reps: prev?.reps ?? (b.targetReps ? String(b.targetReps) : ""),
+              reps: prev?.reps ?? (b.minReps ? String(b.minReps) : ""),
+              rir: "",
               completed: false,
             },
           ],
@@ -284,10 +348,19 @@ export default function SessionPage({
         name: ex?.name ?? "Exercise",
         imageUrl: ex?.imageUrl ?? null,
         targetReps: 0,
+        minReps: 0,
+        maxReps: 0,
         restSeconds: 120,
+        targetRirMin: null,
+        targetRirMax: null,
+        avoidFailure: false,
+        instruction: null,
+        supersetGroup: null,
+        isAnchor: false,
+        deloadMode: false,
         lastSets: [],
         recommendation: undefined,
-        sets: [{ key: nk(), weight: "", reps: "", completed: false }],
+        sets: [{ key: nk(), weight: "", reps: "", rir: "", completed: false }],
       },
     ]);
   }
@@ -388,21 +461,53 @@ export default function SessionPage({
                     {b.sets.filter((set) => set.completed).length}/{b.sets.length}
                   </span>
                 </div>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {b.maxReps > 0 && (
+                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-muted">
+                      {b.minReps}–{b.maxReps} reps
+                    </span>
+                  )}
+                  {rirTarget(b.targetRirMin, b.targetRirMax) && (
+                    <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
+                      {rirTarget(b.targetRirMin, b.targetRirMax)}
+                    </span>
+                  )}
+                  {b.isAnchor && (
+                    <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] text-warn">Anchor</span>
+                  )}
+                  {b.avoidFailure && (
+                    <span className="rounded-full bg-danger/15 px-2 py-0.5 text-[10px] text-danger">Never to failure</span>
+                  )}
+                  {b.supersetGroup && (
+                    <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] text-warn">Superset</span>
+                  )}
+                </div>
                 {b.recommendation && (
-                  <p className={`mt-1 text-xs ${
-                    b.recommendation.action === "increase" ? "text-accent" :
-                    b.recommendation.action === "reduce" ? "text-warn" : "text-muted"
-                  }`}>
-                    {b.recommendation.message}
+                  <div className="mt-2">
+                    <p className={`text-xs font-medium ${
+                      b.recommendation.action === "increase" ? "text-accent" :
+                      b.recommendation.action === "reduce" ? "text-warn" : "text-muted"
+                    }`}>
+                      {b.recommendation.message}
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
+                      Why: {b.recommendation.reason}
+                    </p>
+                  </div>
+                )}
+                {b.instruction && (
+                  <p className="mt-2 rounded-lg border border-border bg-surface-2 px-2.5 py-2 text-[11px] leading-relaxed text-muted">
+                    {b.instruction}
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-[1.5rem_minmax(0,1fr)_minmax(0,0.72fr)_2.75rem] items-center gap-2 px-1 text-center text-[10px] uppercase tracking-wide text-muted">
+            <div className="mt-4 grid grid-cols-[1.25rem_minmax(0,1fr)_minmax(0,0.72fr)_3rem_2.75rem] items-center gap-1.5 px-1 text-center text-[10px] uppercase tracking-wide text-muted min-[360px]:gap-2">
               <span className="text-left">Set</span>
               <span>kg</span>
               <span>reps</span>
+              <span>RIR</span>
               <span className="sr-only">Complete</span>
             </div>
 
@@ -410,7 +515,7 @@ export default function SessionPage({
               {b.sets.map((s, si) => (
                 <div
                   key={s.key}
-                  className={`grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)_minmax(0,0.72fr)_2.75rem] items-center gap-2 rounded-xl p-1 transition ${
+                  className={`grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)_minmax(0,0.72fr)_3rem_2.75rem] items-center gap-1.5 rounded-xl p-1 transition min-[360px]:gap-2 ${
                     s.completed ? "bg-accent/10 ring-1 ring-inset ring-accent/15" : ""
                   }`}
                 >
@@ -444,8 +549,8 @@ export default function SessionPage({
                     placeholder={
                       b.lastSets[si]?.reps
                         ? String(b.lastSets[si].reps)
-                        : b.targetReps
-                          ? String(b.targetReps)
+                        : b.minReps
+                          ? String(b.minReps)
                           : "0"
                     }
                     value={s.reps}
@@ -455,6 +560,18 @@ export default function SessionPage({
                     }
                     onBlur={() => commitValues(exIdx, s)}
                     className="min-w-0 w-full rounded-lg border border-border bg-surface-2 px-1 py-2.5 text-center text-base tabular-nums outline-none focus:border-accent"
+                  />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={10}
+                    placeholder={b.targetRirMin == null ? "–" : String(b.targetRirMin)}
+                    value={s.rir}
+                    aria-label={`${b.name}, set ${si + 1}, reps in reserve`}
+                    onChange={(e) => patchSet(exIdx, s.key, { rir: e.target.value })}
+                    onBlur={() => commitValues(exIdx, s)}
+                    className="min-w-0 w-full rounded-lg border border-border bg-surface-2 px-1 py-2.5 text-center text-sm tabular-nums outline-none focus:border-accent"
                   />
                   <button
                     onClick={() => toggleComplete(exIdx, s.key)}

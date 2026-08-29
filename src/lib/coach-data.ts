@@ -10,6 +10,8 @@ import {
   sessionSets,
   sessions,
   settings,
+  trainingCheckins,
+  trainingPlanState,
   workoutSchedule,
 } from "@/db/schema";
 import {
@@ -32,7 +34,7 @@ export async function getCoachSnapshot({
   const fromTime = startOfAppDay(fromDay);
 
   const [setting] = await db.select().from(settings).where(eq(settings.id, 1));
-  const [weights, expenditures, foods, sessionRows, setRows, schedule, routineTargets] =
+  const [weights, expenditures, foods, sessionRows, setRows, schedule, routineTargets, planStates, checkins] =
     await Promise.all([
       db.select({ day: bodyweightLogs.day, weightKg: bodyweightLogs.weightKg })
         .from(bodyweightLogs).where(gte(bodyweightLogs.day, fromDay)).orderBy(asc(bodyweightLogs.day)),
@@ -51,7 +53,7 @@ export async function getCoachSnapshot({
       db.select({
         sessionId: sessionSets.sessionId, exerciseId: sessionSets.exerciseId,
         exercise: exercises.name, muscleGroup: exercises.muscleGroup,
-        weightKg: sessionSets.weightKg, reps: sessionSets.reps,
+        weightKg: sessionSets.weightKg, reps: sessionSets.reps, rir: sessionSets.rir,
       }).from(sessionSets)
         .innerJoin(sessions, eq(sessions.id, sessionSets.sessionId))
         .innerJoin(exercises, eq(exercises.id, sessionSets.exerciseId))
@@ -63,7 +65,14 @@ export async function getCoachSnapshot({
         routineId: routineExercises.routineId, exercise: exercises.name,
         minReps: routineExercises.minReps, maxReps: routineExercises.maxReps,
         targetSets: routineExercises.targetSets, incrementKg: routineExercises.weightIncrementKg,
+        targetRirMin: routineExercises.targetRirMin,
+        targetRirMax: routineExercises.targetRirMax,
+        avoidFailure: routineExercises.avoidFailure,
+        isAnchor: routineExercises.isAnchor,
+        instruction: routineExercises.instruction,
       }).from(routineExercises).innerJoin(exercises, eq(exercises.id, routineExercises.exerciseId)),
+      db.select().from(trainingPlanState).where(eq(trainingPlanState.id, 1)).limit(1),
+      db.select().from(trainingCheckins).orderBy(desc(trainingCheckins.day)).limit(1),
     ]);
 
   const nutritionByDay = new Map<string, { calories: number; proteinG: number; carbsG: number; fatG: number }>();
@@ -84,10 +93,10 @@ export async function getCoachSnapshot({
   for (const set of setRows) setsBySession.set(set.sessionId, [...(setsBySession.get(set.sessionId) ?? []), set]);
   const workouts = sessionRows.map((session) => {
       const sets = setsBySession.get(session.id) ?? [];
-      const exerciseMap = new Map<string, { muscleGroup: string | null; sets: { weightKg: number; reps: number }[] }>();
+      const exerciseMap = new Map<string, { muscleGroup: string | null; sets: { weightKg: number; reps: number; rir: number | null }[] }>();
       for (const set of sets) {
         const item = exerciseMap.get(set.exercise) ?? { muscleGroup: set.muscleGroup, sets: [] };
-        item.sets.push({ weightKg: set.weightKg, reps: set.reps }); exerciseMap.set(set.exercise, item);
+        item.sets.push({ weightKg: set.weightKg, reps: set.reps, rir: set.rir }); exerciseMap.set(set.exercise, item);
       }
       return {
         id: session.id,
@@ -147,6 +156,10 @@ export async function getCoachSnapshot({
     workouts,
     schedule,
     routineTargets,
+    trainingPlan: {
+      state: planStates[0] ?? null,
+      latestRecoveryCheckin: checkins[0] ?? null,
+    },
     commonFoods,
     nutritionPhase: buildNutritionPhase({
       goal: setting?.goal ?? "recomposition",

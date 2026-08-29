@@ -31,6 +31,12 @@ export async function GET(
       targetWeightKg: routineExercises.targetWeightKg,
       weightIncrementKg: routineExercises.weightIncrementKg,
       restSeconds: routineExercises.restSeconds,
+      targetRirMin: routineExercises.targetRirMin,
+      targetRirMax: routineExercises.targetRirMax,
+      avoidFailure: routineExercises.avoidFailure,
+      instruction: routineExercises.instruction,
+      supersetGroup: routineExercises.supersetGroup,
+      isAnchor: routineExercises.isAnchor,
     })
     .from(routineExercises)
     .innerJoin(exercises, eq(exercises.id, routineExercises.exerciseId))

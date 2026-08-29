@@ -3,6 +3,12 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { sessionSets } from "@/db/schema";
 
+function parseRir(value: unknown) {
+  if (value === "" || value == null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(10, Math.round(parsed))) : null;
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string; setId: string }> }
@@ -12,6 +18,9 @@ export async function PATCH(
   const set: Record<string, unknown> = {};
   if (body.weightKg !== undefined) set.weightKg = Number(body.weightKg);
   if (body.reps !== undefined) set.reps = Number(body.reps);
+  if (body.rir !== undefined) {
+    set.rir = parseRir(body.rir);
+  }
   if (body.isWarmup !== undefined) set.isWarmup = !!body.isWarmup;
   if (body.completed === true) set.completedAt = new Date();
   if (body.completed === false) set.completedAt = null;

@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { sessionSets } from "@/db/schema";
 
+function parseRir(value: unknown) {
+  if (value === "" || value == null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(10, Math.round(parsed))) : null;
+}
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -21,6 +27,7 @@ export async function POST(
       setNumber: body.setNumber ? Number(body.setNumber) : 1,
       weightKg: body.weightKg != null ? Number(body.weightKg) : 0,
       reps: body.reps != null ? Number(body.reps) : 0,
+      rir: parseRir(body.rir),
       isWarmup: !!body.isWarmup,
       completedAt: body.completed ? new Date() : null,
     })

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   LineChart,
   Line,
@@ -9,7 +10,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { Plus, Trophy, ChevronDown, Ruler, Camera } from "lucide-react";
+import { Plus, Trophy, ChevronDown, Ruler, Camera, Gauge } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import { formatDate, todayISO } from "@/lib/utils";
@@ -159,6 +160,11 @@ export default function ProgressPage() {
   return (
     <div>
       <PageHeader title="Progress" />
+
+      <Link href="/workouts/plan" className="card mb-6 flex items-center gap-3 border-accent/30 p-4 active:scale-[0.98] transition">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"><Gauge size={20} /></div>
+        <div className="min-w-0 flex-1"><p className="font-semibold">Training progression</p><p className="text-xs text-muted">Mesocycle week, RIR and deload signals</p></div>
+      </Link>
 
       <section className="mb-6">
         <h2 className="text-sm font-semibold text-muted mb-2">Bodyweight</h2>

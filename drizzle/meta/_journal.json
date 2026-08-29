@@ -64,6 +64,13 @@
       "when": 1787947676396,
       "tag": "0008_handy_pete_wisdom",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788001588055,
+      "tag": "0009_light_beast",
+      "breakpoints": true
     }
   ]
 }

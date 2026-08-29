@@ -60,6 +60,12 @@ export const routineExercises = pgTable("routine_exercises", {
   targetWeightKg: real("target_weight_kg"),
   weightIncrementKg: real("weight_increment_kg").notNull().default(2.5),
   restSeconds: integer("rest_seconds").notNull().default(120),
+  targetRirMin: integer("target_rir_min"),
+  targetRirMax: integer("target_rir_max"),
+  avoidFailure: boolean("avoid_failure").notNull().default(false),
+  instruction: text("instruction"),
+  supersetGroup: text("superset_group"),
+  isAnchor: boolean("is_anchor").notNull().default(false),
 });
 
 // A performed workout instance.
@@ -86,6 +92,7 @@ export const sessionSets = pgTable("session_sets", {
   setNumber: integer("set_number").notNull(),
   weightKg: real("weight_kg").notNull().default(0),
   reps: integer("reps").notNull().default(0),
+  rir: integer("rir"),
   isWarmup: boolean("is_warmup").notNull().default(false),
   completedAt: timestamp("completed_at"),
 });
@@ -140,6 +147,30 @@ export const workoutSchedule = pgTable("workout_schedule", {
     onDelete: "set null",
   }),
 });
+
+// State for the current training block and its autoregulated deload week.
+export const trainingPlanState = pgTable("training_plan_state", {
+  id: integer("id").primaryKey().default(1),
+  planName: text("plan_name").notNull().default("PPL 6-day A/B"),
+  blockStartedOn: date("block_started_on").notNull(),
+  isDeload: boolean("is_deload").notNull().default(false),
+  deloadStartedOn: date("deload_started_on"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const trainingCheckins = pgTable(
+  "training_checkins",
+  {
+    id: serial("id").primaryKey(),
+    day: date("day").notNull(),
+    sleepPoor: boolean("sleep_poor").notNull().default(false),
+    appetiteLow: boolean("appetite_low").notNull().default(false),
+    jointPain: boolean("joint_pain").notNull().default(false),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("training_checkins_day_unique").on(table.day)]
+);
 
 // Daily energy expenditure copied from Garmin Connect.
 export const expenditureLogs = pgTable("expenditure_logs", {
@@ -213,6 +244,8 @@ export type NutritionLog = typeof nutritionLogs.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
 export type BodyweightLog = typeof bodyweightLogs.$inferSelect;
 export type ExpenditureLog = typeof expenditureLogs.$inferSelect;
+export type TrainingPlanState = typeof trainingPlanState.$inferSelect;
+export type TrainingCheckin = typeof trainingCheckins.$inferSelect;
 export type SavedFood = typeof savedFoods.$inferSelect;
 export type MealTemplate = typeof mealTemplates.$inferSelect;
 export type MeasurementLog = typeof measurementLogs.$inferSelect;

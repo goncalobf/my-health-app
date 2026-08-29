@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Play, Dumbbell, History, ListChecks, Zap } from "lucide-react";
+import { Plus, Play, Dumbbell, History, ListChecks, Zap, TrendingUp } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 
@@ -103,6 +103,11 @@ export default function WorkoutsPage() {
           <ListChecks size={18} /> Exercises
         </Link>
       </div>
+
+      <Link href="/workouts/plan" className="card mb-5 flex items-center gap-3 p-4 active:scale-[0.98] transition">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"><TrendingUp size={20} /></div>
+        <div className="min-w-0 flex-1"><p className="font-semibold">Plan & progression</p><p className="text-xs text-muted">RIR, double progression and deload tracking</p></div>
+      </Link>
 
       <h2 className="text-sm font-semibold text-muted mb-2">Your routines</h2>
       {loading ? (

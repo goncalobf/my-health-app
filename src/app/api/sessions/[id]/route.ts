@@ -6,7 +6,9 @@ import {
   sessionSets,
   routineExercises,
   exercises,
+  trainingPlanState,
 } from "@/db/schema";
+import { getProgressionRecommendation } from "@/lib/progressive-overload";
 
 export async function GET(
   _req: Request,
@@ -24,7 +26,7 @@ export async function GET(
   }
 
   // Planned exercises from the routine (if any).
-  const plan = session.routineId
+  const basePlan = session.routineId
     ? await db
         .select({
           exerciseId: routineExercises.exerciseId,
@@ -38,6 +40,12 @@ export async function GET(
           targetWeightKg: routineExercises.targetWeightKg,
           weightIncrementKg: routineExercises.weightIncrementKg,
           restSeconds: routineExercises.restSeconds,
+          targetRirMin: routineExercises.targetRirMin,
+          targetRirMax: routineExercises.targetRirMax,
+          avoidFailure: routineExercises.avoidFailure,
+          instruction: routineExercises.instruction,
+          supersetGroup: routineExercises.supersetGroup,
+          isAnchor: routineExercises.isAnchor,
           position: routineExercises.position,
         })
         .from(routineExercises)
@@ -45,6 +53,21 @@ export async function GET(
         .where(eq(routineExercises.routineId, session.routineId))
         .orderBy(asc(routineExercises.position), asc(routineExercises.id))
     : [];
+  const [planState] = await db
+    .select({ isDeload: trainingPlanState.isDeload })
+    .from(trainingPlanState)
+    .where(eq(trainingPlanState.id, 1));
+  const deloadMode = planState?.isDeload ?? false;
+  const plan = deloadMode
+    ? basePlan.map((item) => ({
+        ...item,
+        targetSets: Math.max(1, Math.ceil(item.targetSets / 2)),
+        targetRirMin: 4,
+        targetRirMax: 6,
+        instruction: `Deload: use about 60% of your normal load and RIR 4+.${item.instruction ? ` ${item.instruction}` : ""}`,
+        deloadMode: true,
+      }))
+    : basePlan.map((item) => ({ ...item, deloadMode: false }));
 
   // Sets already logged in this session.
   const loggedSets = await db
@@ -55,6 +78,7 @@ export async function GET(
       setNumber: sessionSets.setNumber,
       weightKg: sessionSets.weightKg,
       reps: sessionSets.reps,
+      rir: sessionSets.rir,
       isWarmup: sessionSets.isWarmup,
       completedAt: sessionSets.completedAt,
       exerciseName: exercises.name,
@@ -72,11 +96,12 @@ export async function GET(
     ...plan.map((p) => p.exerciseId),
     ...loggedSets.map((s) => s.exerciseId),
   ]);
-  const lastSets: Record<number, { weightKg: number; reps: number }[]> = {};
+  const lastSets: Record<number, { weightKg: number; reps: number; rir: number | null }[]> = {};
   const recommendations: Record<number, {
     action: "start" | "increase" | "repeat" | "reduce";
     weightKg: number | null;
     message: string;
+    reason: string;
   }> = {};
   for (const exId of exerciseIds) {
     const historyRows = await db
@@ -84,6 +109,7 @@ export async function GET(
         sessionId: sessionSets.sessionId,
         weightKg: sessionSets.weightKg,
         reps: sessionSets.reps,
+        rir: sessionSets.rir,
         startedAt: sessions.startedAt,
       })
       .from(sessionSets)
@@ -99,39 +125,36 @@ export async function GET(
       )
       .orderBy(desc(sessions.startedAt), asc(sessionSets.setNumber));
 
-    const grouped = new Map<number, { weightKg: number; reps: number }[]>();
+    const grouped = new Map<number, { weightKg: number; reps: number; rir: number | null }[]>();
     for (const row of historyRows) {
       if (!grouped.has(row.sessionId) && grouped.size >= 2) continue;
       const group = grouped.get(row.sessionId) ?? [];
-      group.push({ weightKg: row.weightKg, reps: row.reps });
+      group.push({ weightKg: row.weightKg, reps: row.reps, rir: row.rir });
       grouped.set(row.sessionId, group);
     }
     const history = [...grouped.values()];
     if (history[0]?.length) lastSets[exId] = history[0];
 
     const item = plan.find((p) => p.exerciseId === exId);
-    if (!item || !history[0]?.length) {
+    if (!item) continue;
+    if (deloadMode) {
+      const workingWeight = history[0]?.length
+        ? Math.max(...history[0].map((set) => set.weightKg))
+        : null;
+      const deloadWeight = workingWeight == null
+        ? null
+        : Math.round(workingWeight * 0.6 * 2) / 2;
       recommendations[exId] = {
-        action: "start",
-        weightKg: item?.targetWeightKg ?? null,
-        message: item?.targetWeightKg ? `Start at ${item.targetWeightKg}kg` : "Choose a comfortable starting weight",
+        action: "reduce",
+        weightKg: deloadWeight,
+        message: deloadWeight == null
+          ? "Use about 60% of your normal load"
+          : `Deload at about ${deloadWeight}kg · RIR 4+`,
+        reason: "This is a planned deload: half the normal sets, lower load and stay far from failure for one week.",
       };
       continue;
     }
-    const latest = history[0];
-    const workingWeight = Math.max(...latest.map((s) => s.weightKg));
-    const enoughSets = latest.length >= item.targetSets;
-    const hitTop = enoughSets && latest.every((s) => s.reps >= item.maxReps);
-    const missedTwice = history.length >= 2 && history.slice(0, 2).every((sets) => sets.some((s) => s.reps < item.minReps));
-    if (hitTop) {
-      const next = Math.round((workingWeight + item.weightIncrementKg) * 10) / 10;
-      recommendations[exId] = { action: "increase", weightKg: next, message: `Progress to ${next}kg · aim for ${item.minReps}–${item.maxReps} reps` };
-    } else if (missedTwice) {
-      const next = Math.max(0, Math.round((workingWeight - item.weightIncrementKg) * 10) / 10);
-      recommendations[exId] = { action: "reduce", weightKg: next, message: `Deload to ${next}kg after two difficult sessions` };
-    } else {
-      recommendations[exId] = { action: "repeat", weightKg: workingWeight, message: `Repeat ${workingWeight}kg · build toward ${item.maxReps} reps` };
-    }
+    recommendations[exId] = getProgressionRecommendation(item, history);
   }
 
   return NextResponse.json({ session, plan, loggedSets, lastSets, recommendations });
