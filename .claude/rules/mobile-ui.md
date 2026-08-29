@@ -22,3 +22,4 @@ paths:
 - Changes to the service worker, manifest, icons, camera/barcode flow, or fixed navigation require an installed-PWA/HTTPS compatibility check.
 - Look at visual changes before reporting them done: `npm run dev:local`, then screenshot. Headless Chrome lays out at a 500 px minimum, so constrain content to a fixed 320/390 px frame when checking narrow widths.
 - Motivation imagery must be free-licence. Premium Unsplash photos render with a visible watermark that no test will catch.
+- Older WebKit does not grant momentum touch-scrolling to an overflow region for free; without `-webkit-overflow-scrolling: touch` a swipe inside a sheet can silently fail to scroll, which looks identical to "the button is missing" and cannot be seen in a desktop browser or a screenshot.
