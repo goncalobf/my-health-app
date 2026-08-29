@@ -9,6 +9,8 @@ description: Design, generate, review, dry-run, apply, and verify a safe Drizzle
 
 1. Inspect `git status --short`, `src/db/schema.ts`, `drizzle/meta/_journal.json`, the latest migration, and the exact target environment.
 2. Determine whether the operation is schema-only, a data backfill, or both. Identify row counts, nullability, ownership, uniqueness, and rollback risks before writing SQL.
+3. Append any backfill to the generated file as its own `--> statement-breakpoint` statement so it applies in the same transaction as the schema change. `drizzle/0012` is the reference: existing accounts are marked onboarded so a new gate never traps them.
+4. Preview deployments read the production database, so apply before a preview or a merge depends on the new shape.
 3. Require explicit authorization before touching production. Confirm the target from configuration without printing connection strings or secret values.
 
 ## Create and review

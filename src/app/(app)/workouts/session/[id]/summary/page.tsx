@@ -8,6 +8,8 @@ import { est1RM, formatDuration, round } from "@/lib/utils";
 import PageHeader from "@/components/PageHeader";
 import WorkoutCoach from "@/components/WorkoutCoach";
 import ExerciseImage from "@/components/ExerciseImage";
+import MotivationCard from "@/components/MotivationCard";
+import { pickImage, pickLine } from "@/lib/motivation";
 import { getProgressionRecommendation } from "@/lib/progressive-overload";
 
 interface SetRow { exerciseId: number; exerciseName: string; exerciseImageUrl: string | null; muscleGroup: string | null; weightKg: number; reps: number; rir: number | null; completedAt: string | null; isWarmup: boolean; isDropSet: boolean; }
@@ -110,7 +112,22 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
       </div>
 
       <WorkoutCoach sessionId={Number(id)} />
-      <Link href="/" className="btn-primary w-full mt-5"><Home size={18} /> Back to dashboard</Link>
+
+      <MotivationCard
+        variant="panel"
+        className="mt-5"
+        image={pickImage(`summary-${id}`)}
+        line={pickLine("summary", `summary-${id}`)}
+        fact={
+          summary.prs.length > 0
+            ? `${summary.prs.length} personal record${summary.prs.length === 1 ? "" : "s"} today.`
+            : summary.volumeChangePct != null && summary.volumeChangePct > 0
+              ? `${summary.volumeChangePct}% more volume than last time.`
+              : `${summary.sets.length} working sets logged.`
+        }
+      />
+
+      <Link href="/" className="btn-primary w-full mt-3"><Home size={18} /> Back to dashboard</Link>
     </div>
   );
 }

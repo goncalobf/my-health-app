@@ -8,6 +8,7 @@ description: Implement or extend a Fitlog product feature across its Next.js UI,
 ## Establish the change surface
 
 1. Read `CLAUDE.md`, `git status --short`, and the rules matching the files involved.
+2. For UI work, start `npm run dev:local` early so the change can be seen as it is built rather than only at the end.
 2. Trace the existing page/component to its API handler, schema tables, and relevant domain function before editing.
 3. State the behavior, data ownership path, validation rules, mobile states, and whether a migration is required.
 

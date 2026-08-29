@@ -18,6 +18,8 @@ import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import ExercisePicker from "@/components/ExercisePicker";
 import ExerciseImage from "@/components/ExerciseImage";
 import RestTimer from "@/components/RestTimer";
+import HypeScreen from "@/components/HypeScreen";
+import { pickLine } from "@/lib/motivation";
 import { normalizeDecimalInput, parseDecimalInput } from "@/lib/decimal-input";
 import { prefillSet, suggestDropWeight } from "@/lib/set-prefill";
 import {
@@ -139,6 +141,7 @@ export default function SessionPage({
   const [picking, setPicking] = useState(false);
   const [overview, setOverview] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
+  const [hype, setHype] = useState(false);
   const [cursor, setCursor] = useState<Cursor | null>(null);
   const [rest, setRest] = useState<{
     seq: number;
@@ -307,6 +310,11 @@ export default function SessionPage({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    // Only a freshly started workout arrives with ?hype=1.
+    setHype(new URLSearchParams(window.location.search).get("hype") === "1");
+  }, []);
 
   function patchEntry(
     exIdx: number,
@@ -555,6 +563,21 @@ export default function SessionPage({
     );
   }
 
+  if (hype) {
+    return (
+      <HypeScreen
+        seed={`session-${id}`}
+        workoutName={name}
+        totalSets={totalSets}
+        exerciseCount={blocks.length}
+        onStart={() => {
+          setHype(false);
+          window.history.replaceState(null, "", `/workouts/session/${id}`);
+        }}
+      />
+    );
+  }
+
   return (
     <div className={rest ? "min-w-0 pb-32" : "min-w-0 pb-8"}>
       <header className="sticky top-[env(safe-area-inset-top)] z-30 -mx-3 mb-5 border-b border-border bg-bg/95 px-3 py-3 backdrop-blur min-[360px]:-mx-4 min-[360px]:px-4">
@@ -683,6 +706,7 @@ export default function SessionPage({
           key={rest.seq}
           targetSeconds={rest.target}
           label={rest.label}
+          note={pickLine("workout", `${id}-${rest.seq}`)}
           onEnd={() => setRest(null)}
         />
       )}
