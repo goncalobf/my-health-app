@@ -51,6 +51,13 @@ Barcode lookup intentionally queries Open Food Facts only. Neither PortFIR nor
 the generic Swiss catalog documents barcodes, so Fitlog does not manufacture or
 infer them.
 
+The mobile scanner preloads its decoder when the Nutrition page opens, requests a
+bounded rear-camera stream, and decodes only EAN/UPC food barcode formats every
+120 ms. Keep its detection callback stable: restarting the camera on a parent
+render makes scanning noticeably slower on iPhone. Product lookup keeps the
+scanner visible with immediate feedback until the authenticated API response
+finishes.
+
 ## Normalization rules
 
 - Nutrients are per 100 g edible portion and are rounded to one decimal place.

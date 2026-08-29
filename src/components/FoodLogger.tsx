@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { X, Search, ScanLine, Pencil, ChevronLeft, Star, Clock3, Utensils } from "lucide-react";
 import { api, apiGet, apiPost } from "@/lib/api";
@@ -108,8 +108,7 @@ export default function FoodLogger({
     };
   }, [submittedQuery, searchNonce]);
 
-  async function onScanned(code: string) {
-    setScanning(false);
+  const onScanned = useCallback(async (code: string) => {
     try {
       const food = await apiGet<FoodResult>(`/api/foods/barcode/${code}`);
       setSelected(food);
@@ -118,8 +117,10 @@ export default function FoodLogger({
       // Not found — jump to manual with the barcode name hint.
       setTab("manual");
       setMName("");
+    } finally {
+      setScanning(false);
     }
-  }
+  }, []);
 
   const factor = parseDecimalInput(qty) / 100;
   const preview = selected

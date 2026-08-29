@@ -8,6 +8,7 @@ import { parseDecimalInput } from "@/lib/decimal-input";
 import MacroSummary from "@/components/MacroSummary";
 import FoodLogger from "@/components/FoodLogger";
 import PageHeader from "@/components/PageHeader";
+import { preloadBarcodeReader } from "@/lib/barcode-scanner-loader";
 
 interface Log {
   id: number;
@@ -60,6 +61,7 @@ export default function NutritionPage() {
   }, [day]);
 
   useEffect(() => {
+    preloadBarcodeReader();
     apiGet<Targets>("/api/settings").then(setTargets);
   }, []);
   useEffect(() => {
