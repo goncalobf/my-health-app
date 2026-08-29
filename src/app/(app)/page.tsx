@@ -16,6 +16,10 @@ import MacroSummary from "@/components/MacroSummary";
 import DailyPlan from "@/components/DailyPlan";
 import CoachDashboardCard from "@/components/CoachDashboardCard";
 import NutritionPhaseCard from "@/components/NutritionPhaseCard";
+import MotivationCard from "@/components/MotivationCard";
+import { pickImage, pickLine } from "@/lib/motivation";
+import { isSlipping, topMotivationFact } from "@/lib/motivation-facts";
+import { getMotivationInput } from "@/lib/motivation-server";
 import { requireAppUser } from "@/lib/app-user";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +75,12 @@ export default async function DashboardPage() {
     db.select({ count: sql<number>`count(distinct ${nutritionLogs.day})::int` }).from(nutritionLogs).where(and(eq(nutritionLogs.userId, user.id), gte(nutritionLogs.day, weekStartDay))),
   ]);
 
+  const motivation = await getMotivationInput(user.id);
+  const slipping = isSlipping(motivation);
+  const motivationFact = topMotivationFact(motivation);
+  // Seeded per user per day: the poster holds still until tomorrow.
+  const motivationSeed = `${today}:${user.id}`;
+
   const hour = hourInAppTimeZone();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -89,6 +99,14 @@ export default async function DashboardPage() {
           <Settings size={20} />
         </Link>
       </header>
+
+      <MotivationCard
+        image={pickImage(motivationSeed)}
+        line={pickLine(slipping ? "slipping" : "dashboard", motivationSeed)}
+        fact={motivationFact?.text ?? null}
+        eyebrow={slipping ? "Get back in" : null}
+        priority
+      />
 
       <DailyPlan
         day={today}
