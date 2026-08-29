@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Pencil, BookmarkPlus } from "lucide-react";
 import { apiGet, apiDelete, apiPatch, apiPost } from "@/lib/api";
 import { todayISO, formatDate, round, shiftISODate } from "@/lib/utils";
+import { parseDecimalInput } from "@/lib/decimal-input";
 import MacroSummary from "@/components/MacroSummary";
 import FoodLogger from "@/components/FoodLogger";
 
@@ -71,8 +72,9 @@ export default function NutritionPage() {
 
   async function editQuantity(log: Log) {
     const next = window.prompt(`Quantity for ${log.name} (grams)`, String(log.quantityG));
-    if (next == null || !Number(next) || Number(next) <= 0) return;
-    await apiPatch(`/api/nutrition/${log.id}`, { quantityG: Number(next) });
+    const quantityG = next == null ? 0 : parseDecimalInput(next);
+    if (quantityG <= 0) return;
+    await apiPatch(`/api/nutrition/${log.id}`, { quantityG });
     loadDay();
   }
 

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { X, Search, ScanLine, Pencil, ChevronLeft, Star, Clock3, Utensils } from "lucide-react";
 import { api, apiGet, apiPost } from "@/lib/api";
 import { round } from "@/lib/utils";
+import { normalizeDecimalInput, parseDecimalInput } from "@/lib/decimal-input";
 import BarcodeScanner from "@/components/BarcodeScanner";
 
 interface FoodResult {
@@ -115,7 +116,7 @@ export default function FoodLogger({
     }
   }
 
-  const factor = (Number(qty) || 0) / 100;
+  const factor = parseDecimalInput(qty) / 100;
   const preview = selected
     ? {
         calories: round(selected.calories * factor, 0),
@@ -134,7 +135,7 @@ export default function FoodLogger({
         meal,
         name: selected.name,
         barcode: selected.barcode,
-        quantityG: Number(qty) || 0,
+        quantityG: parseDecimalInput(qty),
         ...preview,
       });
       onLogged();
@@ -160,7 +161,7 @@ export default function FoodLogger({
     await apiPost("/api/foods/saved", {
       name: selected.name, barcode: selected.barcode,
       servingName: selected.servingSize || null,
-      servingGrams: servingMatch ? Number(servingMatch[0]) : Number(qty) || 100,
+      servingGrams: servingMatch ? Number(servingMatch[0]) : parseDecimalInput(qty) || 100,
       caloriesPer100: selected.calories, proteinPer100: selected.proteinG,
       carbsPer100: selected.carbsG, fatPer100: selected.fatG,
     });
@@ -183,11 +184,11 @@ export default function FoodLogger({
         day,
         meal,
         name: mName.trim(),
-        quantityG: Number(qty) || 0,
-        calories: Number(mKcal) || 0,
-        proteinG: Number(mP) || 0,
-        carbsG: Number(mC) || 0,
-        fatG: Number(mF) || 0,
+        quantityG: parseDecimalInput(qty),
+        calories: parseDecimalInput(mKcal),
+        proteinG: parseDecimalInput(mP),
+        carbsG: parseDecimalInput(mC),
+        fatG: parseDecimalInput(mF),
       });
       onLogged();
     } finally {
@@ -255,11 +256,12 @@ export default function FoodLogger({
             <div>
               <label className="label">Quantity (g)</label>
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
+                pattern="[0-9]*[.,]?[0-9]*"
                 className="input mt-1"
                 value={qty}
-                onChange={(e) => setQty(e.target.value)}
+                onChange={(e) => setQty(normalizeDecimalInput(e.target.value))}
               />
               {selected.servingSize && (() => {
                 const match = selected.servingSize.match(/[\d.]+/);
@@ -506,11 +508,12 @@ function Field({
     <label className="flex flex-col gap-1">
       <span className="label">{label}</span>
       <input
-        type="number"
+        type="text"
         inputMode="decimal"
+        pattern="[0-9]*[.,]?[0-9]*"
         className="input"
         value={v}
-        onChange={(e) => set(e.target.value)}
+        onChange={(e) => set(normalizeDecimalInput(e.target.value))}
       />
     </label>
   );
