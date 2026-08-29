@@ -1,11 +1,11 @@
 {
   "name": "Fitlog",
   "short_name": "Fitlog",
-  "description": "Personal health & fitness tracker",
+  "description": "Your personal training archive",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0b0f14",
-  "theme_color": "#0b0f14",
+  "background_color": "#070706",
+  "theme_color": "#070706",
   "orientation": "portrait",
   "icons": [
     {

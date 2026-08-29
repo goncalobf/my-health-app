@@ -60,23 +60,23 @@ function Chart({
       <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
         <XAxis
           dataKey="date"
-          tick={{ fill: "#8a97a6", fontSize: 11 }}
+          tick={{ fill: "#97978e", fontSize: 11 }}
           tickFormatter={(d) => formatDate(d).replace(/^\w+, /, "")}
           minTickGap={24}
-          stroke="#26313d"
+          stroke="#34342e"
         />
         <YAxis
-          tick={{ fill: "#8a97a6", fontSize: 11 }}
-          stroke="#26313d"
+          tick={{ fill: "#97978e", fontSize: 11 }}
+          stroke="#34342e"
           domain={["dataMin - 2", "dataMax + 2"]}
           width={40}
         />
         <Tooltip
           contentStyle={{
-            background: "#131a22",
-            border: "1px solid #26313d",
-            borderRadius: 12,
-            color: "#e6edf3",
+            background: "#11110f",
+            border: "1px solid #34342e",
+            borderRadius: 2,
+            color: "#f3f1e8",
           }}
           labelFormatter={(d) => formatDate(String(d))}
         />
@@ -162,17 +162,17 @@ export default function ProgressPage() {
       <PageHeader title="Progress" />
 
       <Link href="/workouts/plan" className="card mb-6 flex items-center gap-3 border-accent/30 p-4 active:scale-[0.98] transition">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"><Gauge size={20} /></div>
-        <div className="min-w-0 flex-1"><p className="font-semibold">Training progression</p><p className="text-xs text-muted">Mesocycle week, RIR and deload signals</p></div>
+        <div className="icon-frame"><Gauge size={20} /></div>
+        <div className="min-w-0 flex-1"><p className="font-display text-xl tracking-[0.04em]">Training progression</p><p className="text-xs text-muted">Mesocycle week / RIR / deload signals</p></div>
       </Link>
 
       <section className="mb-6">
-        <h2 className="text-sm font-semibold text-muted mb-2">Bodyweight</h2>
+        <h2 className="section-title">Bodyweight</h2>
         <div className="card min-w-0 p-3 min-[360px]:p-4">
           <Chart
             data={bw.map((b) => ({ date: b.day, weightKg: b.weightKg }))}
             dataKey="weightKg"
-            color="#22d3a6"
+            color="#d6ff45"
           />
           {recentWeightAvg != null && <p className="text-xs text-muted text-center -mt-1 mb-2">Recent average: <span className="text-text font-semibold">{Math.round(recentWeightAvg * 10) / 10} kg</span></p>}
           <form onSubmit={logWeight} className="flex gap-2 mt-3">
@@ -193,7 +193,7 @@ export default function ProgressPage() {
       </section>
 
       <section className="mb-6">
-        <h2 className="text-sm font-semibold text-muted mb-2">Measurements & photos</h2>
+        <h2 className="section-title">Measurements & photos</h2>
         <form onSubmit={logMeasurements} className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
           <div className="grid grid-cols-1 gap-2 min-[340px]:grid-cols-2">
             {([
@@ -227,7 +227,7 @@ export default function ProgressPage() {
         {measurements.filter((m) => m.waistCm != null).length >= 2 && (
           <div className="card p-3 mt-3">
             <p className="text-xs text-muted mb-2">Waist trend</p>
-            <Chart data={measurements.filter((m) => m.waistCm != null).map((m) => ({ date: m.day, waistCm: m.waistCm! }))} dataKey="waistCm" color="#f5a623" />
+            <Chart data={measurements.filter((m) => m.waistCm != null).map((m) => ({ date: m.day, waistCm: m.waistCm! }))} dataKey="waistCm" color="#ffc857" />
           </div>
         )}
         {measurements.some((m) => m.photoDataUrl) && (
@@ -245,9 +245,7 @@ export default function ProgressPage() {
       </section>
 
       <section>
-        <h2 className="text-sm font-semibold text-muted mb-2">
-          Personal records
-        </h2>
+        <h2 className="section-title">Personal records</h2>
         {prs.length === 0 ? (
           <div className="card p-6 flex flex-col items-center text-center gap-3">
             <Trophy className="text-muted" size={32} />
@@ -289,7 +287,7 @@ export default function ProgressPage() {
                         est1RM: p.est1RM,
                       }))}
                       dataKey="est1RM"
-                      color="#22d3a6"
+                      color="#d6ff45"
                     />
                   </div>
                 )}

@@ -50,13 +50,15 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
   return (
     <main className="flex min-h-dvh items-center justify-center px-5 safe-bottom safe-top">
       <div className="w-full max-w-sm">
-        <div className="mb-7 flex flex-col items-center gap-3 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+        <div className="mb-8 flex flex-col items-center gap-4 text-center">
+          <div className="icon-frame h-16 w-16">
             <Dumbbell size={29} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">{signingUp ? "Create your Fitlog" : "Welcome to Fitlog"}</h1>
-            <p className="mt-1 text-sm text-muted">
+            <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.24em] text-accent">Training archive / private</p>
+            <p className="font-display text-6xl leading-none tracking-[0.05em]">Fitlog</p>
+            <h1 className="mt-3 font-display text-2xl tracking-[0.04em]">{signingUp ? "Create your account" : "Welcome back"}</h1>
+            <p className="mx-auto mt-1 max-w-xs text-sm leading-relaxed text-muted">
               {signingUp
                 ? "Use the exact email address that was invited."
                 : "Sign in to your private health and training data."}
@@ -64,7 +66,7 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
           </div>
         </div>
 
-        <form onSubmit={submit} className="card flex flex-col gap-3 p-4">
+        <form onSubmit={submit} className="card flex flex-col gap-4 p-5">
           {signingUp && (
             <label>
               <span className="label">Name</span>

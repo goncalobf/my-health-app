@@ -1,11 +1,25 @@
 import type { Metadata, Viewport } from "next";
+import { Bebas_Neue, Manrope } from "next/font/google";
 import "./globals.css";
 import ServiceWorker from "@/components/ServiceWorker";
 import { Analytics } from "@vercel/analytics/next";
 
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+
+const display = Bebas_Neue({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Fitlog",
-  description: "Personal health & fitness tracker",
+  description: "Your personal training archive",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -18,7 +32,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b0f14",
+  themeColor: "#070706",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -32,7 +46,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${manrope.variable} ${display.variable}`}>
       <body>
         {children}
         <ServiceWorker />

@@ -71,7 +71,7 @@ export default function RestTimer({
                   className="h-full rounded-full transition-all"
                   style={{
                     width: `${pct}%`,
-                    backgroundColor: reached ? "#22d3a6" : "#178b6d",
+                    backgroundColor: reached ? "#d6ff45" : "#93ae39",
                   }}
                 />
               </div>

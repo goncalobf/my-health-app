@@ -23,8 +23,8 @@ export default async function AppLayout({
   if (!row?.onboardedAt) redirect("/onboarding");
 
   return (
-    <div className="min-h-dvh">
-      <div className="mx-auto max-w-lg px-3 pb-28 pt-4 min-[360px]:px-4 safe-top">
+    <div className="app-shell min-h-dvh">
+      <div className="relative z-10 mx-auto max-w-xl px-3 pb-32 pt-4 min-[360px]:px-4 min-[520px]:px-6 safe-top">
         {children}
       </div>
       <BottomNav />

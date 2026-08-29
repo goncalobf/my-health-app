@@ -71,8 +71,9 @@ export default function CoachPage() {
   return (
     <div>
       <PageHeader title="Fitlog Coach" />
-      <div className="card p-4 mb-5 bg-gradient-to-br from-accent/15 to-transparent border-accent/30">
-        <div className="flex items-center gap-3"><Brain size={24} className="shrink-0 text-accent" /><div className="min-w-0"><p className="font-semibold">Your private training partner</p><p className="text-xs text-muted">Evidence from your Fitlog data, reviewed by you.</p></div></div>
+      <div className="card mb-5 overflow-hidden border-accent/30 bg-gradient-to-br from-accent/10 to-transparent p-5">
+        <p className="mb-4 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Intelligence / private</p>
+        <div className="flex items-end gap-3"><Brain size={25} className="mb-1 shrink-0 text-accent" /><div className="min-w-0"><p className="font-display text-3xl leading-none tracking-[0.04em]">Your training partner</p><p className="mt-2 text-xs text-muted">Evidence from your Fitlog data, reviewed by you.</p></div></div>
       </div>
 
       <div className="mb-5">
@@ -80,12 +81,12 @@ export default function CoachPage() {
       </div>
 
       <section className="mb-6">
-        <div className="flex items-center justify-between gap-2 mb-2"><h2 className="min-w-0 text-sm font-semibold text-muted">Weekly review</h2><button onClick={generateWeekly} disabled={generating} className="flex shrink-0 items-center gap-1 text-sm text-accent"><Sparkles size={15} /> {generating ? "Reviewing…" : "Generate"}</button></div>
+        <div className="mb-2 flex items-center justify-between gap-2"><h2 className="section-title mb-0 min-w-0">Weekly review</h2><button onClick={generateWeekly} disabled={generating} className="flex shrink-0 items-center gap-1 font-display tracking-[0.06em] text-accent"><Sparkles size={15} /> {generating ? "Reviewing…" : "Generate"}</button></div>
         {weekly[0] ? <CoachInsightCard row={weekly[0]} onDismiss={async (id) => { await apiPatch("/api/coach/insights", { id }); setInsights((rows) => rows.filter((x) => x.id !== id)); }} /> : <div className="card p-5 text-center"><p className="text-sm text-muted">Generate a review after you have logged several days of training, food, weight and Garmin totals.</p></div>}
       </section>
 
       <section className="mb-6">
-        <div className="flex items-center justify-between gap-2 mb-2"><h2 className="min-w-0 text-sm font-semibold text-muted">Meal ideas for today</h2><Utensils size={17} className="shrink-0 text-muted" /></div>
+        <div className="mb-2 flex items-center justify-between gap-2"><h2 className="section-title mb-0 min-w-0">Meal ideas</h2><Utensils size={17} className="shrink-0 text-muted" /></div>
         {mealIdeas ? <div className="flex flex-col gap-2">
           <p className="text-sm text-muted">{mealIdeas.summary}</p>
           {mealIdeas.ideas.map((idea) => <div key={idea.name} className="card p-4"><p className="font-semibold">{idea.name}</p><p className="text-xs text-muted mt-1">{idea.portion}</p><p className="text-sm mt-2">{idea.why}</p><p className="text-xs text-muted mt-2">~{Math.round(idea.estimatedCalories)} kcal · {Math.round(idea.estimatedProteinG)}P {Math.round(idea.estimatedCarbsG)}C {Math.round(idea.estimatedFatG)}F</p><p className="text-xs text-muted mt-1">{idea.ingredients.join(" · ")}</p></div>)}
@@ -98,7 +99,7 @@ export default function CoachPage() {
       </section>
 
       <section>
-        <div className="flex items-center justify-between mb-2"><h2 className="text-sm font-semibold text-muted">Ask Fitlog</h2>{messages.length > 0 && <button onClick={async () => { await api("/api/coach/chat", { method: "DELETE" }); setMessages([]); }} className="text-muted p-1" aria-label="Clear chat"><Trash2 size={15} /></button>}</div>
+        <div className="mb-2 flex items-center justify-between"><h2 className="section-title mb-0">Ask Fitlog</h2>{messages.length > 0 && <button onClick={async () => { await api("/api/coach/chat", { method: "DELETE" }); setMessages([]); }} className="text-muted p-1" aria-label="Clear chat"><Trash2 size={15} /></button>}</div>
         <div className="card p-3 min-h-48 max-h-[52vh] overflow-y-auto flex flex-col gap-3">
           {messages.length === 0 && <div className="text-center py-8"><Brain size={26} className="text-muted mx-auto" /><p className="text-sm text-muted mt-2">Ask about a plateau, recent training, nutrition consistency, or today’s macros.</p></div>}
           {messages.map((message) => <ChatBubble key={message.id} message={message} onFollowUp={setQuestion} />)}

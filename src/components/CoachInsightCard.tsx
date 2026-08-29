@@ -27,17 +27,17 @@ export default function CoachInsightCard({ row, onDismiss, compact = false }: {
   return (
     <article className="card p-4 border-accent/30">
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0"><Brain size={19} /></div>
+        <div className="icon-frame h-9 w-9"><Brain size={19} /></div>
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-accent uppercase tracking-wide font-semibold">Fitlog Coach · {row.kind.replace("_", " ")}</p>
-          <h3 className="font-semibold mt-0.5">{row.payload.headline}</h3>
+          <h3 className="mt-0.5 font-display text-xl tracking-[0.035em]">{row.payload.headline}</h3>
         </div>
         {onDismiss && <button onClick={() => onDismiss(row.id)} className="text-muted p-1" aria-label="Dismiss insight"><X size={17} /></button>}
       </div>
       <div className="flex flex-col gap-3 mt-4">
         {insights.map((insight, index) => {
           const Icon = categoryIcon[insight.category];
-          return <div key={`${insight.title}-${index}`} className="bg-surface-2 rounded-xl p-3">
+          return <div key={`${insight.title}-${index}`} className="border-l border-border bg-surface-2 p-3">
             <div className="flex items-start gap-2"><Icon size={15} className="mt-0.5 shrink-0 text-muted" /><p className="min-w-0 flex-1 break-words text-sm font-medium">{insight.title}</p><span className="shrink-0 text-[10px] text-muted capitalize">{insight.confidence}</span></div>
             <p className="text-sm text-muted mt-1.5">{insight.observation}</p>
             {insight.evidence.length > 0 && <ul className="mt-2 text-xs text-muted list-disc pl-4 space-y-1">{insight.evidence.map((item) => <li key={item}>{item}</li>)}</ul>}

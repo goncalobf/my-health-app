@@ -19,8 +19,8 @@ export default function BottomNav() {
   if (activeWorkout) return null;
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 bg-surface/90 backdrop-blur border-t border-border safe-bottom">
-      <div className="max-w-lg mx-auto grid grid-cols-5">
+    <nav className="fixed inset-x-0 bottom-0 z-40 px-2 pb-2 safe-bottom" aria-label="Primary navigation">
+      <div className="mx-auto grid max-w-xl grid-cols-5 border border-border bg-bg/95 p-1 shadow-[0_-14px_40px_rgba(0,0,0,0.42)] backdrop-blur-xl [border-radius:2px_14px_2px_2px]">
         {TABS.map((tab) => {
           const active = tab.exact
             ? pathname === tab.href
@@ -31,11 +31,12 @@ export default function BottomNav() {
               key={tab.href}
               href={tab.href}
               prefetch={true}
-              className={`min-w-0 px-0.5 flex flex-col items-center gap-1 py-2.5 text-[10px] min-[360px]:text-[11px] font-medium transition ${
-                active ? "text-accent" : "text-muted"
+              aria-current={active ? "page" : undefined}
+              className={`relative flex min-w-0 flex-col items-center gap-1 px-0.5 py-2.5 font-display text-[11px] tracking-[0.07em] transition min-[360px]:text-xs ${
+                active ? "bg-accent text-bg [border-radius:1px_9px_1px_1px]" : "text-muted hover:text-text"
               }`}
             >
-              <Icon size={22} strokeWidth={active ? 2.4 : 2} />
+              <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
               <span className="w-full truncate text-center">{tab.label}</span>
             </Link>
           );

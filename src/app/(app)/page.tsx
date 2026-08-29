@@ -125,15 +125,17 @@ export default async function DashboardPage() {
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <div className="flex flex-col gap-5">
-      <header className="flex items-center justify-between">
+    <div className="flex flex-col gap-6">
+      <header className="flex items-end justify-between gap-4 border-b border-border pb-4">
         <div className="min-w-0 flex-1">
-          <p className="text-muted text-sm">{formatDate(today)}</p>
-          <h1 className="truncate text-xl font-bold min-[360px]:text-2xl">{greeting}</h1>
+          <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.24em] text-accent">Fitlog / daily log</p>
+          <h1 className="truncate font-display text-4xl leading-none tracking-[0.035em] min-[360px]:text-5xl">{greeting}</h1>
+          <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-muted">{formatDate(today)}</p>
         </div>
         <Link
           href="/settings"
-          className="w-10 h-10 shrink-0 rounded-full bg-surface-2 border border-border flex items-center justify-center text-muted"
+          className="flex h-11 w-11 shrink-0 items-center justify-center border border-border bg-surface-2 text-muted [border-radius:2px_11px_2px_2px]"
+          aria-label="Settings"
         >
           <Settings size={20} />
         </Link>
@@ -161,44 +163,38 @@ export default async function DashboardPage() {
       <section className="grid grid-cols-2 gap-2 min-[360px]:gap-3">
         <Link
           href="/workouts"
-          className="card min-w-0 p-3 min-[360px]:p-4 flex flex-col gap-2 active:scale-[0.98] transition"
+          className="card min-w-0 overflow-hidden p-4 active:scale-[0.98] transition min-[360px]:p-5"
         >
-          <div className="w-10 h-10 rounded-xl bg-accent/15 flex items-center justify-center">
-            <Dumbbell className="text-accent" size={20} />
-          </div>
-          <span className="font-semibold">Start workout</span>
-          <span className="text-xs text-muted">Routines & sessions</span>
+          <div className="mb-7 flex items-center justify-between"><Dumbbell className="text-accent" size={20} /><span className="font-display text-xl text-muted/30">01</span></div>
+          <span className="font-display text-2xl leading-none tracking-[0.04em]">Start workout</span>
+          <span className="mt-2 block text-[10px] uppercase tracking-[0.1em] text-muted">Routines / sessions</span>
         </Link>
         <Link
           href="/nutrition"
-          className="card min-w-0 p-3 min-[360px]:p-4 flex flex-col gap-2 active:scale-[0.98] transition"
+          className="card min-w-0 overflow-hidden p-4 active:scale-[0.98] transition min-[360px]:p-5"
         >
-          <div className="w-10 h-10 rounded-xl bg-warn/15 flex items-center justify-center">
-            <Apple className="text-warn" size={20} />
-          </div>
-          <span className="font-semibold">Log food</span>
-          <span className="text-xs text-muted">Search or scan</span>
+          <div className="mb-7 flex items-center justify-between"><Apple className="text-warn" size={20} /><span className="font-display text-xl text-muted/30">02</span></div>
+          <span className="font-display text-2xl leading-none tracking-[0.04em]">Log food</span>
+          <span className="mt-2 block text-[10px] uppercase tracking-[0.1em] text-muted">Search / scan</span>
         </Link>
       </section>
 
       <section>
-        <h2 className="text-sm font-semibold text-muted mb-2">Today</h2>
+        <h2 className="section-title">Today / nutrition</h2>
         <MacroSummary totals={totals} targets={targets} />
       </section>
 
       <section>
-        <h2 className="text-sm font-semibold text-muted mb-2">Last 7 days</h2>
-        <div className="card p-4 grid grid-cols-2 gap-4 text-center">
-          <div><p className="text-2xl font-bold text-accent">{training?.count ?? 0}<span className="text-sm text-muted font-normal"> / 6</span></p><p className="text-xs text-muted">Workouts</p></div>
-          <div><p className="text-2xl font-bold text-warn">{nutritionDays?.count ?? 0}<span className="text-sm text-muted font-normal"> / 7</span></p><p className="text-xs text-muted">Nutrition days</p></div>
+        <h2 className="section-title">Last 7 days</h2>
+        <div className="card grid grid-cols-2 gap-0 overflow-hidden p-0 text-center">
+          <div className="border-r border-border p-5"><p className="data-number text-4xl text-accent">{training?.count ?? 0}<span className="ml-1 text-base text-muted">/ 6</span></p><p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted">Workouts</p></div>
+          <div className="p-5"><p className="data-number text-4xl text-warn">{nutritionDays?.count ?? 0}<span className="ml-1 text-base text-muted">/ 7</span></p><p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted">Nutrition days</p></div>
         </div>
       </section>
 
       {lastSession && (
         <section>
-          <h2 className="text-sm font-semibold text-muted mb-2">
-            Last workout
-          </h2>
+          <h2 className="section-title">Last workout</h2>
           <Link
             href={
               lastSession.finishedAt
@@ -208,7 +204,7 @@ export default async function DashboardPage() {
             className="card p-4 flex items-center justify-between active:scale-[0.98] transition"
           >
             <div className="min-w-0 flex-1">
-              <p className="break-words font-semibold">{lastSession.name}</p>
+              <p className="break-words font-display text-xl tracking-[0.04em]">{lastSession.name}</p>
               <p className="text-xs text-muted">
                 {formatDate(
                   new Date(lastSession.startedAt).toISOString().slice(0, 10)

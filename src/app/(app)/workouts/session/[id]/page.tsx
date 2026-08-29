@@ -581,10 +581,11 @@ export default function SessionPage({
   return (
     <div className={rest ? "min-w-0 pb-32" : "min-w-0 pb-8"}>
       <header className="sticky top-[env(safe-area-inset-top)] z-30 -mx-3 mb-5 border-b border-border bg-bg/95 px-3 py-3 backdrop-blur min-[360px]:-mx-4 min-[360px]:px-4">
+        <p className="mb-2 pl-12 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Fitlog / live protocol</p>
         <div className="flex items-center gap-2">
           <button
             onClick={() => router.push("/workouts")}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-surface active:scale-95"
+            className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-muted transition active:scale-95 [border-radius:2px_10px_2px_2px]"
             aria-label="Save and exit workout"
           >
             <X size={22} />
@@ -594,7 +595,7 @@ export default function SessionPage({
             onChange={(e) => setName(e.target.value)}
             onBlur={() => apiPatch(`/api/sessions/${id}`, { name })}
             aria-label="Workout name"
-            className="min-w-0 flex-1 truncate bg-transparent text-lg font-bold outline-none focus:text-accent"
+            className="min-w-0 flex-1 truncate bg-transparent font-display text-2xl tracking-[0.04em] outline-none focus:text-accent"
           />
           <button
             onClick={finish}
@@ -604,12 +605,12 @@ export default function SessionPage({
           </button>
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <p className="shrink-0 text-[11px] text-muted tabular-nums">
+          <p className="shrink-0 font-display text-sm tracking-[0.08em] text-muted tabular-nums">
             {completedCount} of {totalSets} sets
           </p>
-          <div className="h-1 min-w-8 flex-1 overflow-hidden rounded-full bg-surface-2">
+          <div className="h-1 min-w-8 flex-1 overflow-hidden bg-surface-2">
             <div
-              className="h-full rounded-full bg-accent transition-[width]"
+              className="h-full bg-accent transition-[width]"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -628,10 +629,8 @@ export default function SessionPage({
         </div>
       ) : !active ? (
         <div className="card flex flex-col items-center gap-3 p-6 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/15 text-accent">
-            <Check size={28} strokeWidth={3} />
-          </div>
-          <p className="font-semibold">Every set is logged</p>
+          <div className="icon-frame h-14 w-14"><Check size={28} strokeWidth={3} /></div>
+          <p className="font-display text-2xl tracking-[0.04em]">Every set is logged</p>
           <p className="text-sm text-muted">
             {completedCount} sets done. Finish up to see your summary and next targets.
           </p>
@@ -770,7 +769,11 @@ function ActiveSet({
 
   return (
     <div className="min-w-0">
-      <div className="card min-w-0 p-3 min-[360px]:p-4">
+      <div className="card min-w-0 overflow-hidden p-4 min-[360px]:p-5">
+        <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent">Active movement</p>
+          <span className="font-display text-lg text-muted/35">{String(setIdx + 1).padStart(2, "0")}</span>
+        </div>
         <div className="flex items-start gap-3">
           <ExerciseImage
             name={block.name}
@@ -778,7 +781,7 @@ function ActiveSet({
             className="h-14 w-14"
           />
           <div className="min-w-0 flex-1">
-            <p className="min-w-0 break-words font-semibold leading-snug">
+            <p className="min-w-0 break-words font-display text-2xl leading-none tracking-[0.035em]">
               {block.name}
             </p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -848,7 +851,7 @@ function ActiveSet({
         )}
 
         <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <p className="font-semibold">
+          <p className="font-display text-2xl tracking-[0.04em]">
             {entry.isDrop ? (
               <span className="text-warn">Drop {dropIndex}</span>
             ) : (
@@ -911,7 +914,7 @@ function ActiveSet({
                     onChange({ rir: selected ? "" : value });
                     onCommit();
                   }}
-                  className={`min-w-0 flex-1 rounded-lg py-2.5 text-sm font-medium tabular-nums transition active:scale-95 ${
+                  className={`min-w-0 flex-1 py-2.5 font-display text-base tabular-nums transition active:scale-95 [border-radius:2px_7px_2px_2px] ${
                     selected
                       ? "bg-accent text-bg"
                       : "border border-border bg-surface-2 text-muted"
@@ -1035,11 +1038,12 @@ function Stepper({
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-surface-2 p-2.5">
+    <div className="border border-border bg-surface-2 p-2.5 [border-radius:2px_12px_2px_2px]">
+      <p className="mb-1 text-center font-display text-sm uppercase tracking-[0.12em] text-muted">{label}</p>
       <div className="flex items-center gap-2">
         <button
           onClick={() => nudge(-step)}
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text transition active:scale-95"
+          className="flex h-12 w-12 shrink-0 items-center justify-center border border-border bg-surface text-text transition active:scale-95 [border-radius:2px_9px_2px_2px]"
           aria-label={`Decrease ${label}`}
         >
           <Minus size={20} />
@@ -1058,13 +1062,13 @@ function Stepper({
               )
             }
             onBlur={onCommit}
-            className="w-full bg-transparent text-center text-3xl font-bold tabular-nums outline-none placeholder:text-muted"
+            className="w-full bg-transparent text-center font-display text-4xl tabular-nums outline-none placeholder:text-muted"
           />
           <p className="text-center text-[11px] text-muted">{unit}</p>
         </div>
         <button
           onClick={() => nudge(step)}
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text transition active:scale-95"
+          className="flex h-12 w-12 shrink-0 items-center justify-center border border-border bg-surface text-text transition active:scale-95 [border-radius:2px_9px_2px_2px]"
           aria-label={`Increase ${label}`}
         >
           <Plus size={20} />
@@ -1093,10 +1097,10 @@ function Overview({
     <div className="fixed inset-0 z-50 flex flex-col bg-bg/95 backdrop-blur">
       <div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-3 min-[360px]:px-4">
         <div className="flex shrink-0 items-center gap-2 py-3 safe-top">
-          <h2 className="min-w-0 flex-1 text-lg font-bold">Workout overview</h2>
+          <div className="min-w-0 flex-1"><p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent">Fitlog / session map</p><h2 className="font-display text-3xl tracking-[0.04em]">Workout overview</h2></div>
           <button
             onClick={onClose}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted transition active:scale-95"
+            className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-muted transition active:scale-95 [border-radius:2px_9px_2px_2px]"
             aria-label="Close overview"
           >
             <X size={22} />

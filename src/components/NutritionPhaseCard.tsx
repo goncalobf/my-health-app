@@ -20,7 +20,7 @@ export default function NutritionPhaseCard() {
         href="/settings"
         className="card p-4 flex items-center gap-3 border-warn/30"
       >
-        <div className="w-10 h-10 rounded-xl bg-warn/15 text-warn flex items-center justify-center shrink-0">
+        <div className="icon-frame border-warn/30 text-warn">
           <CalendarDays size={20} />
         </div>
         <div className="min-w-0 flex-1">
@@ -35,7 +35,7 @@ export default function NutritionPhaseCard() {
   return (
     <div className="card p-4 border-accent/30">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0">
+        <div className="icon-frame">
           <CalendarDays size={20} />
         </div>
         <div className="min-w-0 flex-1">

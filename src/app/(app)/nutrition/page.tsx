@@ -7,6 +7,7 @@ import { todayISO, formatDate, round, shiftISODate } from "@/lib/utils";
 import { parseDecimalInput } from "@/lib/decimal-input";
 import MacroSummary from "@/components/MacroSummary";
 import FoodLogger from "@/components/FoodLogger";
+import PageHeader from "@/components/PageHeader";
 
 interface Log {
   id: number;
@@ -88,17 +89,20 @@ export default function NutritionPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <PageHeader title="Nutrition" />
+      <div className="mb-5 flex items-center justify-between border-b border-border pb-4">
         <button
           onClick={() => setDay((d) => shiftISODate(d, -1))}
-          className="w-10 h-10 rounded-full bg-surface-2 border border-border flex items-center justify-center text-muted"
+          className="flex h-10 w-10 items-center justify-center border border-border bg-surface-2 text-muted [border-radius:2px_10px_2px_2px]"
+          aria-label="Previous day"
         >
           <ChevronLeft size={20} />
         </button>
         <div className="min-w-0 flex-1 px-2 text-center">
-          <h1 className="truncate text-lg font-bold">
+          <p className="label mb-1">Food log / date</p>
+          <h2 className="truncate font-display text-2xl leading-none tracking-[0.04em]">
             {isToday ? "Today" : formatDate(day)}
-          </h1>
+          </h2>
           {!isToday && (
             <button
               onClick={() => setDay(todayISO())}
@@ -111,7 +115,8 @@ export default function NutritionPage() {
         <button
           onClick={() => setDay((d) => shiftISODate(d, 1))}
           disabled={isToday}
-          className="w-10 h-10 rounded-full bg-surface-2 border border-border flex items-center justify-center text-muted disabled:opacity-30"
+          className="flex h-10 w-10 items-center justify-center border border-border bg-surface-2 text-muted disabled:opacity-30 [border-radius:2px_10px_2px_2px]"
+          aria-label="Next day"
         >
           <ChevronRight size={20} />
         </button>
@@ -120,13 +125,13 @@ export default function NutritionPage() {
       <MacroSummary totals={totals} targets={targets} />
 
       <div className="flex flex-col gap-4 mt-5">
-        {MEALS.map((meal) => {
+        {MEALS.map((meal, mealIndex) => {
           const items = logs.filter((l) => l.meal === meal);
           const kcal = items.reduce((a, l) => a + l.calories, 0);
           return (
             <div key={meal}>
               <div className="flex items-center justify-between gap-2 mb-2">
-                <h2 className="min-w-0 flex-1 font-semibold capitalize">{meal}</h2>
+                <h2 className="min-w-0 flex-1 font-display text-2xl tracking-[0.05em]"><span className="mr-2 text-base text-muted/40">{String(mealIndex + 1).padStart(2, "0")}</span>{meal}</h2>
                 <div className="flex shrink-0 items-center gap-2 min-[360px]:gap-3">
                   {kcal > 0 && (
                     <span className="text-sm text-muted tabular-nums">
@@ -138,7 +143,7 @@ export default function NutritionPage() {
                   )}
                   <button
                     onClick={() => setLogging(meal)}
-                    className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center"
+                    className="flex h-8 w-8 items-center justify-center border border-accent/40 bg-accent/10 text-accent [border-radius:2px_8px_2px_2px]"
                     aria-label={`Add to ${meal}`}
                   >
                     <Plus size={18} />
@@ -146,7 +151,7 @@ export default function NutritionPage() {
                 </div>
               </div>
               {items.length === 0 ? (
-                <p className="text-xs text-muted pl-1">Nothing logged</p>
+                <p className="border-l border-border py-2 pl-3 text-[10px] uppercase tracking-[0.12em] text-muted">Nothing logged</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   {items.map((l) => (
@@ -155,7 +160,7 @@ export default function NutritionPage() {
                       className="card px-3 py-2.5 flex items-center gap-3"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium truncate">{l.name}</p>
+                        <p className="truncate font-medium">{l.name}</p>
                         <p className="text-xs text-muted">
                           {round(l.quantityG, 0)}g · {round(l.calories, 0)} kcal
                           · {round(l.proteinG, 0)}P {round(l.carbsG, 0)}C{" "}

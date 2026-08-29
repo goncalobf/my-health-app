@@ -21,7 +21,7 @@ export default function ExerciseImage({
   return (
     <div
       className={cn(
-        "relative shrink-0 overflow-hidden rounded-xl border border-border bg-surface-2",
+        "relative shrink-0 overflow-hidden border border-border bg-surface-2 [border-radius:2px_12px_2px_2px] grayscale contrast-110",
         className
       )}
     >

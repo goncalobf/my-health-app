@@ -57,10 +57,11 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
   return (
     <div>
       <PageHeader title="Workout complete" back="/workouts/history" />
-      <div className="text-center mb-5">
-        <div className="w-14 h-14 rounded-full bg-accent/15 text-accent flex items-center justify-center mx-auto mb-2"><Award size={28} /></div>
-        <h1 className="break-words text-2xl font-bold">{data.session.name}</h1>
-        <p className="text-sm text-muted">Strong work. Your next targets are ready.</p>
+      <div className="card mb-5 overflow-hidden border-accent/30 bg-gradient-to-br from-accent/10 to-transparent p-6 text-center">
+        <div className="icon-frame mx-auto mb-3 h-14 w-14"><Award size={28} /></div>
+        <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Protocol complete</p>
+        <h1 className="break-words font-display text-4xl leading-none tracking-[0.04em]">{data.session.name}</h1>
+        <p className="mt-2 text-sm text-muted">Strong work. Your next targets are ready.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 mb-5 min-[400px]:grid-cols-4 min-[360px]:gap-2">
@@ -70,8 +71,8 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
         <Stat icon={<TrendingUp size={17} />} value={summary.averageRir == null ? "—" : String(summary.averageRir)} label="Avg RIR" />
       </div>
       <div className="card p-4 mb-4">
-        <p className="text-xs text-muted uppercase tracking-wide">Compared with previous performance</p>
-        <p className="font-semibold mt-1">{summary.volumeChangePct == null ? "Your first volume baseline is saved." : `${summary.volumeChangePct >= 0 ? "+" : ""}${summary.volumeChangePct}% training volume`}</p>
+        <p className="label">Compared with previous performance</p>
+        <p className="mt-1 font-display text-2xl tracking-[0.04em]">{summary.volumeChangePct == null ? "Your first volume baseline is saved." : `${summary.volumeChangePct >= 0 ? "+" : ""}${summary.volumeChangePct}% training volume`}</p>
         <div className="flex flex-wrap gap-2 mt-3">{summary.muscles.map(([name, sets]) => <span key={name} className="px-2.5 py-1 rounded-full bg-surface-2 text-xs text-muted">{name} · {sets} sets</span>)}{summary.dropCount > 0 && <span className="px-2.5 py-1 rounded-full bg-warn/15 text-xs text-warn">{summary.dropCount} drop{summary.dropCount === 1 ? "" : "s"}</span>}</div>
       </div>
 
@@ -82,7 +83,7 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
         </div>
       )}
 
-      <h2 className="text-sm font-semibold text-muted mb-2">Exercise recap & next target</h2>
+      <h2 className="section-title">Exercise recap / next target</h2>
       <div className="flex flex-col gap-3">
         {(data.plan.length ? data.plan : [...new Map(summary.sets.map((s) => [s.exerciseId, { exerciseId: s.exerciseId, name: s.exerciseName, imageUrl: s.exerciseImageUrl, muscleGroup: s.muscleGroup, targetSets: 1, minReps: 0, maxReps: 0, weightIncrementKg: 2.5, targetRirMin: null, targetRirMax: null, deloadMode: false } satisfies Plan])).values()]).map((p) => {
           const sets = summary.sets.filter((s) => s.exerciseId === p.exerciseId);
@@ -133,5 +134,5 @@ export default function WorkoutSummaryPage({ params }: { params: Promise<{ id: s
 }
 
 function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
-  return <div className="card p-3 text-center"><span className="text-muted flex justify-center mb-1">{icon}</span><p className="font-bold tabular-nums truncate">{value}</p><p className="text-[11px] text-muted">{label}</p></div>;
+  return <div className="card p-3 text-center"><span className="mb-1 flex justify-center text-muted">{icon}</span><p className="data-number truncate text-xl">{value}</p><p className="text-[9px] uppercase tracking-[0.1em] text-muted">{label}</p></div>;
 }

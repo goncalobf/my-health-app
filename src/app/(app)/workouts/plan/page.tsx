@@ -145,14 +145,14 @@ export default function TrainingPlanPage() {
 
       <section className={`card p-4 ${status.deloadRecommended || state.isDeload ? "border-warn/40 bg-warn/10" : "border-accent/30 bg-accent/10"}`}>
         <div className="flex items-start gap-3">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${status.deloadRecommended || state.isDeload ? "bg-warn/15 text-warn" : "bg-accent/15 text-accent"}`}>
+          <div className={`icon-frame ${status.deloadRecommended || state.isDeload ? "border-warn/30 text-warn" : ""}`}>
             {state.isDeload ? <RefreshCcw size={20} /> : <TrendingUp size={20} />}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted">
               {state.isDeload ? "Deload" : `Mesocycle · week ${status.week}`}
             </p>
-            <h2 className="mt-0.5 text-lg font-bold">{status.headline}</h2>
+            <h2 className="mt-0.5 font-display text-2xl tracking-[0.04em]">{status.headline}</h2>
             <p className="mt-1 text-sm text-muted">
               {state.isDeload
                 ? "Use half the normal sets, about 60% of your normal load and RIR 4+ for one week."
@@ -183,7 +183,7 @@ export default function TrainingPlanPage() {
       </section>
 
       <section className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold text-muted">Double progression</h2>
+        <h2 className="section-title">Double progression</h2>
         <div className="card p-4">
           <ol className="space-y-3">
             {[
@@ -193,7 +193,7 @@ export default function TrainingPlanPage() {
               ["4", "Increase and rebuild", "Add the configured increment, return to the bottom of the range and repeat."],
             ].map(([number, title, detail]) => (
               <li key={number} className="flex gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">{number}</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center border border-accent/30 bg-accent/10 font-display text-base text-accent [border-radius:2px_7px_2px_2px]">{number}</span>
                 <div className="min-w-0"><p className="font-medium">{title}</p><p className="text-xs leading-relaxed text-muted">{detail}</p></div>
               </li>
             ))}
@@ -202,20 +202,20 @@ export default function TrainingPlanPage() {
       </section>
 
       <section className="mt-6">
-        <div className="mb-2 flex items-center gap-2"><Gauge size={17} className="text-accent" /><h2 className="text-sm font-semibold text-muted">Understanding RIR</h2></div>
+        <div className="mb-2 flex items-center gap-2"><Gauge size={17} className="text-accent" /><h2 className="section-title mb-0">Understanding RIR</h2></div>
         <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-4">
           {[
             ["3", "3 good reps left"], ["2", "2 good reps left"],
             ["1", "1 good rep left"], ["0", "Technical failure"],
           ].map(([rir, meaning]) => (
-            <div key={rir} className="card p-3 text-center"><p className="text-xl font-bold text-accent">RIR {rir}</p><p className="mt-1 text-[11px] text-muted">{meaning}</p></div>
+            <div key={rir} className="card p-3 text-center"><p className="data-number text-2xl text-accent">RIR {rir}</p><p className="mt-1 text-[11px] text-muted">{meaning}</p></div>
           ))}
         </div>
         <p className="mt-2 text-xs leading-relaxed text-muted">Log your honest RIR after each set. Slower bar speed and changing technique usually mean fewer reps remain.</p>
       </section>
 
       <section className="mt-6">
-        <div className="mb-2 flex items-center gap-2"><AlertTriangle size={17} className="text-warn" /><h2 className="text-sm font-semibold text-muted">Deload signals</h2></div>
+        <div className="mb-2 flex items-center gap-2"><AlertTriangle size={17} className="text-warn" /><h2 className="section-title mb-0">Deload signals</h2></div>
         <div className="flex flex-col gap-2">
           {status.triggers.map((trigger) => (
             <div key={trigger.key} className={`card flex items-start gap-3 p-3 ${trigger.active ? "border-warn/40" : ""}`}>
@@ -227,7 +227,7 @@ export default function TrainingPlanPage() {
       </section>
 
       <section className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold text-muted">Recovery check-in</h2>
+        <h2 className="section-title">Recovery check-in</h2>
         <div className="card flex flex-col gap-3 p-4">
           {[
             ["sleepPoor", "Sleep has worsened"],

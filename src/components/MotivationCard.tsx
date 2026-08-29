@@ -6,15 +6,15 @@ type Variant = "hero" | "full" | "panel";
 // `flex` on the frame lets the content stretch and sit against the bottom;
 // a plain `h-full` child cannot resolve against a min-height-only parent.
 const FRAME: Record<Variant, string> = {
-  hero: "relative isolate flex min-h-44 overflow-hidden rounded-2xl border border-border",
+  hero: "relative isolate flex min-h-[18rem] overflow-hidden border border-border [border-radius:2px_24px_2px_2px]",
   full: "relative isolate flex overflow-hidden",
-  panel: "relative isolate flex min-h-36 overflow-hidden rounded-2xl border border-border",
+  panel: "relative isolate flex min-h-48 overflow-hidden border border-border [border-radius:2px_20px_2px_2px]",
 };
 
 const HEADLINE: Record<Variant, string> = {
-  hero: "text-2xl min-[360px]:text-3xl",
-  full: "text-4xl min-[360px]:text-5xl",
-  panel: "text-xl min-[360px]:text-2xl",
+  hero: "text-[2.8rem] min-[360px]:text-[3.35rem]",
+  full: "text-6xl min-[360px]:text-7xl",
+  panel: "text-3xl min-[360px]:text-4xl",
 };
 
 /**
@@ -49,28 +49,32 @@ export default function MotivationCard({
         fill
         priority={priority}
         sizes="(max-width: 512px) 100vw, 512px"
-        className="-z-10 object-cover grayscale brightness-[0.6] contrast-[1.15]"
+        className="-z-10 object-cover grayscale brightness-[0.5] contrast-[1.35]"
       />
-      {/* Keeps the type readable no matter how bright the photograph is. */}
-      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-bg via-bg/75 to-bg/20" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-bg via-bg/35 to-transparent" />
+      <div className="pointer-events-none absolute inset-0 border-[10px] border-bg/15 mix-blend-multiply" />
+      <div className="absolute left-4 top-4 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.22em] text-text/75">
+        <span className="h-px w-5 bg-accent" /> Fitlog / daily protocol
+      </div>
+      <span className="absolute right-4 top-4 font-display text-2xl text-text/20">01</span>
 
       <div
-        className={`flex min-w-0 flex-1 flex-col justify-end gap-2 p-4 ${
-          variant === "full" ? "min-[360px]:p-6" : ""
+        className={`flex min-w-0 flex-1 flex-col justify-end gap-2 p-5 ${
+          variant === "full" ? "min-[360px]:p-7" : "min-[360px]:p-6"
         }`}
       >
         {eyebrow && (
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-accent">
+          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-accent">
             {eyebrow}
           </p>
         )}
         <p
-          className={`min-w-0 text-balance font-black uppercase leading-[0.95] tracking-tight text-text drop-shadow-lg ${HEADLINE[variant]}`}
+          className={`min-w-0 text-balance font-display uppercase leading-[0.86] tracking-[0.015em] text-text drop-shadow-lg ${HEADLINE[variant]}`}
         >
           {line}
         </p>
         {fact && (
-          <p className="min-w-0 text-xs font-medium text-muted min-[360px]:text-sm">
+          <p className="max-w-[34rem] border-l border-accent pl-3 text-xs font-medium leading-relaxed text-text/75 min-[360px]:text-sm">
             {fact}
           </p>
         )}

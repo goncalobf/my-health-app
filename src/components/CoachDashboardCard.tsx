@@ -28,14 +28,14 @@ export default function CoachDashboardCard() {
   if (configured === null) return null;
   if (!configured) return (
     <Link href="/coach" className="card p-4 flex items-center gap-3 border-accent/30">
-      <div className="w-10 h-10 shrink-0 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><Brain size={20} /></div>
-      <div className="min-w-0 flex-1"><p className="font-semibold">Fitlog Coach</p><p className="text-xs text-muted">Add an API key to enable personal insights</p></div><ChevronRight size={19} className="shrink-0 text-muted" />
+      <div className="icon-frame"><Brain size={20} /></div>
+      <div className="min-w-0 flex-1"><p className="font-display text-xl tracking-[0.04em]">Fitlog Coach</p><p className="text-xs text-muted">Add an API key to enable personal insights</p></div><ChevronRight size={19} className="shrink-0 text-muted" />
     </Link>
   );
   if (row) return <div><CoachInsightCard row={row} compact /><Link href="/coach" className="text-sm text-accent flex items-center justify-center gap-1 mt-2">Open Coach <ChevronRight size={15} /></Link></div>;
   return (
     <div className="card p-4 text-center">
-      <Sparkles size={24} className="text-accent mx-auto" /><p className="font-semibold mt-2">What stands out today?</p>
+      <Sparkles size={24} className="text-accent mx-auto" /><p className="mt-2 font-display text-2xl tracking-[0.04em]">What stands out today?</p>
       <p className="text-xs text-muted mt-1">Coach can review your recent training, nutrition, Garmin and weight data.</p>
       <button onClick={generate} disabled={loading} className="btn-primary w-full mt-3">{loading ? "Reviewing…" : "Get today’s guidance"}</button>
       {error && <p className="text-xs text-danger mt-2">{error}</p>}

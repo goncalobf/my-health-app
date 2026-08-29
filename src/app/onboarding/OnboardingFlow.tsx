@@ -74,7 +74,7 @@ export default function OnboardingFlow({ name }: { name: string | null }) {
         {[0, 1].map((index) => (
           <div
             key={index}
-            className={`h-1 flex-1 rounded-full transition ${
+            className={`h-1 flex-1 transition ${
               index <= step ? "bg-accent" : "bg-surface-2"
             }`}
           />
@@ -83,10 +83,11 @@ export default function OnboardingFlow({ name }: { name: string | null }) {
 
       {step === 0 && (
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+          <div className="icon-frame mb-6 h-12 w-12">
             <Dumbbell size={24} />
           </div>
-          <h1 className="text-2xl font-bold min-[360px]:text-3xl">
+          <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Fitlog / initialization</p>
+          <h1 className="font-display text-4xl leading-none tracking-[0.04em] min-[360px]:text-5xl">
             {name ? `Welcome, ${name.split(" ")[0]}.` : "Welcome to Fitlog."}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted">
@@ -107,7 +108,7 @@ export default function OnboardingFlow({ name }: { name: string | null }) {
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold">{option.label}</p>
+                    <p className="font-display text-xl tracking-[0.04em]">{option.label}</p>
                     <p className="text-xs text-muted">{option.detail}</p>
                   </div>
                   {selected && (
@@ -130,7 +131,8 @@ export default function OnboardingFlow({ name }: { name: string | null }) {
 
       {step === 1 && (
         <div className="flex min-w-0 flex-1 flex-col">
-          <h1 className="text-2xl font-bold min-[360px]:text-3xl">About you</h1>
+          <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Fitlog / body profile</p>
+          <h1 className="font-display text-4xl leading-none tracking-[0.04em] min-[360px]:text-5xl">About you</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted">
             Used to estimate your energy needs. Nothing here leaves your account.
           </p>

@@ -28,21 +28,15 @@ function Bar({
 }) {
   const pct = target > 0 ? Math.min(100, (value / target) * 100) : 0;
   return (
-    <div>
-      <div className="flex justify-between text-sm mb-1">
-        <span className="text-muted">{label}</span>
-        <span className="tabular-nums">
-          {round(value, 0)}
-          <span className="text-muted">
-            {" "}
-            / {round(target, 0)}
-            {unit}
-          </span>
-        </span>
+    <div className="min-w-0 border-l border-border pl-3 first:border-l-0 first:pl-0">
+      <div className="mb-2 flex items-baseline justify-between gap-1">
+        <span className="font-display text-base uppercase tracking-[0.08em] text-muted">{label}</span>
+        <span className="text-[10px] tabular-nums text-muted">/{round(target, 0)}{unit}</span>
       </div>
-      <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
+      <p className="data-number text-2xl leading-none">{round(value, 0)}<span className="ml-0.5 text-xs text-muted">{unit}</span></p>
+      <div className="mt-2 h-1 overflow-hidden bg-surface-2">
         <div
-          className="h-full rounded-full transition-all"
+          className="h-full transition-all"
           style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </div>
@@ -62,50 +56,38 @@ export default function MacroSummary({
       ? Math.min(100, (totals.calories / targets.targetCalories) * 100)
       : 0;
   return (
-    <div className="card flex min-w-0 flex-col gap-4 p-3 min-[360px]:p-4">
-      <div className="flex min-w-0 items-center gap-3 min-[360px]:gap-4">
-        <div
-          className="relative w-20 h-20 rounded-full shrink-0"
-          style={{
-            background: `conic-gradient(#22d3a6 ${kcalPct * 3.6}deg, #1b242e 0deg)`,
-          }}
-        >
-          <div className="absolute inset-1.5 rounded-full bg-surface flex flex-col items-center justify-center">
-            <span className="text-lg font-bold tabular-nums leading-none">
-              {round(totals.calories, 0)}
-            </span>
-            <span className="text-[10px] text-muted">kcal</span>
-          </div>
+    <div className="card flex min-w-0 flex-col overflow-hidden p-4 min-[360px]:p-5">
+      <div className="flex min-w-0 items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="label">Daily fuel</p>
+          <p className="data-number mt-1 text-5xl leading-none min-[360px]:text-6xl">{round(totals.calories, 0)}</p>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-muted">Kcal consumed</p>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm text-muted">Calories</p>
-          <p className="break-words text-xl font-bold tabular-nums min-[360px]:text-2xl">
-            {round(targets.targetCalories - totals.calories, 0)}
-            <span className="text-sm font-normal text-muted"> left</span>
-          </p>
-          <p className="text-xs text-muted">
-            of {round(targets.targetCalories, 0)} kcal target
-          </p>
+        <div className="shrink-0 pb-1 text-right">
+          <p className="data-number text-3xl leading-none text-accent">{round(targets.targetCalories - totals.calories, 0)}</p>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted">Remaining</p>
         </div>
       </div>
-      <div className="grid gap-3">
+      <div className="mt-5 h-1.5 overflow-hidden bg-surface-2"><div className="h-full bg-accent transition-all" style={{ width: `${kcalPct}%` }} /></div>
+      <div className="mt-2 flex justify-between text-[9px] uppercase tracking-[0.12em] text-muted"><span>0</span><span>Target {round(targets.targetCalories, 0)}</span></div>
+      <div className="mt-5 grid grid-cols-3 gap-3 border-t border-border pt-4">
         <Bar
           label="Protein"
           value={totals.proteinG}
           target={targets.targetProteinG}
-          color="#22d3a6"
+          color="#d6ff45"
         />
         <Bar
           label="Carbs"
           value={totals.carbsG}
           target={targets.targetCarbsG}
-          color="#f5a623"
+          color="#ffc857"
         />
         <Bar
           label="Fat"
           value={totals.fatG}
           target={targets.targetFatG}
-          color="#f2555a"
+          color="#ff5a4f"
         />
       </div>
     </div>
