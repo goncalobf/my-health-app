@@ -27,6 +27,7 @@ npm run local:db               # migrate + seed the throwaway local database
 npm run dev:local              # run locally with no auth and no login page
 npm run plan:ppl               # apply the PPL plan; data-changing script
 npm run sync:exercises         # synchronize external exercise data
+npm run icons                  # regenerate PWA/iOS/favicon assets from the canonical brand mark
 node --env-file=.env.local scripts/run-migration.mjs drizzle/<file>.sql --dry-run
 ```
 
@@ -62,6 +63,10 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 - `src/app/onboarding/`: required one-time goal and body-profile setup for a new account.
 - `src/proxy.ts`: Neon Auth middleware. Public asset exclusions are declared in its matcher.
 - `src/components/`: client UI and reusable iPhone-oriented components.
+- `assets/brand/fitlog-mark-source.png`: canonical monochrome Fitlog artwork with no text. It is the
+  source for every application icon; it is intentionally not a public runtime asset.
+- `public/icons/`: generated favicon, Apple touch icon, PWA icons, and Android maskable icon. Regenerate
+  them with `npm run icons` instead of editing individual PNGs.
 - `src/db/schema.ts`: canonical Drizzle schema. SQL migrations in `drizzle/` are the production history.
 - `src/lib/app-user.ts`: Neon-session-to-`app_users` mapping and new-member initialization.
 - `src/lib/local-mode.ts`: the single guard for local no-auth mode. Nothing else may bypass auth.
@@ -123,10 +128,21 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 ## UI conventions
 
 - Design for iPhone first, including 320 px-wide screens, then enhance larger layouts.
-- Preserve the dark theme, `max-w-lg` app shell, safe-area helpers, and hidden scrollbars.
+- The Fitlog visual language is a personal **training archive**, not a generic SaaS dashboard: near-black
+  surfaces, warm off-white type, monochrome training photography/illustration, large condensed editorial
+  headings, restrained asymmetric corners, and lime (`accent`) only for primary action or positive progress.
+  Use `font-display`, `.section-title`, `.icon-frame`, and `.data-number` where they clarify hierarchy.
+- Preserve the dark theme, `max-w-xl` app shell, safe-area helpers, and hidden scrollbars.
 - Avoid horizontal overflow, clipped fixed controls, hover-only interactions, and undersized touch targets.
 - Decimal gram/weight fields must accept both `.` and `,` from iPhone keyboards. Reuse `src/lib/decimal-input.ts`; do not rely on `type="number"` parsing alone.
 - Use the shared `.card`, `.btn*`, `.input`, and `.label` classes where practical.
+- The official Fitlog mark is the monochrome illustrated figure **without any text**. The source is
+  `assets/brand/fitlog-mark-source.png`; icons derive from it through `scripts/generate-icons.mjs`.
+  Do not put a slogan, wordmark, or arbitrary crop into app icons. After changing the source or crop rules,
+  run `npm run icons` and verify `favicon.png`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, and
+  `maskable-512.png`. The root metadata and manifest must continue to point at those generated files.
+- PWA icon changes are cached by iOS. In the handoff, tell the user to remove and re-add the Home Screen app
+  if an old icon remains after the production deployment.
 - Motivation posters use `MotivationCard`. Images live in `public/motivation/` and must be free-licence;
   check `premium`/`plus` before adding an Unsplash photo, and record it in `CREDITS.md`.
 - Verify visual changes by running `npm run dev:local` and looking at the screen, not by reasoning alone.
