@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check, Dumbbell } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { apiPost } from "@/lib/api";
 import { normalizeDecimalInput } from "@/lib/decimal-input";
 import type { BiologicalSex, Goal } from "@/lib/calorie-targets";
@@ -83,8 +84,8 @@ export default function OnboardingFlow({ name }: { name: string | null }) {
 
       {step === 0 && (
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="icon-frame mb-6 h-12 w-12">
-            <Dumbbell size={24} />
+          <div className="mb-6 h-16 w-16 overflow-hidden border border-border bg-black [border-radius:2px_14px_2px_2px]">
+            <Image src="/icons/icon-192.png" alt="Fitlog" width={64} height={64} priority />
           </div>
           <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Fitlog / initialization</p>
           <h1 className="font-display text-4xl leading-none tracking-[0.04em] min-[360px]:text-5xl">

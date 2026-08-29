@@ -28,6 +28,8 @@ export const metadata: Metadata = {
     title: "Fitlog",
   },
   icons: {
+    icon: "/icons/favicon.png",
+    shortcut: "/icons/favicon.png",
     apple: "/icons/apple-touch-icon.png",
   },
 };

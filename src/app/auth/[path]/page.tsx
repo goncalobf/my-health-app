@@ -2,8 +2,9 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Dumbbell, LogIn, UserPlus } from "lucide-react";
+import { LogIn, UserPlus } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 
 export default function AuthPage({ params }: { params: Promise<{ path: string }> }) {
@@ -51,8 +52,8 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
     <main className="flex min-h-dvh items-center justify-center px-5 safe-bottom safe-top">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-4 text-center">
-          <div className="icon-frame h-16 w-16">
-            <Dumbbell size={29} />
+          <div className="h-20 w-20 overflow-hidden border border-border bg-black [border-radius:2px_16px_2px_2px]">
+            <Image src="/icons/icon-192.png" alt="Fitlog" width={80} height={80} priority />
           </div>
           <div>
             <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.24em] text-accent">Training archive / private</p>
