@@ -9,3 +9,5 @@
 - Do not push, merge, deploy, change Neon/Vercel configuration, or apply a production migration without explicit authorization or a clear standing instruction from the user.
 - Before an authorized push, fetch safely and confirm the intended commits and files. Never silently overwrite a newer `origin/main`.
 - Report the commit hash, pushed ref, migration result, deployment URL/status, and smoke-test result for actions actually performed.
+- Production deploys from `main` through the Vercel Git integration, so shipping means merging, not `vercel --prod` from a branch.
+- Never commit `public/motivation/` images without confirming their licence, or anything pulled by `vercel env pull`.
