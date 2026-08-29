@@ -89,6 +89,14 @@ select:focus-visible {
   -ms-overflow-style: none;
 }
 
+/* Older WebKit needs an explicit hint to give an overflow region momentum
+   touch-scrolling; without it a finger-swipe inside a sheet or drawer can
+   silently fail to scroll, hiding whatever sits below the fold. */
+.overflow-y-auto,
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
 *::-webkit-scrollbar {
   display: none;
   width: 0;
