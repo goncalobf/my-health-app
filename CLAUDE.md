@@ -27,6 +27,7 @@ npm run local:db               # migrate + seed the throwaway local database
 npm run dev:local              # run locally with no auth and no login page
 npm run plan:ppl               # apply the PPL plan; data-changing script
 npm run sync:exercises         # synchronize external exercise data
+npm run sync:foods             # atomically refresh official PT/CH food catalogs
 npm run icons                  # regenerate PWA/iOS/favicon assets from the canonical brand mark
 node --env-file=.env.local scripts/run-migration.mjs drizzle/<file>.sql --dry-run
 ```
@@ -119,6 +120,8 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 - Motivation is a presentation layer only: seeded hard-toned lines over licensed dark photography, plus
   facts computed from the user's own working sets. It never invents a number.
 - Nutrition is gram-first and stores per-entry totals. USDA FoodData Central supplies cooked/generic foods; Open Food Facts supplies packaged products and barcodes. External macros are normalized per 100 g before quantity scaling.
+- PortFIR/INSA and the Swiss FSVO database are versioned shared catalogs imported from official XLSX downloads. Per-user food region/language settings influence ranking and localized names. See `docs/food-data.md` before changing providers or ingestion.
+- Missing upstream nutrients remain null, and foods without all four core macros are not loggable. PortFIR beverages expressed per 100 ml remain outside the current gram-only flow.
 - Garmin energy expenditure is entered manually; there is no Garmin OAuth/API integration.
 - Body profile, goals, calories, macros, phase start, and adaptive-target preferences live in per-user settings.
 - Fat-loss/recomposition protein is deterministic at 2.4 g/kg; maintenance/muscle-gain protein is 2.0 g/kg. Fat receives about 25% of target calories and carbohydrate receives the remainder. Macro calories must remain internally consistent.

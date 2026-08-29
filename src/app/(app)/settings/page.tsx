@@ -23,6 +23,8 @@ interface Targets {
   heightCm: number | null;
   ageYears: number | null;
   biologicalSex: "male" | "female" | "unspecified";
+  foodRegion: "PT" | "CH" | "both";
+  foodLanguage: "pt" | "de" | "fr" | "it" | "en";
 }
 
 interface ScheduleRow { dayOfWeek: number; day: string; routineId: number | null; }
@@ -189,6 +191,50 @@ export default function SettingsPage() {
           ) : (
             "Save profile"
           )}
+        </button>
+      </div>
+
+      <h2 className="text-sm font-semibold text-muted mb-2 mt-6">Food search</h2>
+      <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
+        <label>
+          <span className="label">Preferred food region</span>
+          <select
+            className="input mt-1"
+            value={t.foodRegion}
+            onChange={(e) =>
+              setT({ ...t, foodRegion: e.target.value as Targets["foodRegion"] })
+            }
+          >
+            <option value="both">Portugal + Switzerland</option>
+            <option value="PT">Portugal first</option>
+            <option value="CH">Switzerland first</option>
+          </select>
+        </label>
+        <label>
+          <span className="label">Food names</span>
+          <select
+            className="input mt-1"
+            value={t.foodLanguage}
+            onChange={(e) =>
+              setT({
+                ...t,
+                foodLanguage: e.target.value as Targets["foodLanguage"],
+              })
+            }
+          >
+            <option value="pt">Português</option>
+            <option value="de">Deutsch</option>
+            <option value="fr">Français</option>
+            <option value="it">Italiano</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <p className="text-[11px] text-muted">
+          Official PortFIR and Swiss FSVO foods are ranked first for your region.
+          USDA fills generic gaps; Open Food Facts supplies packaged products and barcodes.
+        </p>
+        <button onClick={save} className="btn-primary mt-1">
+          {saved ? <><Check size={18} /> Saved</> : "Save food preferences"}
         </button>
       </div>
 

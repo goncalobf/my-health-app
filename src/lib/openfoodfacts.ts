@@ -1,95 +1,123 @@
-// Thin wrapper around the free Open Food Facts API. No key required.
+import "server-only";
 
-const UA = "Fitlog/0.1 (personal health tracker)";
+import { unstable_cache } from "next/cache";
+import { normalize, record } from "@/lib/foods/openfoodfacts-normalizer";
+import type {
+  FoodLanguage,
+  FoodProvider,
+  FoodResult,
+} from "@/lib/foods/types";
 
-export interface FoodResult {
-  barcode: string | null;
-  name: string;
-  brand: string | null;
-  imageUrl: string | null;
-  // Macros per 100 g.
-  calories: number;
-  proteinG: number;
-  carbsG: number;
-  fatG: number;
-  servingSize: string | null;
-  source: string;
-  sourceId: string | null;
-}
+const USER_AGENT = "Fitlog/0.2 (https://fitlog.site)";
+const PRODUCT_FIELDS = [
+  "code",
+  "product_name",
+  "product_name_pt",
+  "product_name_de",
+  "product_name_fr",
+  "product_name_it",
+  "product_name_en",
+  "generic_name",
+  "brands",
+  "categories",
+  "image_small_url",
+  "image_front_small_url",
+  "serving_size",
+  "nutriments",
+  "nutrition",
+  "countries_tags",
+  "lang",
+];
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function num(v: any): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.round(n * 10) / 10 : 0;
-}
-
-export function normalize(p: any): FoodResult | null {
-  if (!p) return null;
-  const name = p.product_name || p.product_name_en || p.generic_name || "";
-  if (!name) return null;
-  const n = p.nutriments || {};
-  return {
-    barcode: p.code ? String(p.code) : null,
-    name,
-    brand: p.brands ? String(p.brands).split(",")[0].trim() : null,
-    imageUrl: p.image_front_small_url || p.image_small_url || null,
-    calories: num(n["energy-kcal_100g"]),
-    proteinG: num(n["proteins_100g"]),
-    carbsG: num(n["carbohydrates_100g"]),
-    fatG: num(n["fat_100g"]),
-    servingSize: p.serving_size || null,
-    source: "Open Food Facts",
-    sourceId: p.code ? String(p.code) : null,
-  };
-}
-
-export async function searchFoods(query: string): Promise<FoodResult[]> {
-  const fields = [
-    "code",
-    "product_name",
-    "product_name_en",
-    "generic_name",
-    "brands",
-    "image_small_url",
-    "image_front_small_url",
-    "serving_size",
-    "nutriments",
-  ];
-  const res = await fetch("https://search.openfoodfacts.org/search", {
+async function searchFoodsUncached(
+  query: string,
+  language: FoodLanguage
+): Promise<FoodResult[]> {
+  const languages = Array.from(new Set([language, "pt", "de", "fr", "it", "en"]));
+  const response = await fetch("https://search.openfoodfacts.org/search", {
     method: "POST",
-    headers: { "User-Agent": UA, "Content-Type": "application/json" },
+    headers: { "User-Agent": USER_AGENT, "Content-Type": "application/json" },
     body: JSON.stringify({
       q: query,
       page_size: 24,
-      langs: ["en"],
-      fields,
+      langs: languages,
+      fields: PRODUCT_FIELDS,
     }),
     signal: AbortSignal.timeout(8_000),
   });
-  if (!res.ok) {
-    throw new Error(`Open Food Facts search failed (${res.status}).`);
+  if (!response.ok) {
+    throw new Error(`Open Food Facts search failed (${response.status}).`);
   }
-  const data = await res.json();
-  return (data.hits || [])
-    .map(normalize)
-    .filter((f: FoodResult | null): f is FoodResult => f !== null);
+  const data = record(await response.json());
+  const hits = Array.isArray(data.hits) ? data.hits : [];
+  return hits
+    .map((product) => normalize(product, language))
+    .filter((food): food is FoodResult => food !== null);
 }
 
-export async function lookupBarcode(code: string): Promise<FoodResult | null> {
+const cachedSearchFoods = unstable_cache(
+  searchFoodsUncached,
+  ["food-provider", "openfoodfacts", "search", "v2"],
+  { revalidate: 21_600 }
+);
+
+export function searchFoods(
+  query: string,
+  language: FoodLanguage = "en"
+): Promise<FoodResult[]> {
+  return cachedSearchFoods(query.trim().toLowerCase(), language);
+}
+
+async function lookupBarcodeUncached(
+  code: string,
+  language: FoodLanguage,
+  country: string
+): Promise<FoodResult | null> {
   const url =
-    `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(
-      code
-    )}.json?` +
+    `https://world.openfoodfacts.org/api/v3.6/product/${encodeURIComponent(code)}.json?` +
     new URLSearchParams({
-      fields:
-        "code,product_name,product_name_en,generic_name,brands,image_small_url,image_front_small_url,serving_size,nutriments",
+      fields: PRODUCT_FIELDS.filter((field) => field !== "nutriments").join(","),
+      lc: language,
+      cc: country.toLowerCase(),
     }).toString();
-  const res = await fetch(url, {
-    headers: { "User-Agent": UA },
+  const response = await fetch(url, {
+    headers: { "User-Agent": USER_AGENT },
     signal: AbortSignal.timeout(8_000),
   });
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (data.status !== 1) return null;
-  return normalize(data.product);
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`Open Food Facts barcode lookup failed (${response.status}).`);
+  }
+  const data = record(await response.json());
+  const result = record(data.result);
+  if (result.id !== "product_found") return null;
+  return normalize(data.product, language);
 }
+
+const cachedLookupBarcode = unstable_cache(
+  lookupBarcodeUncached,
+  ["food-provider", "openfoodfacts", "barcode", "v3.6"],
+  { revalidate: 86_400 }
+);
+
+export function lookupBarcode(
+  code: string,
+  language: FoodLanguage = "en",
+  country = "CH"
+): Promise<FoodResult | null> {
+  return cachedLookupBarcode(code, language, country);
+}
+
+export const openFoodFactsProvider: FoodProvider = {
+  id: "openfoodfacts",
+  search: ({ query, language }) => searchFoods(query, language),
+  lookupBarcode: (code, context) =>
+    lookupBarcode(
+      code,
+      context.language,
+      context.region === "PT" ? "PT" : "CH"
+    ),
+};
+
+export type { FoodResult } from "@/lib/foods/types";
+export { normalize } from "@/lib/foods/openfoodfacts-normalizer";

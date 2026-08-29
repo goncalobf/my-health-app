@@ -15,6 +15,7 @@
     "seed": "node --env-file=.env.local scripts/seed.mjs",
     "plan:ppl": "node --env-file=.env.local scripts/apply-ppl-plan.mjs",
     "sync:exercises": "node --env-file=.env.local scripts/sync-exercises.mjs",
+    "sync:foods": "node --env-file=.env.local scripts/sync-food-catalogs.mjs",
     "dev:local": "FITLOG_LOCAL=1 VERCEL= VERCEL_ENV= DATABASE_URL=postgresql://fitlog:fitlog@localhost:55432/fitlog next dev --port 3210",
     "local:db": "DATABASE_URL=postgresql://fitlog:fitlog@localhost:55432/fitlog node scripts/local-db.mjs"
   },
@@ -43,6 +44,8 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.0.0",
     "eslint-config-next": "16.3.3",
+    "fast-xml-parser": "^5.11.1",
+    "fflate": "^0.8.3",
     "postcss": "^8.4.49",
     "puppeteer-core": "^25.9.0",
     "sharp": "^0.35.4",
