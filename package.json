@@ -14,7 +14,9 @@
     "icons": "node scripts/generate-icons.mjs",
     "seed": "node --env-file=.env.local scripts/seed.mjs",
     "plan:ppl": "node --env-file=.env.local scripts/apply-ppl-plan.mjs",
-    "sync:exercises": "node --env-file=.env.local scripts/sync-exercises.mjs"
+    "sync:exercises": "node --env-file=.env.local scripts/sync-exercises.mjs",
+    "dev:local": "FITLOG_LOCAL=1 VERCEL= VERCEL_ENV= DATABASE_URL=postgresql://fitlog:fitlog@localhost:55432/fitlog next dev --port 3210",
+    "local:db": "DATABASE_URL=postgresql://fitlog:fitlog@localhost:55432/fitlog node scripts/local-db.mjs"
   },
   "dependencies": {
     "@neondatabase/auth": "0.5.0-beta",
@@ -24,6 +26,7 @@
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.454.0",
     "next": "^16.3.3",
+    "pg": "^8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "recharts": "^2.15.0",
@@ -31,6 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.20",

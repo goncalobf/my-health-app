@@ -23,12 +23,35 @@ npm run db:generate            # generate a Drizzle migration from schema change
 npm run db:push                # local/dev schema sync only; do not use for production
 npm run db:studio              # inspect the configured database
 npm run seed                   # seed the shared exercise library
+npm run local:db               # migrate + seed the throwaway local database
+npm run dev:local              # run locally with no auth and no login page
 npm run plan:ppl               # apply the PPL plan; data-changing script
 npm run sync:exercises         # synchronize external exercise data
 node --env-file=.env.local scripts/run-migration.mjs drizzle/<file>.sql --dry-run
 ```
 
 Run targeted unit tests while iterating. Before a normal handoff run `npm test` and `npm run lint`; also run `npm run build` for routing, auth, configuration, dependency, or production-facing changes.
+
+## Local no-auth mode
+
+`npm run dev:local` runs the app on port 3210 against a disposable Postgres
+container with Neon Auth switched off, so the UI can be opened and checked
+without credentials. It is for looking at the app, not for testing auth.
+
+```bash
+docker run -d --name fitlog-local-db -e POSTGRES_PASSWORD=fitlog \
+  -e POSTGRES_USER=fitlog -e POSTGRES_DB=fitlog -p 55432:5432 postgres:16-alpine
+npm run local:db                  # replay migrations and seed demo history
+npm run local:db -- reset         # drop, re-migrate, re-seed
+npm run local:db -- fresh-account # clear onboarding to see that flow again
+npm run dev:local
+```
+
+`isLocalMode()` in `src/lib/local-mode.ts` is the only switch. It requires
+`FITLOG_LOCAL=1` **and** no `VERCEL`/`VERCEL_ENV` **and** a non-production
+`NODE_ENV`, so it cannot engage on a deployment. `.env.local` pulled from
+Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
+`local:db` at a real database; it refuses any non-localhost URL.
 
 ## Architecture
 

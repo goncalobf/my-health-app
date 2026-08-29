@@ -1,6 +1,9 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
+import { drizzle as drizzleNode } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import * as schema from "./schema";
+import { isLocalMode } from "@/lib/local-mode";
 
 type DB = NeonHttpDatabase<typeof schema>;
 
@@ -15,7 +18,11 @@ function getDb(): DB {
       "Missing DATABASE_URL. Add a Postgres (Neon) database in Vercel or set it in .env.local."
     );
   }
-  _db = drizzle(neon(connectionString), { schema });
+  // The local database is a plain Postgres container, which the Neon HTTP
+  // driver cannot address, so local mode uses node-postgres instead.
+  _db = isLocalMode()
+    ? (drizzleNode(new Pool({ connectionString }), { schema }) as unknown as DB)
+    : drizzle(neon(connectionString), { schema });
   return _db;
 }
 

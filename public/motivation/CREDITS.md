@@ -8,5 +8,6 @@ Credited here anyway.
 - `heavy-bag.jpg` — Mathias Reding (unsplash.com/photos/E0vlCRya9n4) — a black boxing bag in a dark room
 - `ringwork.jpg` — Lisa Marie Theck (unsplash.com/photos/4zaaZR_vjnc) — A black and white photo of a man in a boxing ring
 - `the-grind.jpg` — Brandon Morales (unsplash.com/photos/1bnnb12tiWQ) — a man kneeling on a bench in a dark room
-- `sled.jpg` — Ramsés Cervantes (unsplash.com/photos/DsFEZDGuXfM) — A shirtless man pushing a heavy weighted sled in a dimly lit
 - `before-dawn.jpg` — Ryan Hall (unsplash.com/photos/0zCeNgAQ7d4) — Two masked figures in a dark, gritty, abandoned room
+
+- `overhead.jpg` — Redd Francisco (unsplash.com/photos/Be03xxgZFRk) — a woman lifting a barbell in a gym

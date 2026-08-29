@@ -9,6 +9,7 @@ import {
   workoutSchedule,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { isLocalMode, LOCAL_USER_EMAIL, LOCAL_USER_NAME } from "@/lib/local-mode";
 import { todayISO } from "@/lib/utils";
 
 async function initializeUserData(userId: number) {
@@ -33,6 +34,30 @@ async function initializeUserData(userId: number) {
 }
 
 export async function getAppUser() {
+  // Local mode has no Neon Auth at all: resolve a fixed local account so the
+  // app can be opened without a login page. Guarded to non-deployed builds.
+  if (isLocalMode()) {
+    const [existing] = await db
+      .select()
+      .from(appUsers)
+      .where(eq(appUsers.email, LOCAL_USER_EMAIL))
+      .limit(1);
+    if (existing) return existing;
+    const [created] = await db
+      .insert(appUsers)
+      .values({
+        email: LOCAL_USER_EMAIL,
+        name: LOCAL_USER_NAME,
+        role: "owner",
+        status: "active",
+        authUserId: "local-dev-user",
+        joinedAt: new Date(),
+      })
+      .returning();
+    await initializeUserData(created.id);
+    return created;
+  }
+
   const { data: session } = await auth.getSession();
   const authUser = session?.user;
   if (!authUser?.id || !authUser.email) return null;

@@ -65,7 +65,7 @@ export const MOTIVATION_IMAGES = [
   "heavy-bag",
   "ringwork",
   "the-grind",
-  "sled",
+  "overhead",
   "before-dawn",
 ] as const;
 
