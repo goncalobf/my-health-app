@@ -20,6 +20,12 @@ import ExerciseImage from "@/components/ExerciseImage";
 import RestTimer from "@/components/RestTimer";
 import { normalizeDecimalInput, parseDecimalInput } from "@/lib/decimal-input";
 import { prefillSet, suggestDropWeight } from "@/lib/set-prefill";
+import {
+  firstIncompletePosition,
+  groupLoggedRows,
+  nextIncompletePosition,
+  nextSetNumber,
+} from "@/lib/workout-flow";
 
 interface PlanItem {
   exerciseId: number;
@@ -177,24 +183,17 @@ export default function SessionPage({
         deloadMode: boolean;
       }
     ): Block => {
-      const logged = data.loggedSets
-        .filter((s) => s.exerciseId === exerciseId)
-        .sort((a, b) => a.setNumber - b.setNumber || a.id - b.id);
+      const logged = data.loggedSets.filter((s) => s.exerciseId === exerciseId);
       const last = data.lastSets[exerciseId] ?? [];
       const recommendation = data.recommendations[exerciseId];
 
       let sets: LocalSet[];
       if (logged.length) {
-        // Rows sharing a set number are one set: the effort plus its drops.
-        const grouped = new Map<number, LoggedSet[]>();
-        for (const row of logged) {
-          grouped.set(row.setNumber, [...(grouped.get(row.setNumber) ?? []), row]);
-        }
-        sets = [...grouped.values()].map((rows) => ({
+        sets = groupLoggedRows(logged).map((group) => ({
           key: nk(),
-          setNumber: rows[0].setNumber,
-          completed: !!rows[0].completedAt,
-          entries: rows.map((row) => ({
+          setNumber: group.setNumber,
+          completed: group.completed,
+          entries: group.rows.map((row) => ({
             key: nk(),
             dbId: row.id,
             weight: numberText(row.weightKg),
@@ -301,7 +300,7 @@ export default function SessionPage({
     }
 
     setBlocks(built);
-    setCursor(firstIncomplete(built));
+    setCursor(firstIncompletePosition(built));
     setLoading(false);
   }, [id, router]);
 
@@ -379,7 +378,7 @@ export default function SessionPage({
       )
     );
 
-    const upcoming = nextIncomplete(blocks, exIdx, set.key);
+    const upcoming = nextIncompletePosition(blocks, exIdx, set.key);
     setRest((prev) => ({
       seq: (prev?.seq ?? 0) + 1,
       target: block.restSeconds,
@@ -453,7 +452,7 @@ export default function SessionPage({
     const previous = block.sets[block.sets.length - 1]?.entries[0];
     const created: LocalSet = {
       key: nk(),
-      setNumber: Math.max(0, ...block.sets.map((s) => s.setNumber)) + 1,
+      setNumber: nextSetNumber(block.sets),
       completed: false,
       entries: [
         {
@@ -485,7 +484,7 @@ export default function SessionPage({
       setCursor(
         remaining.length
           ? { exIdx, setKey: remaining[remaining.length - 1].key }
-          : firstIncomplete(blocks)
+          : firstIncompletePosition(blocks)
       );
     }
   }
@@ -688,34 +687,6 @@ export default function SessionPage({
         />
       )}
     </div>
-  );
-}
-
-function firstIncomplete(blocks: Block[]): Cursor | null {
-  for (let exIdx = 0; exIdx < blocks.length; exIdx++) {
-    const set = blocks[exIdx].sets.find((s) => !s.completed);
-    if (set) return { exIdx, setKey: set.key };
-  }
-  return null;
-}
-
-/** Next unlogged set after the current one, wrapping back to earlier gaps. */
-function nextIncomplete(
-  blocks: Block[],
-  exIdx: number,
-  setKey: string
-): Cursor | null {
-  const order: Cursor[] = [];
-  blocks.forEach((block, i) =>
-    block.sets.forEach((set) => order.push({ exIdx: i, setKey: set.key }))
-  );
-  const at = order.findIndex((p) => p.exIdx === exIdx && p.setKey === setKey);
-  const rotated = at === -1 ? order : [...order.slice(at + 1), ...order.slice(0, at)];
-  return (
-    rotated.find((p) => {
-      const set = blocks[p.exIdx].sets.find((s) => s.key === p.setKey);
-      return set && !set.completed;
-    }) ?? null
   );
 }
 
