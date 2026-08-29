@@ -39,6 +39,7 @@ export async function POST(
       reps: body.reps != null ? Number(body.reps) : 0,
       rir: parseRir(body.rir),
       isWarmup: !!body.isWarmup,
+      isDropSet: !!body.isDropSet,
       completedAt: body.completed ? new Date() : null,
     })
     .returning();

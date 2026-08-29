@@ -1,0 +1,1 @@
+ALTER TABLE "session_sets" ADD COLUMN "is_drop_set" boolean DEFAULT false NOT NULL;

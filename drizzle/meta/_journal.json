@@ -78,6 +78,13 @@
       "when": 1788011875195,
       "tag": "0010_fearless_slyde",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788017813748,
+      "tag": "0011_right_trauma",
+      "breakpoints": true
     }
   ]
 }

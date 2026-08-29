@@ -117,6 +117,9 @@ export const sessionSets = pgTable("session_sets", {
   reps: integer("reps").notNull().default(0),
   rir: integer("rir"),
   isWarmup: boolean("is_warmup").notNull().default(false),
+  // A drop shares its parent's set_number and is excluded from progression,
+  // personal records and other working-set analysis.
+  isDropSet: boolean("is_drop_set").notNull().default(false),
   completedAt: timestamp("completed_at"),
 });
 

@@ -36,6 +36,7 @@ export async function PATCH(
     set.rir = parseRir(body.rir);
   }
   if (body.isWarmup !== undefined) set.isWarmup = !!body.isWarmup;
+  if (body.isDropSet !== undefined) set.isDropSet = !!body.isDropSet;
   if (body.completed === true) set.completedAt = new Date();
   if (body.completed === false) set.completedAt = null;
 

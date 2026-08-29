@@ -21,25 +21,30 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
     setBusy(true);
     setError("");
 
-    const result = signingUp
-      ? await authClient.signUp.email({
-          name: name.trim(),
-          email: email.trim().toLowerCase(),
-          password,
-        })
-      : await authClient.signIn.email({
-          email: email.trim().toLowerCase(),
-          password,
-        });
+    try {
+      const result = signingUp
+        ? await authClient.signUp.email({
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            password,
+          })
+        : await authClient.signIn.email({
+            email: email.trim().toLowerCase(),
+            password,
+          });
 
-    if (result.error) {
-      setError(result.error.message || "Authentication failed.");
+      if (result.error) {
+        setError(result.error.message || "Authentication failed.");
+        setBusy(false);
+        return;
+      }
+
+      router.replace("/");
+      router.refresh();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Authentication failed.");
       setBusy(false);
-      return;
     }
-
-    router.replace("/");
-    router.refresh();
   }
 
   return (

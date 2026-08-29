@@ -82,7 +82,8 @@ export async function GET() {
             eq(sessions.userId, user.id),
             isNotNull(sessionSets.completedAt),
             isNotNull(sessions.finishedAt),
-            eq(sessionSets.isWarmup, false)
+            eq(sessionSets.isWarmup, false),
+            eq(sessionSets.isDropSet, false)
           )
         )
         .orderBy(desc(sessions.startedAt), asc(sessionSets.setNumber))

@@ -82,6 +82,7 @@ export async function GET(
       reps: sessionSets.reps,
       rir: sessionSets.rir,
       isWarmup: sessionSets.isWarmup,
+      isDropSet: sessionSets.isDropSet,
       completedAt: sessionSets.completedAt,
       exerciseName: exercises.name,
       muscleGroup: exercises.muscleGroup,
@@ -90,7 +91,11 @@ export async function GET(
     .from(sessionSets)
     .innerJoin(exercises, eq(exercises.id, sessionSets.exerciseId))
     .where(eq(sessionSets.sessionId, sessionId))
-    .orderBy(asc(sessionSets.exerciseId), asc(sessionSets.setNumber));
+    .orderBy(
+      asc(sessionSets.exerciseId),
+      asc(sessionSets.setNumber),
+      asc(sessionSets.id)
+    );
 
   // "Last time" reference: for each planned exercise (or any ad-hoc exercise
   // already logged), pull the sets from the most recent *other* session.
@@ -123,7 +128,8 @@ export async function GET(
           ne(sessionSets.sessionId, sessionId),
           isNotNull(sessions.finishedAt),
           isNotNull(sessionSets.completedAt),
-          eq(sessionSets.isWarmup, false)
+          eq(sessionSets.isWarmup, false),
+          eq(sessionSets.isDropSet, false)
         )
       )
       .orderBy(desc(sessions.startedAt), asc(sessionSets.setNumber));
