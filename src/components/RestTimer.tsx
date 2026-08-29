@@ -5,26 +5,27 @@ import { X, Timer } from "lucide-react";
 import { formatDuration } from "@/lib/utils";
 
 export default function RestTimer({
-  startedAt,
   targetSeconds,
   label,
+  note,
   onEnd,
 }: {
-  startedAt: number;
   targetSeconds: number;
   label: string;
+  note?: string | null;
   onEnd: () => void;
 }) {
   const [elapsed, setElapsed] = useState(0);
   const buzzed = useRef(false);
 
+  // The timer owns its own clock: mount one per rest period via a changing key.
   useEffect(() => {
-    buzzed.current = false;
+    const startedAt = Date.now();
     const tick = () => setElapsed(Math.floor((Date.now() - startedAt) / 1000));
     tick();
     const iv = setInterval(tick, 250);
     return () => clearInterval(iv);
-  }, [startedAt]);
+  }, []);
 
   const reached = targetSeconds > 0 && elapsed >= targetSeconds;
   useEffect(() => {
@@ -83,6 +84,11 @@ export default function RestTimer({
               <X size={16} /> End
             </button>
           </div>
+          {note && (
+            <p className="mt-2.5 border-t border-border pt-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
+              {note}
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -55,7 +55,7 @@ export default function WorkoutsPage() {
       const created = await apiPost<{ id: number }>("/api/sessions", {
         routineId,
       });
-      router.push(`/workouts/session/${created.id}`);
+      router.push(`/workouts/session/${created.id}?hype=1`);
     } finally {
       setStarting(false);
     }

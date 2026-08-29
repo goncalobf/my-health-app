@@ -12,6 +12,8 @@ paths:
 # API, authentication, and privacy rules
 
 - Call `requireAppUser()` before accessing private application data. A Neon session proves identity, not Fitlog invitation status.
+- `isLocalMode()` in `src/lib/local-mode.ts` is the only sanctioned auth bypass. It must keep requiring `FITLOG_LOCAL=1`, no `VERCEL`/`VERCEL_ENV`, and a non-production `NODE_ENV`. Never add a second bypass or relax these guards.
+- A deployment without Neon Auth configuration must fail closed. Never fall through to the application unauthenticated.
 - Scope every personal select, update, and delete to `user.id`. Never fetch by a client-supplied numeric ID alone.
 - Establish nested ownership by joining to the user-owned parent before reading or mutating a routine exercise or session set.
 - Before inserting a foreign key, prove the referenced routine/session belongs to the user and the exercise is shared or user-owned.

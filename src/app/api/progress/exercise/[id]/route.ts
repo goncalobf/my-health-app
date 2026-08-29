@@ -35,6 +35,7 @@ export async function GET(
         eq(sessionSets.exerciseId, exerciseId),
         eq(sessions.userId, user.id),
         eq(sessionSets.isWarmup, false),
+        eq(sessionSets.isDropSet, false),
         gt(sessionSets.reps, 0),
         gt(sessionSets.weightKg, 0),
         isNotNull(sessionSets.completedAt)

@@ -16,6 +16,10 @@ import MacroSummary from "@/components/MacroSummary";
 import DailyPlan from "@/components/DailyPlan";
 import CoachDashboardCard from "@/components/CoachDashboardCard";
 import NutritionPhaseCard from "@/components/NutritionPhaseCard";
+import MotivationCard from "@/components/MotivationCard";
+import { pickImage, pickLine } from "@/lib/motivation";
+import { isSlipping, topMotivationFact } from "@/lib/motivation-facts";
+import { getMotivationInput } from "@/lib/motivation-server";
 import { requireAppUser } from "@/lib/app-user";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +39,7 @@ export default async function DashboardPage() {
     todayBurns,
     trainingRows,
     nutritionDayRows,
+    motivation,
   ] = await Promise.all([
     getTargets(user.id),
     db
@@ -86,6 +91,7 @@ export default async function DashboardPage() {
           gte(nutritionLogs.day, weekStartDay)
         )
       ),
+    getMotivationInput(user.id),
   ]);
   const lastSession = lastSessions[0];
   const latestWeight = latestWeights[0];
@@ -109,6 +115,11 @@ export default async function DashboardPage() {
       .from(routines).where(and(eq(routines.userId, user.id), ilike(routines.name, `%${term}%`))).limit(1);
   }
 
+  const slipping = isSlipping(motivation);
+  const motivationFact = topMotivationFact(motivation);
+  // Seeded per user per day: the poster holds still until tomorrow.
+  const motivationSeed = `${today}:${user.id}`;
+
   const hour = hourInAppTimeZone();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -127,6 +138,14 @@ export default async function DashboardPage() {
           <Settings size={20} />
         </Link>
       </header>
+
+      <MotivationCard
+        image={pickImage(motivationSeed)}
+        line={pickLine(slipping ? "slipping" : "dashboard", motivationSeed)}
+        fact={motivationFact?.text ?? null}
+        eyebrow={slipping ? "Get back in" : null}
+        priority
+      />
 
       <DailyPlan
         day={today}

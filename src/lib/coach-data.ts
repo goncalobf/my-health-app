@@ -58,7 +58,7 @@ export async function getCoachSnapshot({
       }).from(sessionSets)
         .innerJoin(sessions, eq(sessions.id, sessionSets.sessionId))
         .innerJoin(exercises, eq(exercises.id, sessionSets.exerciseId))
-        .where(and(eq(sessions.userId, userId), gte(sessions.startedAt, fromTime), isNotNull(sessions.finishedAt), isNotNull(sessionSets.completedAt), eq(sessionSets.isWarmup, false))),
+        .where(and(eq(sessions.userId, userId), gte(sessions.startedAt, fromTime), isNotNull(sessions.finishedAt), isNotNull(sessionSets.completedAt), eq(sessionSets.isWarmup, false), eq(sessionSets.isDropSet, false))),
       db.select({ dayOfWeek: workoutSchedule.dayOfWeek, routine: routines.name })
         .from(workoutSchedule).leftJoin(routines, eq(routines.id, workoutSchedule.routineId))
         .where(eq(workoutSchedule.userId, userId))
