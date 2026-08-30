@@ -531,3 +531,18 @@ export type HyroxSegment = typeof hyroxSegments.$inferSelect;
 export type GarminConnection = typeof garminConnections.$inferSelect;
 export type GarminPendingImport = typeof garminPendingImports.$inferSelect;
 export type GarminDailyMetrics = typeof garminDailyMetrics.$inferSelect;
+
+// Short-lived (10 min) session that lets a local script POST a token back to the server.
+// The browser creates it, polls it; the script completes it from a non-datacenter IP.
+export const garminAuthSessions = pgTable("garmin_auth_sessions", {
+  id: text("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
+  secret: text("secret").notNull(),
+  status: text("status").notNull().default("pending"), // 'pending' | 'done'
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type GarminAuthSession = typeof garminAuthSessions.$inferSelect;
