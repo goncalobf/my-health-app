@@ -28,7 +28,14 @@ export async function POST(req: Request) {
   // Verify credentials before storing by attempting a login.
   try {
     await fetchRecentActivities(username, password, 1);
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    // Garmin throws this when a new-device/location challenge is triggered (not wrong credentials).
+    if (msg.includes("MFA") || msg.includes("Ticket not found")) {
+      return NextResponse.json({
+        error: "Garmin blocked this sign-in as a new device. Check your email for a Garmin security notification, confirm it was you, then try connecting again.",
+      }, { status: 401 });
+    }
     return NextResponse.json({ error: "Garmin login failed — check your username and password" }, { status: 401 });
   }
 

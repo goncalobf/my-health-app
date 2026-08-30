@@ -26,7 +26,11 @@ export async function POST() {
   let activities;
   try {
     activities = await fetchRecentActivities(username, password, 20);
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    if (msg.includes("MFA") || msg.includes("Ticket not found")) {
+      return NextResponse.json({ error: "Garmin blocked this sign-in as a new device. Check your email for a Garmin security notification, confirm it was you, then try again." }, { status: 502 });
+    }
     return NextResponse.json({ error: "Garmin sync failed — reconnect your account" }, { status: 502 });
   }
 
