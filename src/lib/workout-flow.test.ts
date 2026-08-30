@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applySessionExerciseOrder,
   firstIncompletePosition,
   groupLoggedRows,
   nextIncompletePosition,
   nextSetNumber,
+  reorderExerciseIds,
 } from "./workout-flow";
 
 const done = "2026-08-29T10:00:00.000Z";
@@ -87,5 +89,49 @@ test("starts on the first unlogged set of the workout", () => {
   assert.equal(
     firstIncompletePosition([{ sets: [{ key: "a1", completed: true }] }]),
     null
+  );
+});
+
+test("reorders a plan by a saved exercise order", () => {
+  const plan = [{ exerciseId: 1 }, { exerciseId: 2 }, { exerciseId: 3 }];
+  assert.deepEqual(
+    applySessionExerciseOrder(plan, [3, 1, 2]).map((p) => p.exerciseId),
+    [3, 1, 2]
+  );
+});
+
+test("keeps original relative order for a plan with no saved order", () => {
+  const plan = [{ exerciseId: 1 }, { exerciseId: 2 }];
+  assert.deepEqual(applySessionExerciseOrder(plan, null), plan);
+  assert.deepEqual(applySessionExerciseOrder(plan, []), plan);
+});
+
+test("sends exercises missing from a saved order to the end, in original order", () => {
+  const plan = [{ exerciseId: 1 }, { exerciseId: 2 }, { exerciseId: 3 }];
+  assert.deepEqual(
+    applySessionExerciseOrder(plan, [2]).map((p) => p.exerciseId),
+    [2, 1, 3]
+  );
+});
+
+test("ignores a saved order id no longer in the plan", () => {
+  const plan = [{ exerciseId: 1 }, { exerciseId: 2 }];
+  assert.deepEqual(
+    applySessionExerciseOrder(plan, [99, 2, 1]).map((p) => p.exerciseId),
+    [2, 1]
+  );
+});
+
+test("combines a drag of the unlocked tail with the locked exercises kept in place", () => {
+  assert.deepEqual(
+    reorderExerciseIds([1, 2, 3, 4], new Set([1, 3]), [4, 2]),
+    [1, 3, 4, 2]
+  );
+});
+
+test("reorders freely when nothing is locked yet", () => {
+  assert.deepEqual(
+    reorderExerciseIds([1, 2, 3], new Set(), [3, 1, 2]),
+    [3, 1, 2]
   );
 });

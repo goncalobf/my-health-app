@@ -87,3 +87,40 @@ export function nextIncompletePosition(
     }) ?? null
   );
 }
+
+/**
+ * Applies a session's saved exercise-order override to its planned exercise
+ * list. IDs absent from the override (new to the routine, or no override
+ * saved yet) keep their original relative order and sort after any ID that
+ * is present, so a stale/partial override degrades gracefully.
+ */
+export function applySessionExerciseOrder<T extends { exerciseId: number }>(
+  plan: T[],
+  order: number[] | null | undefined
+): T[] {
+  if (!order || order.length === 0) return plan;
+  const rank = new Map(order.map((exerciseId, i) => [exerciseId, i]));
+  return plan
+    .map((item, i) => ({ item, i, rank: rank.get(item.exerciseId) }))
+    .sort((a, b) => {
+      if (a.rank == null && b.rank == null) return a.i - b.i;
+      if (a.rank == null) return 1;
+      if (b.rank == null) return -1;
+      return a.rank - b.rank || a.i - b.i;
+    })
+    .map((entry) => entry.item);
+}
+
+/**
+ * Combines a drag reorder of the not-yet-started exercises with the
+ * exercises that are locked (in progress or completed): locked IDs keep
+ * their current relative order and stay ahead of the reordered tail.
+ */
+export function reorderExerciseIds(
+  currentOrder: number[],
+  lockedExerciseIds: ReadonlySet<number>,
+  newUnlockedOrder: number[]
+): number[] {
+  const locked = currentOrder.filter((id) => lockedExerciseIds.has(id));
+  return [...locked, ...newUnlockedOrder];
+}
