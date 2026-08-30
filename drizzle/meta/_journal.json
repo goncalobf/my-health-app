@@ -134,6 +134,13 @@
       "when": 1788096081139,
       "tag": "0018_heavy_nuke",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788096870601,
+      "tag": "0019_unusual_famine",
+      "breakpoints": true
     }
   ]
 }
