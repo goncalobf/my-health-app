@@ -1,33 +1,16 @@
 ---
 name: migrate-fitlog-database
-description: Design, generate, review, dry-run, apply, and verify a safe Drizzle/Neon migration for Fitlog. Use whenever schema.ts changes, a backfill is needed, ownership is added, or the user asks to migrate a development or production database.
+description: Design, generate, review, dry-run, apply, and verify a Drizzle/Neon migration. Use when schema.ts changes, a backfill is needed, ownership or constraints change, or the user asks to migrate a specific environment.
 ---
 
-# Migrate the Fitlog database
+# Migrate Fitlog safely
 
-## Prepare
-
-1. Inspect `git status --short`, `src/db/schema.ts`, `drizzle/meta/_journal.json`, the latest migration, and the exact target environment.
-2. Determine whether the operation is schema-only, a data backfill, or both. Identify row counts, nullability, ownership, uniqueness, and rollback risks before writing SQL.
-3. Append any backfill to the generated file as its own `--> statement-breakpoint` statement so it applies in the same transaction as the schema change. `drizzle/0012` is the reference: existing accounts are marked onboarded so a new gate never traps them.
-4. Preview deployments read the production database, so apply before a preview or a merge depends on the new shape.
-3. Require explicit authorization before touching production. Confirm the target from configuration without printing connection strings or secret values.
-
-## Create and review
-
-1. Modify the Drizzle schema first.
-2. Run `npm run db:generate` and review every generated statement.
-3. Never modify or reorder an already-applied migration. Never use `db:push` in production.
-4. For existing rows, backfill deterministically before adding `NOT NULL`, uniqueness, or foreign-key constraints.
-5. For multi-user data, include `user_id` in ownership and uniqueness design. Never assign private rows to an arbitrary account.
-6. Make reruns safe where possible. If SQL is intentionally one-shot, document the preconditions and verification query.
-
-## Validate and apply
-
-1. Run tests, lint, and build for the related code.
-2. Load the intended environment without echoing it, then run:
-   `node --env-file=.env.local scripts/run-migration.mjs drizzle/<migration>.sql --dry-run`
-3. Confirm the dry run executed every statement and rolled back intentionally.
-4. Only after authorization, run the same command without `--dry-run` against the exact target.
-5. Verify schema shape, relevant row counts, ownership distribution, uniqueness, and foreign-key joins. Query aggregates, not private payloads.
-6. Report the migration filename, statement count, target, dry-run result, apply result, and post-migration checks. Do not claim success if verification is incomplete.
+1. Inspect `git status`, `src/db/schema.ts`, the journal/latest migration, and the exact target. Classify schema, backfill, ownership, nullability, uniqueness, and rollback risk.
+2. Require explicit authorization before production access. Resolve configuration without printing secrets or private rows.
+3. Change the schema first, run `npm run db:generate`, and review every generated statement. Never edit or reorder an applied migration.
+4. Backfill existing data deterministically before required columns or constraints. Never assign private rows to an arbitrary account; keep user-aware keys.
+5. Keep schema and backfill in the generated migration transaction using statement breakpoints. Document non-idempotent preconditions.
+6. Run related tests, lint, and build, then:
+   `node --env-file=.env.local scripts/run-migration.mjs drizzle/<file>.sql --dry-run`
+7. Apply without `--dry-run` only after authorization to the confirmed target.
+8. Verify schema, aggregate counts, ownership distribution, uniqueness, and critical joins. Report file, target, statements, dry-run/apply results, and residual risk.

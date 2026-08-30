@@ -1,33 +1,17 @@
 ---
 name: release-fitlog
-description: Verify, commit, push, migrate, deploy, and smoke-test a Fitlog release using GitHub, Neon, and Vercel while preserving unrelated worktree changes. Invoke only when the user explicitly asks to release, push, merge, deploy, or ship changes.
+description: Verify, commit, push, migrate, deploy, and smoke-test Fitlog while preserving unrelated work. Invoke only when the user explicitly asks to release, push, merge, deploy, or ship.
 disable-model-invocation: true
 ---
 
 # Release Fitlog
 
-## Authorization and scope
-
-1. Confirm the user's request authorizes each requested mutation: commit, push, merge/update main, production migration, and deployment are separate actions.
-2. Inspect `git status --short`, the current branch, `git diff`, `git diff --cached`, and `git log --oneline origin/main..HEAD`.
-3. Preserve all unrelated changes. Do not rename the Conductor branch, force-push, reset, or rewrite history.
-
-## Release gate
-
-1. Review the final diff for secrets, generated artifacts, missing ownership filters, unsafe migrations, and accidental file changes.
-2. Run `npm test`, `npm run lint`, and `npm run build`.
-3. If the schema changed, invoke `/migrate-fitlog-database` and complete its dry-run before any production application.
-4. Stage only intended files and create a focused commit. Recheck the staged diff before committing.
-5. Fetch `origin` and confirm the push will not overwrite newer mainline work. Resolve divergence without destructive commands.
-
-## Publish and verify
-
-1. Push the authorized ref. Update `main` only when explicitly requested. Production deploys from `main` through the Vercel Git integration, so merging is what ships; do not deploy a branch with `vercel --prod`.
-2. Apply an authorized production migration before or after deployment according to backward-compatibility needs; prefer an expand/migrate/contract rollout for breaking schema changes.
-3. Deploy through the linked Vercel project and wait for READY/failed status. Do not treat upload completion as a successful deployment.
-4. Smoke-test the canonical production domain `https://fitlog.site`: public auth page, protected redirect/session behavior, changed API/UI path, and a safe failure case. Never create fake production health data merely to smoke-test.
-   When the manifest or icons changed, also fetch the changed icon directly and compare it with the staged
-   file; advise the user that an existing iOS Home Screen install may need to be removed and re-added.
-5. Preview URLs stay behind Vercel Authentication; reach them with the protection bypass secret in an `x-vercel-protection-bypass` header rather than disabling protection.
-5. For Neon Auth changes, verify the production origin remains in the branch's trusted-domain list.
-6. Report commit SHA, pushed branch/main status, migration details, deployment URL/ID, smoke results, and any residual risk.
+1. Map the user's authorization separately for commit, push, main update, production migration, deployment, and external configuration.
+2. Inspect status, branch, unstaged/staged diffs, and `origin/main..HEAD`. Preserve unrelated work; never rename the Conductor branch, reset, rewrite history, or force-push.
+3. Review the intended diff for secrets, ownership gaps, unsafe migrations, generated artifacts, and accidental files. Run tests, lint, and build.
+4. If schema changed, invoke `/migrate-fitlog-database` and complete the authorized target's dry-run before rollout.
+5. Stage only intended files, recheck the staged diff, commit, fetch, and verify that publishing cannot overwrite newer mainline work.
+6. Push only the authorized ref. Production deploys through the Vercel `main` integration; do not substitute `vercel --prod` from a branch.
+7. Wait for deployment readiness, then smoke-test `https://fitlog.site`: public auth/legal pages, protected behavior, changed path, and a safe failure case. Do not create fake production health data.
+8. For icons, compare the deployed file and mention iOS reinstall caching. For auth, verify canonical trusted origins. For Garmin Worker changes, verify its separately authorized deployment.
+9. Report commit, refs, migration, deployment, smoke results, and residual risk. Never claim completion for a check not performed.

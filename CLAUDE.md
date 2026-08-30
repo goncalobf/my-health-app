@@ -1,197 +1,55 @@
-@AGENTS.md
+# Fitlog project guide
 
-# Fitlog agent guide
+Fitlog is a multi-user, iPhone-first health, nutrition, strength, and cardio tracker. It uses Next.js App Router, Neon Postgres/Auth, Drizzle, Vercel, OpenAI, and an optional Cloudflare Worker for Garmin authentication.
 
-Fitlog is a private-by-default, multi-user, iPhone-first health and resistance-training tracker. It is a Next.js App Router PWA backed by Neon Postgres and deployed on Vercel. Treat this file as the current agent-facing source of truth; parts of `README.md` still describe the former single-password app.
+## Before editing
 
-## First actions
+- Run `git status --short` and inspect the relevant code and tests. Preserve every pre-existing tracked or untracked change.
+- Follow the path-scoped rules in `.claude/rules/`; Claude Code loads them when matching files are opened.
+- For Next.js changes, follow `AGENTS.md` and read the relevant installed guide under `node_modules/next/dist/docs/`. Do not rely on remembered Next.js APIs.
+- Trace existing behavior end to end before changing it. Prefer the smallest coherent fix over a parallel abstraction.
 
-1. Read `git status --short`, the relevant source files, and the matching `.claude/rules/` files before editing.
-2. Preserve pre-existing worktree changes. Never discard or rewrite a file merely to make the tree clean.
-3. For Next.js work, read the relevant installed documentation under `node_modules/next/dist/docs/` as required by `AGENTS.md`. This project uses Next.js 16, whose APIs may differ from prior knowledge.
-4. Make the smallest coherent change, then verify it in proportion to risk.
+## Non-negotiable invariants
 
-## Commands
+- Private routes call `requireAppUser()` and scope every personal read/write to `user.id` or a proven user-owned parent. Authentication alone is not authorization.
+- `src/lib/auth.ts` and `src/db/index.ts` construct lazily. Never make a module throw while Next.js imports it during build or route collection.
+- `isLocalMode()` in `src/lib/local-mode.ts` is the only auth bypass. It must never engage on Vercel or in a production build.
+- Calories, macros, phase logic, progression, workout flow, and other health numbers are deterministic code in `src/lib/`, with unit tests. Models may narrate results; they do not own calculations.
+- Warmups and drop sets are not working sets. Exclude both from progression, records, history, plan anchors, and coach data; a drop shares its parent's `set_number`.
+- Never print, commit, or expose secrets, tokens, health payloads, progress photos, private notes, or model conversations.
 
-```bash
-npm install                    # install the locked dependency graph
-npm run dev                    # local development
-npm test                       # Node/tsx unit tests
-npm run lint                   # ESLint
-npm run build                  # production Next.js build
-npm run db:generate            # generate a Drizzle migration from schema changes
-npm run db:push                # local/dev schema sync only; do not use for production
-npm run db:studio              # inspect the configured database
-npm run seed                   # seed the shared exercise library
-npm run local:db               # migrate + seed the throwaway local database
-npm run dev:local              # run locally with no auth and no login page
-npm run plan:ppl               # apply the PPL plan; data-changing script
-npm run sync:exercises         # synchronize external exercise data
-npm run sync:foods             # atomically refresh official PT/CH food catalogs
-npm run icons                  # regenerate PWA/iOS/favicon assets from the canonical brand mark
-node --env-file=.env.local scripts/run-migration.mjs drizzle/<file>.sql --dry-run
-```
+## Repository map
 
-Run targeted unit tests while iterating. Before a normal handoff run `npm test` and `npm run lint`; also run `npm run build` for routing, auth, configuration, dependency, or production-facing changes.
+- `src/app/`: App Router pages and route handlers; `(app)` is the authenticated shell.
+- `src/components/`: client UI; inspect changed screens in the local seeded app.
+- `src/lib/`: domain logic and external-service adapters.
+- `src/db/schema.ts`: desired Drizzle schema; `drizzle/` is append-only production history.
+- `scripts/`: operational or data-changing tasks; inspect a script before running it.
+- `workers/garmin-auth/`: separate Cloudflare Worker runtime for the Garmin login handshake.
 
-## Local no-auth mode
-
-`npm run dev:local` runs the app on port 3210 against a disposable Postgres
-container with Neon Auth switched off, so the UI can be opened and checked
-without credentials. It is for looking at the app, not for testing auth.
+## Common commands
 
 ```bash
-docker run -d --name fitlog-local-db -e POSTGRES_PASSWORD=fitlog \
-  -e POSTGRES_USER=fitlog -e POSTGRES_DB=fitlog -p 55432:5432 postgres:16-alpine
-npm run local:db                  # replay migrations and seed demo history
-npm run local:db -- reset         # drop, re-migrate, re-seed
-npm run local:db -- fresh-account # clear onboarding to see that flow again
-npm run dev:local
+npm run dev:local      # seeded disposable DB, no login, port 3210
+npm run local:db       # migrate and seed the local disposable DB
+npm test               # unit tests
+npm run lint           # ESLint
+npm run build          # production build
+npm run db:generate    # generate a new migration from schema changes
 ```
 
-`isLocalMode()` in `src/lib/local-mode.ts` is the only switch. It requires
-`FITLOG_LOCAL=1` **and** no `VERCEL`/`VERCEL_ENV` **and** a non-production
-`NODE_ENV`, so it cannot engage on a deployment. `.env.local` pulled from
-Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
-`local:db` at a real database; it refuses any non-localhost URL.
+Use targeted tests while iterating. Before handoff, run `npm test` and `npm run lint`; also run `npm run build` for routes, auth, dependencies, configuration, or production-facing changes. For UI work, run `npm run dev:local` and inspect mobile states rather than inferring them from code.
 
-## Architecture
+## Git, database, and delivery
 
-- `src/app/(app)/`: authenticated application pages. Its layout calls `requireAppUser()` and renders the shared bottom navigation.
-- `src/app/api/`: route handlers. Authentication alone is insufficient: every personal query must also be scoped to the current application user.
-- `src/app/auth/[path]/`: custom Neon Auth email/password and Google sign-in/sign-up UI.
-- `src/app/access-pending/`: disabled-account boundary and one-time legacy-owner claim flow.
-- `src/app/privacy/` and `src/app/terms/`: public legal pages; keep both outside the auth gate.
-- `src/app/onboarding/`: required one-time goal and body-profile setup for a new account.
-- `src/proxy.ts`: Neon Auth middleware. Public asset exclusions are declared in its matcher.
-- `src/components/`: client UI and reusable iPhone-oriented components.
-- `assets/brand/fitlog-mark-source.png`: canonical monochrome Fitlog artwork with no text. It is the
-  source for every application icon; it is intentionally not a public runtime asset.
-- `public/icons/`: generated favicon, Apple touch icon, PWA icons, and Android maskable icon. Regenerate
-  them with `npm run icons` instead of editing individual PNGs.
-- `src/db/schema.ts`: canonical Drizzle schema. SQL migrations in `drizzle/` are the production history.
-- `src/lib/app-user.ts`: Neon-session-to-`app_users` mapping and new-member initialization.
-- `src/lib/local-mode.ts`: the single guard for local no-auth mode. Nothing else may bypass auth.
-- `src/lib/coach-data.ts`: privacy-filtered, user-scoped aggregate supplied to the AI coach.
-- `src/lib/macro-targets.ts`, `calorie-targets.ts`, `nutrition-phase.ts`, `progressive-overload.ts`, and
-  `training-plan.ts`: deterministic health/training rules. Keep calculations here rather than delegating
-  them to a model.
-- `src/lib/set-prefill.ts`, `workout-flow.ts`: deterministic rules behind the guided workout screen
-  (opening values, drop weights, set grouping and ordering).
-- `src/lib/motivation.ts`, `motivation-facts.ts`, `motivation-server.ts`: seeded motivation copy and the
-  facts drawn from a user's own working sets.
-- `scripts/`: operational scripts. Assume they can mutate configured data unless inspection proves otherwise.
+- Compare with `origin/main`; do not rename the active Conductor branch, stage unrelated files, force-push, reset shared history, or discard user changes.
+- Never use `db:push` against production or edit an applied migration. Dry-run the exact migration against the exact target before an authorized apply.
+- Commit, push, merge, production migration, deployment, and external configuration changes each require explicit authorization. Production ships from `main` through Vercel.
+- Keep `.env.local`, `.vercel/`, `.next/`, `.context/`, database dumps, and generated caches out of commits. `.env.example` contains names and placeholders only.
 
-## Authentication and account model
+## On-demand context
 
-- Neon Auth owns credentials and sessions. `app_users` maps a Neon auth user ID to one numeric Fitlog user ID.
-- Registration is open. On first authenticated access, `getAppUser()` creates an active member row from the normalized Neon Auth identity and initializes blank settings, training-plan state, and seven blank schedule days. New users never inherit another user's routines or history.
-- The owner manages registered accounts at `/settings/friends` through `/api/accounts` and may disable or restore member access. A disabled member can hold a valid Neon session but must not access application data.
-- `app_users.invited_at` and the `invited` status may exist in old database history only. Migration `0014` activates legacy invitations and changes the default to `active`; do not build new invitation behavior around the legacy column/value.
-- The migrated owner is deliberately not auto-linked. `/api/claim-owner` requires the authenticated owner email plus the former `APP_PASSWORD` once before historical records are attached.
-- `APP_PASSWORD` is legacy claim proof, not the current login system. `/unlock` only redirects to Neon sign-in. Do not reintroduce shared-password authentication.
-- Revoked accounts may have a valid Neon session but must not access application data.
-- Auth is constructed lazily. Importing `src/lib/auth.ts` must never throw, so a build succeeds without
-  secrets; a deployment missing configuration fails closed with `503` rather than serving anything.
-- A new account is redirected to `/onboarding` until `settings.onboarded_at` is set.
-- Google sign-in uses Neon Auth OAuth and the application starts it with `authClient.signIn.social({ provider: "google" })`; the provider must also be enabled for the production branch in Neon. Production Neon Auth must trust the canonical production origin `https://fitlog.site`. The `www`
-  origin is also trusted while `https://www.fitlog.site` remains attached to the Vercel project.
-
-## Data ownership invariants
-
-- Personal root tables carry `user_id`: routines, sessions, nutrition logs, settings, bodyweight, schedule, training state/check-ins, Garmin expenditure, saved foods, meals, measurements, and coach records.
-- Child tables inherit ownership through their parent: `routine_exercises` through `routines`; `session_sets` through `sessions`.
-- Exercises with `owner_user_id IS NULL` are shared library records. Custom exercises are visible only when `owner_user_id` equals the current user.
-- Start each protected route with `requireAppUser()`. Add `user.id` to every select, update, and delete predicate. Validate parent ownership before inserting or mutating child rows.
-- For inaccessible IDs, prefer the same `404` response used for absent IDs. Do not reveal another account's resource existence.
-- Warmups and drop sets are not working sets. Exclude `is_warmup` and `is_drop_set` from progression,
-  personal records, exercise history, training-plan anchors and coach data. A drop shares its parent's
-  `set_number`; including one in progression input can trigger a false weight reduction.
-- Application-level scoping is the current isolation boundary; do not claim PostgreSQL RLS is enabled.
-
-## Product behavior
-
-- The active workout is a guided one-set-at-a-time flow: prefilled stepper controls, automatic advance to
-  the next set while the rest bar counts down, jumpable set pills and an overview sheet. Sets open with
-  real values so completing one never silently stores zeroes.
-- A drop set ends the current effort lighter with no rest and is stored under its parent set's number.
-- Workouts support routines, a fixed Monday-Sunday schedule, rest timers, RIR, double-progression
-  recommendations, fatigue check-ins, and deload guidance.
-- Signing up with email/password or Google requires a one-time onboarding that captures goal and body profile, then derives calories
-  deterministically and macros from the existing allocation rules.
-- Motivation is a presentation layer only: seeded hard-toned lines over licensed dark photography, plus
-  facts computed from the user's own working sets. It never invents a number.
-- Nutrition is gram-first and stores per-entry totals. USDA FoodData Central supplies cooked/generic foods; Open Food Facts supplies packaged products and barcodes. External macros are normalized per 100 g before quantity scaling.
-- PortFIR/INSA and the Swiss FSVO database are versioned shared catalogs imported from official XLSX downloads. Per-user food region/language settings influence ranking and localized names. See `docs/food-data.md` before changing providers or ingestion.
-- Missing upstream nutrients remain null, and foods without all four core macros are not loggable. PortFIR beverages expressed per 100 ml remain outside the current gram-only flow.
-- Garmin energy expenditure is entered manually; there is no Garmin OAuth/API integration.
-- Body profile, goals, calories, macros, phase start, and adaptive-target preferences live in per-user settings.
-- Fat-loss/recomposition protein is deterministic at 2.4 g/kg; maintenance/muscle-gain protein is 2.0 g/kg. Fat receives about 25% of target calories and carbohydrate receives the remainder. Macro calories must remain internally consistent.
-- The AI coach uses OpenAI Responses API structured outputs. It may propose calories and explain observations, but deterministic code calculates macros and progression. Nothing is applied without user review.
-- Never send progress photos or private measurement notes to OpenAI. Do not log health payloads or model text in production diagnostics.
-
-## UI conventions
-
-- Design for iPhone first, including 320 px-wide screens, then enhance larger layouts.
-- The Fitlog visual language is a personal **training archive**, not a generic SaaS dashboard: near-black
-  surfaces, warm off-white type, monochrome training photography/illustration, large condensed editorial
-  headings, restrained asymmetric corners, and lime (`accent`) only for primary action or positive progress.
-  Use `font-display`, `.section-title`, `.icon-frame`, and `.data-number` where they clarify hierarchy.
-- Preserve the dark theme, `max-w-xl` app shell, safe-area helpers, and hidden scrollbars.
-- Avoid horizontal overflow, clipped fixed controls, hover-only interactions, and undersized touch targets.
-- Decimal gram/weight fields must accept both `.` and `,` from iPhone keyboards. Reuse `src/lib/decimal-input.ts`; do not rely on `type="number"` parsing alone.
-- Use the shared `.card`, `.btn*`, `.input`, and `.label` classes where practical.
-- The official Fitlog mark is the monochrome illustrated figure **without any text**. The source is
-  `assets/brand/fitlog-mark-source.png`; icons derive from it through `scripts/generate-icons.mjs`.
-  Do not put a slogan, wordmark, or arbitrary crop into app icons. After changing the source or crop rules,
-  run `npm run icons` and verify `favicon.png`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, and
-  `maskable-512.png`. The root metadata and manifest must continue to point at those generated files.
-- PWA icon changes are cached by iOS. In the handoff, tell the user to remove and re-add the Home Screen app
-  if an old icon remains after the production deployment.
-- Motivation posters use `MotivationCard`. Images live in `public/motivation/` and must be free-licence;
-  check `premium`/`plus` before adding an Unsplash photo, and record it in `CREDITS.md`.
-- Verify visual changes by running `npm run dev:local` and looking at the screen, not by reasoning alone.
-
-## Environment and external services
-
-- Database: `DATABASE_URL` or `POSTGRES_URL`.
-- Neon Auth: `NEON_AUTH_BASE_URL` and a 32+ character `NEON_AUTH_COOKIE_SECRET`; `AUTH_SECRET` remains a compatibility fallback.
-- Legacy owner claim: `APP_PASSWORD`.
-- Coach: server-only `OPENAI_API_KEY`; optional `OPENAI_MODEL` defaults to `gpt-5-mini`.
-- Food search: server-only `FDC_API_KEY`; the code falls back to USDA `DEMO_KEY`. Open Food Facts needs no key.
-- Time zone: `NEXT_PUBLIC_APP_TIME_ZONE`, currently `Europe/Zurich`.
-- Preview deployments have their own `DATABASE_URL`, `NEON_AUTH_BASE_URL` and `NEON_AUTH_COOKIE_SECRET`.
-  Preview currently points at the production database, so apply a migration before a preview relies on it.
-- Preview URLs stay behind Vercel Authentication. Automation reaches them with the project's protection
-  bypass secret in an `x-vercel-protection-bypass` header; do not disable the protection itself.
-- `NEON_AUTH_COOKIE_SECRET` and `AUTH_SECRET` are sensitive in Vercel, so `vercel env pull` returns them
-  empty. A local production build needs a placeholder value for them.
-- Never print, commit, paste, or expose secret values. `.env.local`, `.vercel/`, `.next/`, and `.context/` are local artifacts.
-- `fitlog.site` uses Vercel nameservers. Vercel does not host mailboxes; a provider's MX/TXT records must be added before publishing `support@fitlog.site` as a working contact address. See `docs/authentication.md`.
-
-## Git and delivery
-
-- This is commonly used through Conductor worktrees. Keep the current branch name unless the user explicitly requests a rename.
-- Diff against `origin/main`. Do not assume a clean worktree, and do not stage unrelated changes.
-- Never force-push, rewrite shared history, or use destructive cleanup commands.
-- A request to implement does not automatically authorize pushing, production deployment, or a production migration. Require explicit authorization or a clearly applicable standing instruction.
-- Production migrations are append-only and must be dry-run transactionally before application. Never use `db:push` against production.
-- A release is incomplete until tests, lint, build, deployment status, and focused production smoke tests are reported.
-
-## Reusable Claude skills
-
-- `/implement-fitlog-feature`: build a user-scoped feature across schema, API, UI, and tests.
-- `/migrate-fitlog-database`: prepare and safely execute a Drizzle migration.
-- `/audit-fitlog`: review bugs, isolation, health logic, and mobile regressions.
-- `/release-fitlog`: explicitly authorized commit/push/deploy workflow.
-
-## Definition of done
-
-- Requested behavior works and existing behavior is preserved.
-- Account isolation is demonstrated for reads and writes, including nested IDs.
-- Input validation and failure responses are intentional.
-- Relevant deterministic logic has unit coverage.
-- Mobile behavior is checked for changed UI.
-- `npm test`, `npm run lint`, and when required `npm run build` pass.
-- Schema changes include a reviewed migration and safe rollout notes.
-- The final report distinguishes code changes, database changes, deployment changes, verification, and any remaining risk.
+- Authentication and account lifecycle: `docs/authentication.md`
+- Food providers and normalization: `docs/food-data.md`
+- Garmin connection and worker boundary: `docs/garmin.md`
+- Repeated workflows: `/implement-fitlog-feature`, `/migrate-fitlog-database`, `/audit-fitlog`, and user-invoked `/release-fitlog`

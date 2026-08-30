@@ -69,15 +69,14 @@ operation; proxy checks are not the ownership boundary.
 
 ## Support email and DNS
 
-`fitlog.site` delegates DNS to `ns1.vercel-dns.com` and
-`ns2.vercel-dns.com`. As of 30 August 2026 it has no MX, SPF or DMARC records,
-so `support@fitlog.site` is reserved in the policy copy but cannot receive mail
-yet. Vercel hosts DNS, not email. Before presenting the address as active:
+Vercel can host the domain's DNS records but does not provide a mailbox. Treat
+`support@fitlog.site` as inactive until the current DNS and provider setup have
+been verified. Before presenting the address as active:
 
 1. choose a mailbox or forwarding provider that can also support replies;
 2. add that provider's MX and verification/SPF TXT records in Vercel Domains;
 3. configure DKIM and DMARC as recommended by the provider;
-4. send an inbound and outbound test; and
+4. verify MX/SPF/DKIM/DMARC from public DNS and send inbound/outbound tests; and
 5. update the legal copy to remove the activation warning.
 
 Do not point the public legal pages at the owner's personal email without

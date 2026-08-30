@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link2, Link2Off, RefreshCw, ShieldCheck, Eye, EyeOff } from "lucide-react";
 import { apiGet } from "@/lib/api";
 
@@ -12,9 +12,23 @@ interface ConnectionStatus {
 
 type AuthPhase =
   | "idle"
-  | "connecting"  // calling Worker
+  | "connecting"
   | "done"
   | "error";
+
+const WORKER_TIMEOUT_MS = 50_000;
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function authErrorMessage(error: unknown) {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "Garmin sign-in took too long. Please try again.";
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return "Could not connect to Garmin. Please try again.";
+}
 
 export default function GarminSettings() {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
@@ -26,90 +40,80 @@ export default function GarminSettings() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [syncError, setSyncError] = useState("");
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   async function load() {
     const s = await apiGet<ConnectionStatus>("/api/garmin/connect");
     setStatus(s);
   }
 
   useEffect(() => { load(); }, []);
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   async function connect() {
     if (!username.trim() || !password) return;
     setPhase("connecting");
     setAuthError("");
 
-    // 1. Create a session on the server
-    const sessionRes = await fetch("/api/garmin/auth-session", { method: "POST" });
-    if (!sessionRes.ok) {
-      setPhase("error");
-      setAuthError("Could not start auth session");
-      return;
-    }
-    const { id: sessionId, secret } = await sessionRes.json() as { id: string; secret: string };
+    try {
+      const sessionRes = await fetch("/api/garmin/auth-session", { method: "POST" });
+      if (!sessionRes.ok) throw new Error("Could not start the Garmin sign-in.");
+      const { id: sessionId, secret } = await sessionRes.json() as { id: string; secret: string };
 
-    // 2. Call the Cloudflare Worker — it logs into Garmin from a non-flagged IP
-    const workerUrl = process.env.NEXT_PUBLIC_GARMIN_WORKER_URL;
-    if (!workerUrl) {
-      setPhase("error");
-      setAuthError("Garmin auth worker is not configured");
-      return;
-    }
+      const workerUrl = process.env.NEXT_PUBLIC_GARMIN_WORKER_URL;
+      if (!workerUrl) throw new Error("Garmin auth worker is not configured.");
 
-    // Call the Worker — if the network request itself fails (CORS, DNS, etc.)
-    // surface it immediately rather than letting the poll spin forever.
-    fetch(workerUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: username.trim(),
-        password,
-        sessionId,
-        secret,
-        callbackUrl: window.location.origin,
-      }),
-    }).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      setPhase("error");
-      setAuthError(`Could not reach the Garmin auth server — ${msg}`);
-    });
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), WORKER_TIMEOUT_MS);
+      let workerRes: Response;
 
-    // 3. Poll for completion — give up after 90 s if the Worker never calls back
-    const deadline = Date.now() + 90_000;
-    pollRef.current = setInterval(async () => {
-      if (Date.now() > deadline) {
-        clearInterval(pollRef.current!);
-        setPhase("error");
-        setAuthError("Connection timed out — the auth server didn't respond. Please try again.");
-        return;
+      try {
+        workerRes = await fetch(workerUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: username.trim(),
+            password,
+            sessionId,
+            secret,
+          }),
+          signal: controller.signal,
+        });
+      } finally {
+        window.clearTimeout(timeout);
       }
-      const r = await fetch(`/api/garmin/auth-session/${sessionId}`);
-      if (!r.ok) return;
-      const { status: s, error } = await r.json() as { status: string; error?: string };
 
-      if (s === "done") {
-        clearInterval(pollRef.current!);
-        setPhase("done");
-        setUsername("");
-        setPassword("");
-        await load();
-      } else if (s === "error") {
-        clearInterval(pollRef.current!);
-        setPhase("error");
-        const msg = error ?? "Garmin login failed";
-        setAuthError(
-          msg.includes("MFA") || msg.includes("Ticket not found")
-            ? "Garmin blocked this sign-in. Check your Garmin email for a security notification, then try again."
-            : `Garmin login failed — ${msg}`
-        );
-      } else if (s === "expired") {
-        clearInterval(pollRef.current!);
-        setPhase("error");
-        setAuthError("Session timed out. Please try again.");
+      const workerBody = await workerRes.json().catch(() => ({})) as { error?: string };
+      if (!workerRes.ok) {
+        throw new Error(workerBody.error ?? "Garmin sign-in failed. Please try again.");
       }
-    }, 2000);
+
+      // A successful Worker response means its server callback has completed.
+      // Retry briefly only to tolerate a delayed database read.
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const resultRes = await fetch(`/api/garmin/auth-session/${sessionId}`);
+        if (!resultRes.ok) throw new Error("Could not confirm the Garmin connection.");
+        const result = await resultRes.json() as { status: string; error?: string };
+
+        if (result.status === "done") {
+          setPhase("done");
+          setUsername("");
+          setPassword("");
+          await load();
+          return;
+        }
+        if (result.status === "error") {
+          throw new Error(result.error ?? "Garmin sign-in failed. Please try again.");
+        }
+        if (result.status === "expired") {
+          throw new Error("Garmin sign-in expired. Please try again.");
+        }
+        if (attempt < 7) await delay(750);
+      }
+
+      throw new Error("Garmin connected, but Fitlog could not confirm it. Please try again.");
+    } catch (err: unknown) {
+      setPhase("error");
+      setAuthError(authErrorMessage(err));
+      setPassword("");
+    }
   }
 
   async function disconnect() {

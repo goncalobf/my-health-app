@@ -5,16 +5,12 @@ paths:
   - "tsconfig.json"
 ---
 
-# Next.js and TypeScript rules
+# Next.js and TypeScript
 
-- This is Next.js 16 with React 19. Read the relevant installed guide under `node_modules/next/dist/docs/` before relying on remembered APIs.
-- Keep Server Components as the default. Add `"use client"` only for browser APIs, state, effects, or event handlers.
-- Treat route `params`, `searchParams`, cookies, and headers according to the installed Next.js asynchronous APIs. Existing dynamic pages and handlers await `params`.
-- Keep server-only modules marked with `import "server-only"` when they access secrets, sessions, or the database.
-- Never validate configuration at module scope. Construct clients lazily so importing a module cannot throw while Next collects page data; otherwise any environment without secrets fails to build.
-- The React compiler rejects impure calls such as `Date.now()` in component scope. Let a component own its own clock in an effect, and pass a changing `key` to restart it.
-- Use the `@/*` alias for `src/*`. Preserve strict TypeScript and avoid `any` unless an untyped external payload is isolated and normalized immediately.
-- Validate unknown JSON before use. `Number(...)` must be followed by finite/range checks when the value affects health data or persistence.
-- Do not add caching to authenticated or user-specific data without proving cache keys cannot cross accounts. The authenticated app layout is intentionally dynamic.
-- Preserve consistent JSON errors in route handlers and actionable user-facing messages in clients.
-- Reuse domain functions rather than duplicating macro, phase, date, or progression logic in components or prompts.
+- This is Next.js 16 with React 19. Read the relevant installed guide under `node_modules/next/dist/docs/` before using framework APIs.
+- Server Components are the default; use `"use client"` only for browser APIs, state, effects, or handlers.
+- Follow the installed asynchronous APIs for route params, search params, cookies, and headers.
+- Mark secret/session/database modules `server-only` and construct environment-dependent clients lazily; imports must remain build-safe without secrets.
+- Keep authenticated layouts dynamic and do not cache user data without proven per-user isolation.
+- Preserve strict TypeScript. Validate unknown external JSON at its adapter boundary and reuse domain functions instead of duplicating them in UI or prompts.
+- Avoid impure values such as `Date.now()` in component render; update clocks in effects and use keys when a timer must restart.
