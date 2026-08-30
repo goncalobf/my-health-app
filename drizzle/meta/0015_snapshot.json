@@ -1,227 +1,9 @@
 {
   "id": "14ed8199-261b-4553-a8d1-ca00dd34069c",
-  "prevId": "fb364ee3-6d45-40ad-85e2-58c4f7f0b435",
+  "prevId": "0b2d2b1d-a3c5-4843-ac60-8e31c5071de3",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.activity_intervals": {
-      "name": "activity_intervals",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "activity_session_id": {
-          "name": "activity_session_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "interval_number": {
-          "name": "interval_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "target_distance_m": {
-          "name": "target_distance_m",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "actual_distance_m": {
-          "name": "actual_distance_m",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "duration_seconds": {
-          "name": "duration_seconds",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "avg_heart_rate": {
-          "name": "avg_heart_rate",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "activity_intervals_activity_session_id_activity_sessions_id_fk": {
-          "name": "activity_intervals_activity_session_id_activity_sessions_id_fk",
-          "tableFrom": "activity_intervals",
-          "tableTo": "activity_sessions",
-          "columnsFrom": [
-            "activity_session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.activity_sessions": {
-      "name": "activity_sessions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "finished_at": {
-          "name": "finished_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "duration_seconds": {
-          "name": "duration_seconds",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "avg_heart_rate": {
-          "name": "avg_heart_rate",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "max_heart_rate": {
-          "name": "max_heart_rate",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "calories": {
-          "name": "calories",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "distance_m": {
-          "name": "distance_m",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "elevation_m": {
-          "name": "elevation_m",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "avg_speed_kmh": {
-          "name": "avg_speed_kmh",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "avg_power_w": {
-          "name": "avg_power_w",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "avg_cadence": {
-          "name": "avg_cadence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "division": {
-          "name": "division",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "location": {
-          "name": "location",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rox_zone_seconds": {
-          "name": "rox_zone_seconds",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "garmin_activity_id": {
-          "name": "garmin_activity_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "activity_sessions_user_id_app_users_id_fk": {
-          "name": "activity_sessions_user_id_app_users_id_fk",
-          "tableFrom": "activity_sessions",
-          "tableTo": "app_users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.app_users": {
       "name": "app_users",
       "schema": "",
@@ -262,7 +44,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'invited'"
+          "default": "'active'"
         },
         "invited_at": {
           "name": "invited_at",
@@ -668,60 +450,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.garmin_connections": {
-      "name": "garmin_connections",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "encrypted_data": {
-          "name": "encrypted_data",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "last_synced_at": {
-          "name": "last_synced_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "connected_at": {
-          "name": "connected_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "garmin_connections_user_id_app_users_id_fk": {
-          "name": "garmin_connections_user_id_app_users_id_fk",
-          "tableFrom": "garmin_connections",
-          "tableTo": "app_users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.garmin_pending_imports": {
-      "name": "garmin_pending_imports",
+    "public.food_catalog_items": {
+      "name": "food_catalog_items",
       "schema": "",
       "columns": {
         "id": {
@@ -730,68 +460,177 @@
           "primaryKey": true,
           "notNull": true
         },
-        "user_id": {
-          "name": "user_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "garmin_activity_id": {
-          "name": "garmin_activity_id",
+        "provider": {
+          "name": "provider",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "garmin_activity_type": {
-          "name": "garmin_activity_type",
+        "provider_id": {
+          "name": "provider_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "garmin_data_json": {
-          "name": "garmin_data_json",
+        "country_code": {
+          "name": "country_code",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "labeled_at": {
-          "name": "labeled_at",
-          "type": "timestamp",
+        "category": {
+          "name": "category",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
+        "basis_quantity": {
+          "name": "basis_quantity",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 100
+        },
+        "basis_unit": {
+          "name": "basis_unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'g'"
+        },
+        "calories_kcal": {
+          "name": "calories_kcal",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "protein_g": {
+          "name": "protein_g",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carbs_g": {
+          "name": "carbs_g",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fat_g": {
+          "name": "fat_g",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fiber_g": {
+          "name": "fiber_g",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sugar_g": {
+          "name": "sugar_g",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "saturated_fat_g": {
+          "name": "saturated_fat_g",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "salt_g": {
+          "name": "salt_g",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sodium_mg": {
+          "name": "sodium_mg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_version": {
+          "name": "source_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_url": {
+          "name": "source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attribution": {
+          "name": "attribution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imported_at": {
+          "name": "imported_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {},
-      "foreignKeys": {
-        "garmin_pending_imports_user_id_app_users_id_fk": {
-          "name": "garmin_pending_imports_user_id_app_users_id_fk",
-          "tableFrom": "garmin_pending_imports",
-          "tableTo": "app_users",
-          "columnsFrom": [
-            "user_id"
+      "indexes": {
+        "food_catalog_provider_id_unique": {
+          "name": "food_catalog_provider_id_unique",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "columnsTo": [
-            "id"
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "food_catalog_country_provider_idx": {
+          "name": "food_catalog_country_provider_idx",
+          "columns": [
+            {
+              "expression": "country_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.hyrox_segments": {
-      "name": "hyrox_segments",
+    "public.food_catalog_names": {
+      "name": "food_catalog_names",
       "schema": "",
       "columns": {
         "id": {
@@ -800,63 +639,83 @@
           "primaryKey": true,
           "notNull": true
         },
-        "activity_session_id": {
-          "name": "activity_session_id",
+        "food_id": {
+          "name": "food_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
-        "segment_number": {
-          "name": "segment_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "segment_type": {
-          "name": "segment_type",
+        "language": {
+          "name": "language",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "station_name": {
-          "name": "station_name",
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "synonyms": {
+          "name": "synonyms",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "duration_seconds": {
-          "name": "duration_seconds",
-          "type": "integer",
+        "search_text": {
+          "name": "search_text",
+          "type": "text",
           "primaryKey": false,
-          "notNull": false
-        },
-        "avg_heart_rate": {
-          "name": "avg_heart_rate",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "weight_kg": {
-          "name": "weight_kg",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reps_or_distance_m": {
-          "name": "reps_or_distance_m",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
+          "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "food_catalog_name_language_unique": {
+          "name": "food_catalog_name_language_unique",
+          "columns": [
+            {
+              "expression": "food_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "language",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "food_catalog_names_search_idx": {
+          "name": "food_catalog_names_search_idx",
+          "columns": [
+            {
+              "expression": "search_text",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "gin_trgm_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "hyrox_segments_activity_session_id_activity_sessions_id_fk": {
-          "name": "hyrox_segments_activity_session_id_activity_sessions_id_fk",
-          "tableFrom": "hyrox_segments",
-          "tableTo": "activity_sessions",
+        "food_catalog_names_food_id_food_catalog_items_id_fk": {
+          "name": "food_catalog_names_food_id_food_catalog_items_id_fk",
+          "tableFrom": "food_catalog_names",
+          "tableTo": "food_catalog_items",
           "columnsFrom": [
-            "activity_session_id"
+            "food_id"
           ],
           "columnsTo": [
             "id"
@@ -1746,6 +1605,20 @@
           "notNull": true,
           "default": "'unspecified'"
         },
+        "food_region": {
+          "name": "food_region",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'both'"
+        },
+        "food_language": {
+          "name": "food_language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pt'"
+        },
         "onboarded_at": {
           "name": "onboarded_at",
           "type": "timestamp",
@@ -2025,6 +1898,427 @@
           ]
         }
       },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.activity_sessions": {
+      "name": "activity_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avg_heart_rate": {
+          "name": "avg_heart_rate",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_heart_rate": {
+          "name": "max_heart_rate",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "calories": {
+          "name": "calories",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "distance_m": {
+          "name": "distance_m",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "elevation_m": {
+          "name": "elevation_m",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avg_speed_kmh": {
+          "name": "avg_speed_kmh",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avg_power_w": {
+          "name": "avg_power_w",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avg_cadence": {
+          "name": "avg_cadence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "division": {
+          "name": "division",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location": {
+          "name": "location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rox_zone_seconds": {
+          "name": "rox_zone_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "garmin_activity_id": {
+          "name": "garmin_activity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "activity_sessions_user_id_app_users_id_fk": {
+          "name": "activity_sessions_user_id_app_users_id_fk",
+          "tableFrom": "activity_sessions",
+          "tableTo": "app_users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.garmin_pending_imports": {
+      "name": "garmin_pending_imports",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "garmin_activity_id": {
+          "name": "garmin_activity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "garmin_activity_type": {
+          "name": "garmin_activity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "garmin_data_json": {
+          "name": "garmin_data_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "labeled_at": {
+          "name": "labeled_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "garmin_pending_imports_user_id_app_users_id_fk": {
+          "name": "garmin_pending_imports_user_id_app_users_id_fk",
+          "tableFrom": "garmin_pending_imports",
+          "tableTo": "app_users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.activity_intervals": {
+      "name": "activity_intervals",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "activity_session_id": {
+          "name": "activity_session_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "interval_number": {
+          "name": "interval_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_distance_m": {
+          "name": "target_distance_m",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actual_distance_m": {
+          "name": "actual_distance_m",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avg_heart_rate": {
+          "name": "avg_heart_rate",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "activity_intervals_activity_session_id_activity_sessions_id_fk": {
+          "name": "activity_intervals_activity_session_id_activity_sessions_id_fk",
+          "tableFrom": "activity_intervals",
+          "tableTo": "activity_sessions",
+          "columnsFrom": [
+            "activity_session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.garmin_connections": {
+      "name": "garmin_connections",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "encrypted_data": {
+          "name": "encrypted_data",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_synced_at": {
+          "name": "last_synced_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "connected_at": {
+          "name": "connected_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "garmin_connections_user_id_app_users_id_fk": {
+          "name": "garmin_connections_user_id_app_users_id_fk",
+          "tableFrom": "garmin_connections",
+          "tableTo": "app_users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.hyrox_segments": {
+      "name": "hyrox_segments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "activity_session_id": {
+          "name": "activity_session_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "segment_number": {
+          "name": "segment_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "segment_type": {
+          "name": "segment_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "station_name": {
+          "name": "station_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avg_heart_rate": {
+          "name": "avg_heart_rate",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weight_kg": {
+          "name": "weight_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reps_or_distance_m": {
+          "name": "reps_or_distance_m",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "hyrox_segments_activity_session_id_activity_sessions_id_fk": {
+          "name": "hyrox_segments_activity_session_id_activity_sessions_id_fk",
+          "tableFrom": "hyrox_segments",
+          "tableTo": "activity_sessions",
+          "columnsFrom": [
+            "activity_session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
