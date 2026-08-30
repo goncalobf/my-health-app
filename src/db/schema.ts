@@ -312,6 +312,103 @@ export const coachMessages = pgTable("coach_messages", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Cardio activity sessions (runs, cycling, Hyrox). Resistance sessions use
+// the existing `sessions` + `session_sets` tables.
+// type: run_easy | run_interval | indoor_cycling | outdoor_cycling | hyrox
+export const activitySessions = pgTable("activity_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  durationSeconds: integer("duration_seconds"),
+  avgHeartRate: integer("avg_heart_rate"),
+  maxHeartRate: integer("max_heart_rate"),
+  calories: integer("calories"),
+  notes: text("notes"),
+  // Run + outdoor cycling fields
+  distanceM: real("distance_m"),
+  elevationM: real("elevation_m"),
+  // Cycling fields
+  avgSpeedKmh: real("avg_speed_kmh"),
+  avgPowerW: integer("avg_power_w"),
+  avgCadence: integer("avg_cadence"),
+  // Hyrox fields
+  division: text("division"), // open | pro | elite_15 | women | doubles | relay
+  location: text("location"),
+  roxZoneSeconds: integer("rox_zone_seconds"),
+  // Garmin import reference (null for manually logged sessions)
+  garminActivityId: text("garmin_activity_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Per-interval data for interval run sessions.
+export const activityIntervals = pgTable("activity_intervals", {
+  id: serial("id").primaryKey(),
+  activitySessionId: integer("activity_session_id")
+    .notNull()
+    .references(() => activitySessions.id, { onDelete: "cascade" }),
+  intervalNumber: integer("interval_number").notNull(),
+  targetDistanceM: real("target_distance_m"),
+  actualDistanceM: real("actual_distance_m"),
+  durationSeconds: integer("duration_seconds"),
+  avgHeartRate: integer("avg_heart_rate"),
+});
+
+// One row per segment in a Hyrox session (8 run legs + 8 stations = 16 rows).
+// segmentType: run | station
+// stationName (stations only): ski_erg | sled_push | sled_pull |
+//   burpee_broad_jump | rowing | farmers_carry | sandbag_lunges | wall_balls
+export const hyroxSegments = pgTable("hyrox_segments", {
+  id: serial("id").primaryKey(),
+  activitySessionId: integer("activity_session_id")
+    .notNull()
+    .references(() => activitySessions.id, { onDelete: "cascade" }),
+  segmentNumber: integer("segment_number").notNull(), // 1–8
+  segmentType: text("segment_type").notNull(), // run | station
+  stationName: text("station_name"),
+  durationSeconds: integer("duration_seconds"),
+  avgHeartRate: integer("avg_heart_rate"),
+  weightKg: real("weight_kg"),
+  repsOrDistanceM: real("reps_or_distance_m"),
+});
+
+// Per-user Garmin Connect credentials, AES-256-GCM encrypted with
+// GARMIN_ENCRYPTION_KEY. The plaintext never touches the database.
+export const garminConnections = pgTable("garmin_connections", {
+  userId: integer("user_id")
+    .primaryKey()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
+  encryptedData: text("encrypted_data").notNull(), // JSON: {iv, ciphertext, authTag}
+  lastSyncedAt: timestamp("last_synced_at"),
+  connectedAt: timestamp("connected_at").notNull().defaultNow(),
+});
+
+// Raw Garmin activities staged for labeling. Strength training types are
+// filtered out at sync time and never appear here.
+export const garminPendingImports = pgTable(
+  "garmin_pending_imports",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    garminActivityId: text("garmin_activity_id").notNull(),
+    garminActivityType: text("garmin_activity_type").notNull(),
+    garminDataJson: text("garmin_data_json").notNull(),
+    labeledAt: timestamp("labeled_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("garmin_pending_imports_user_activity_unique").on(
+      table.userId,
+      table.garminActivityId
+    ),
+  ]
+);
+
 export type Exercise = typeof exercises.$inferSelect;
 export type AppUser = typeof appUsers.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
@@ -329,3 +426,8 @@ export type MealTemplate = typeof mealTemplates.$inferSelect;
 export type MeasurementLog = typeof measurementLogs.$inferSelect;
 export type CoachInsight = typeof coachInsights.$inferSelect;
 export type CoachMessage = typeof coachMessages.$inferSelect;
+export type ActivitySession = typeof activitySessions.$inferSelect;
+export type ActivityInterval = typeof activityIntervals.$inferSelect;
+export type HyroxSegment = typeof hyroxSegments.$inferSelect;
+export type GarminConnection = typeof garminConnections.$inferSelect;
+export type GarminPendingImport = typeof garminPendingImports.$inferSelect;

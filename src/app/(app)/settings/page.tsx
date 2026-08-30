@@ -8,6 +8,7 @@ import { apiGet, apiPatch, api, apiPost } from "@/lib/api";
 import type { CoachTargetPayload } from "@/lib/coach";
 import PageHeader from "@/components/PageHeader";
 import { authClient } from "@/lib/auth-client";
+import GarminSettings from "@/components/GarminSettings";
 
 interface Targets {
   targetCalories: number;
@@ -322,6 +323,8 @@ export default function SettingsPage() {
         ))}
         <button onClick={save} className="btn-primary">Save schedule & settings</button>
       </div>
+
+      <GarminSettings />
 
       <button onClick={logout} className="btn-ghost w-full mt-6">
         <LogOut size={18} /> Sign out

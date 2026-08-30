@@ -34,5 +34,7 @@ export const apiPost = <T>(p: string, body: unknown) =>
   api<T>(p, { method: "POST", body: JSON.stringify(body) });
 export const apiPatch = <T>(p: string, body: unknown) =>
   api<T>(p, { method: "PATCH", body: JSON.stringify(body) });
+export const apiPut = <T>(p: string, body: unknown) =>
+  api<T>(p, { method: "PUT", body: JSON.stringify(body) });
 export const apiDelete = <T>(p: string) =>
   api<T>(p, { method: "DELETE" });
