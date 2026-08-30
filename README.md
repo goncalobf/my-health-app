@@ -1,89 +1,51 @@
 # Fitlog
 
-A personal, iPhone-first health & fitness tracker. Built with Next.js and
-deployed on Vercel.
+Fitlog is your personal training and nutrition log. It brings workouts, food, body progress, Garmin data, and personalized guidance together in one private account.
 
-- **Workouts** — build routines (exercises + target sets/reps/rest), then run a
-  live session: log weight & reps per set, with a **manual rest timer** that
-  counts your rest and waits for you to end it. Rep ranges, per-exercise weight
-  increments, progressive-overload suggestions, deload detection, a fixed
-  weekly schedule, and post-workout summaries are built in.
-- **Nutrition** — cooked and generic food search via [USDA FoodData Central](https://fdc.nal.usda.gov/),
-  with packaged-product search and barcode scanning via [Open Food Facts](https://world.openfoodfacts.org/),
-  plus manual macro entry. Daily
-  totals vs. your targets. Recent foods, favourites, gram/serving quantities,
-  reusable meals, and recipes make repeat logging fast.
-- **Adaptive targets** — enter Garmin total calories daily; after enough food,
-  expenditure, and weight data, Fitlog proposes a conservative two-week target
-  update for a recomposition goal.
-- **Fitlog Coach** — optional private AI guidance using aggregated workout,
-  nutrition, bodyweight, and Garmin data: daily insights, weekly reviews,
-  post-workout analysis, macro-aware meal ideas, and chat. Suggestions never
-  change routines or targets without your review. Progress photos and private
-  measurement notes are not sent to the model.
-- **Progress** — bodyweight, measurements, private progress photos, workout
-  volume, and per-exercise PRs (estimated 1RM) over time.
-- **PWA** — installable on your iPhone home screen, fullscreen, offline shell.
-- Single-password unlock. Everything in **kg**.
+## Getting started
 
-## Stack
+### 1. Create your account
 
-Next.js (App Router) · TypeScript · Tailwind · Drizzle ORM · Vercel Postgres
-(Neon) · Recharts · ZXing (barcode).
+Open [fitlog.site](https://fitlog.site) and sign up with Google or email and password. Each account has its own routines, history, nutrition, measurements, and settings.
 
-## Deploy to Vercel
+### 2. Complete your profile
 
-1. **Push this repo to GitHub** and import it in Vercel (New Project).
-2. **Add a database:** in the Vercel project → **Storage** → create a
-   **Postgres (Neon)** database and connect it. This injects `DATABASE_URL`
-   automatically.
-3. **Add environment variables** (Project → Settings → Environment Variables):
-   - `APP_PASSWORD` — the password you'll type to unlock the app.
-   - `AUTH_SECRET` — a long random string. Generate one with:
-     `openssl rand -base64 32`
-   - `OPENAI_API_KEY` — optional; enables Fitlog Coach. Keep this server-only.
-   - `OPENAI_MODEL` — optional model override (defaults to `gpt-5-mini`).
-   - `FDC_API_KEY` — optional free data.gov key for higher USDA search limits;
-     the rate-limited USDA `DEMO_KEY` is used when omitted.
-4. **Create the tables.** From your machine, with the DB URL available locally:
-   ```bash
-   npm install
-   vercel link           # link to the Vercel project
-   vercel env pull .env.local   # pulls DATABASE_URL etc.
-   npm run db:push       # creates all tables from the schema
-   npm run seed          # optional: starter exercise library
-   ```
-5. **Deploy** (Vercel builds automatically on push). Open the URL on your
-   iPhone → Share → **Add to Home Screen**.
+During onboarding, enter your goal, age, height, current weight, target weight, and activity level. Fitlog uses these details to calculate an initial calorie and macro target.
 
-## Local development
+You can review or change this information later in **Settings**.
 
-```bash
-npm install
-cp .env.example .env.local   # fill in DATABASE_URL, APP_PASSWORD, AUTH_SECRET
-npm run db:push              # create tables
-npm run seed                 # optional starter exercises
-npm run dev
-```
+### 3. Set up your training week
 
-Open http://localhost:3000. The camera-based barcode scanner needs `localhost`
-or HTTPS (Vercel provides HTTPS in production).
+Choose a routine for each training day. You can use the existing Push/Pull/Legs structure or create and customize your own routines and exercises.
 
-## Notes on MyFitnessPal
+When it is time to train, press **Start workout**. Fitlog guides you through one set at a time, including warmups, working sets, drop sets, RIR, and rest periods.
 
-MyFitnessPal no longer offers a public API, so this app does **not** connect to
-it. Instead it has its own food logging backed by Open Food Facts, which gives
-you barcode scanning and search for free and keeps all your data in your own
-database.
+### 4. Log your nutrition
 
-## Scripts
+Search for cooked foods, generic ingredients, or packaged products. You can also scan barcodes, change quantities in grams, save frequent foods, and create reusable meals.
 
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Local dev server |
-| `npm run build` / `start` | Production build / serve |
-| `npm run db:push` | Sync schema → database (create/update tables) |
-| `npm run db:studio` | Drizzle Studio (browse your data) |
-| `npm run seed` | Insert a starter exercise library |
-| `npm run plan:ppl` | Apply the six-day Push/Pull/Legs A/B plan |
-| `npm run icons` | Regenerate PWA icons from the SVG mark |
+Daily calories and macros are compared with the targets in your profile.
+
+### 5. Connect Garmin
+
+Garmin Connect can import cardio activities and health information such as calories, sleep, resting heart rate, HRV, and steps. You can also enter Garmin's daily calorie total manually.
+
+Garmin is optional; the rest of Fitlog works without it.
+
+### 6. Track progress
+
+Use **Progress** to record bodyweight, measurements, photos, workout volume, and personal records. Fitlog uses your real training, nutrition, weight, and expenditure trends to review progress over time.
+
+### 7. Use Fitlog Coach
+
+The Coach can explain trends, review your week, suggest meals, and propose calorie adjustments. Calculations such as macros and progressive overload remain deterministic, and no recommendation changes your plan without your approval.
+
+## Your privacy
+
+Your account data is private and separated from other users. Progress photos and private measurement notes are not sent to the AI Coach.
+
+Read the current [Privacy Policy](https://fitlog.site/privacy) and [Terms of Use](https://fitlog.site/terms) for more information.
+
+## Install on iPhone
+
+Open Fitlog in Safari, tap **Share**, choose **Add to Home Screen**, and launch it from the new Fitlog icon for an app-like fullscreen experience.

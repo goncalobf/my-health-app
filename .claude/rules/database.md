@@ -3,20 +3,21 @@ paths:
   - "src/db/**/*"
   - "drizzle/**/*"
   - "drizzle.config.ts"
-  - "scripts/*.mjs"
+  - "scripts/run-migration.mjs"
+  - "scripts/local-db.mjs"
+  - "scripts/seed.mjs"
+  - "scripts/sync-*.mjs"
+  - "scripts/apply-ppl-plan.mjs"
 ---
 
-# Database rules
+# Database and migrations
 
-- Treat `src/db/schema.ts` as the desired schema and `drizzle/` as immutable production history.
-- Generate a new numbered migration with `npm run db:generate`; do not edit an already-applied migration.
-- Review generated SQL for destructive operations, table rewrites, nullability changes, foreign-key behavior, ownership backfills, and uniqueness conflicts.
-- For a required column on existing data, use an explicit staged/backfill strategy that cannot orphan or misassign records.
-- Append the backfill to the generated migration as its own `--> statement-breakpoint` statement so it applies in the same transaction. `settings.onboarded_at` is the reference example: existing accounts are marked onboarded so they never see the new flow.
-- Preview deployments read the production database, so apply a migration before preview depends on the new shape.
-- `npm run local:db` targets the disposable local container only and refuses any non-localhost URL. Its `reset` drops the schema.
-- Keep indexes and unique keys user-aware. A value that was globally unique in the single-user app may need a composite user key.
-- Use transactions when the provider supports them. Run `scripts/run-migration.mjs <file> --dry-run` against the exact target before any authorized application.
-- Never run `npm run db:push` against production. Never modify production data simply to make a test pass.
-- After applying a migration, verify schema shape, row counts, ownership distribution, and critical foreign-key joins without printing private data.
-- Seed/sync scripts must be idempotent or document why rerunning is safe. Shared exercises use `owner_user_id = NULL`; per-user records must never be seeded into every account accidentally.
+- `src/db/schema.ts` is the desired schema; numbered files in `drizzle/` are immutable once applied.
+- Change the schema first, run `npm run db:generate`, then review every statement.
+- Treat destructive operations, table rewrites, required columns, uniqueness, foreign keys, and ownership backfills as explicit rollout decisions.
+- Existing private rows must be backfilled deterministically; never assign them to an arbitrary user. Keep unique keys and indexes user-aware.
+- Assume application queries still need ownership predicates even if database RLS is added later.
+- Confirm the exact target without printing its URL. Never assume a preview database is isolated from production.
+- Run `scripts/run-migration.mjs <file> --dry-run` before an authorized apply; verify schema, aggregate counts, ownership, and critical joins afterward.
+- `npm run local:db -- reset` is destructive and valid only for the guarded localhost disposable database.
+- Seed/sync scripts must be idempotent or document their one-shot preconditions. Use transactions for multi-step mutations where supported.

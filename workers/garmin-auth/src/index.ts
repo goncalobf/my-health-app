@@ -58,7 +58,7 @@ function json(body: unknown, status = 200, origin: string | null = null) {
   });
 }
 
-export default {
+const worker = {
   async fetch(request: Request): Promise<Response> {
     const origin = request.headers.get("Origin");
 
@@ -126,3 +126,5 @@ export default {
     return json({ ok: true }, 200, origin);
   },
 };
+
+export default worker;

@@ -1,4 +1,5 @@
 'use strict';
+/* eslint-disable @typescript-eslint/no-require-imports -- intentional CommonJS postinstall script */
 const fs = require('fs');
 const path = require('path');
 

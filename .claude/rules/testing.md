@@ -2,19 +2,18 @@
 paths:
   - "src/**/*.{ts,tsx}"
   - "scripts/**/*"
+  - "workers/**/*"
   - "package.json"
   - "package-lock.json"
+  - "eslint.config.mjs"
 ---
 
-# Testing and verification rules
+# Verification
 
-- Reproduce a bug before fixing it when practical. Add a focused regression test for deterministic or parsing logic.
-- Keep pure domain logic in `src/lib/` so it can be tested with `tsx --test` without a browser or live database.
-- Run the narrowest relevant test during iteration, then `npm test` and `npm run lint` before handoff.
-- Run `npm run build` for changes involving routes, layouts, Server/Client boundaries, auth, environment handling, Next.js config, dependencies, or deployment.
-- For API ownership changes, verify allowed, unauthenticated/revoked, cross-account, invalid-input, and not-found cases. Do not use real private production records as fixtures.
-- For external APIs, test normalization and failure handling with fixtures/mocks; do not make unit tests depend on live USDA, Open Food Facts, OpenAI, Neon, or Vercel services.
-- For UI changes, inspect at mobile width and cover empty, loading, error, long-label, keyboard, and safe-area states.
-- Run the app and look at it. `npm run dev:local` gives a no-auth local app with seeded history; unit tests do not catch dark-on-dark contrast, dead space, or watermarked assets.
-- Extract ordering, grouping and prefill rules into `src/lib/` so behaviour that cannot be clicked in a screenshot is still covered by tests.
-- Do not weaken assertions, skip tests, or hide errors to obtain a green result. Report any check that could not be run and why.
+- Reproduce reported defects when practical and add a focused regression test for deterministic, parsing, normalization, or ordering logic.
+- Keep pure domain logic in `src/lib/` so `tsx --test` can cover it without a browser or live database.
+- External-service tests use fixtures/mocks; never depend on live Neon, Garmin, OpenAI, USDA, Open Food Facts, Vercel, or production records.
+- Ownership work covers authenticated/allowed, unauthenticated or revoked, cross-account, invalid-input, and missing-resource cases.
+- UI work is inspected in `npm run dev:local` at mobile width, including empty, loading, error, long-content, keyboard, and safe-area states.
+- Run focused tests while iterating, then `npm test` and `npm run lint`. Add `npm run build` for routing, auth, dependencies, configuration, or production-facing changes.
+- Do not weaken assertions, suppress unexpected errors, or skip checks to make a handoff green. Report anything not run and why.
