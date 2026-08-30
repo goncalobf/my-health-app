@@ -71,8 +71,15 @@ export default function GarminSettings() {
       }),
     }).catch(() => {}); // errors surface via poll
 
-    // 3. Poll for completion
+    // 3. Poll for completion — give up after 90 s if the Worker never calls back
+    const deadline = Date.now() + 90_000;
     pollRef.current = setInterval(async () => {
+      if (Date.now() > deadline) {
+        clearInterval(pollRef.current!);
+        setPhase("error");
+        setAuthError("Connection timed out — the auth server didn't respond. Please try again.");
+        return;
+      }
       const r = await fetch(`/api/garmin/auth-session/${sessionId}`);
       if (!r.ok) return;
       const { status: s, error } = await r.json() as { status: string; error?: string };
