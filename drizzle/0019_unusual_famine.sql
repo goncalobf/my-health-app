@@ -1,0 +1,1 @@
+ALTER TABLE "garmin_auth_sessions" ADD COLUMN "error_message" text;

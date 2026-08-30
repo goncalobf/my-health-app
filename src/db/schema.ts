@@ -540,7 +540,8 @@ export const garminAuthSessions = pgTable("garmin_auth_sessions", {
     .notNull()
     .references(() => appUsers.id, { onDelete: "cascade" }),
   secret: text("secret").notNull(),
-  status: text("status").notNull().default("pending"), // 'pending' | 'done'
+  status: text("status").notNull().default("pending"), // 'pending' | 'done' | 'error'
+  errorMessage: text("error_message"),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

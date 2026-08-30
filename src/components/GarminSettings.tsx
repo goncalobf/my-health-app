@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Link2, Link2Off, RefreshCw, ShieldCheck, Copy, Check } from "lucide-react";
+import { Link2, Link2Off, RefreshCw, ShieldCheck, Eye, EyeOff } from "lucide-react";
 import { apiGet } from "@/lib/api";
 
 interface ConnectionStatus {
@@ -10,27 +10,23 @@ interface ConnectionStatus {
   lastSyncedAt: string | null;
 }
 
-type AuthState =
-  | { phase: "idle" }
-  | { phase: "waiting"; command: string; sessionId: string }
-  | { phase: "done" }
-  | { phase: "expired" }
-  | { phase: "error"; message: string };
+type AuthPhase =
+  | "idle"
+  | "connecting"  // calling Worker
+  | "done"
+  | "error";
 
 export default function GarminSettings() {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
-  const [auth, setAuth] = useState<AuthState>({ phase: "idle" });
-  const [copied, setCopied] = useState(false);
+  const [phase, setPhase] = useState<AuthPhase>("idle");
+  const [authError, setAuthError] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [syncError, setSyncError] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Manual token paste fallback
-  const [showManual, setShowManual] = useState(false);
-  const [manualToken, setManualToken] = useState("");
-  const [manualConnecting, setManualConnecting] = useState(false);
-  const [manualError, setManualError] = useState("");
 
   async function load() {
     const s = await apiGet<ConnectionStatus>("/api/garmin/connect");
@@ -38,72 +34,77 @@ export default function GarminSettings() {
   }
 
   useEffect(() => { load(); }, []);
-
-  // Stop polling on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
-  async function startAuth() {
-    setAuth({ phase: "idle" });
-    if (pollRef.current) clearInterval(pollRef.current);
+  async function connect() {
+    if (!username.trim() || !password) return;
+    setPhase("connecting");
+    setAuthError("");
 
-    const res = await fetch("/api/garmin/auth-session", { method: "POST" });
-    if (!res.ok) { setAuth({ phase: "error", message: "Could not create auth session" }); return; }
-    const { id, command } = await res.json() as { id: string; command: string };
+    // 1. Create a session on the server
+    const sessionRes = await fetch("/api/garmin/auth-session", { method: "POST" });
+    if (!sessionRes.ok) {
+      setPhase("error");
+      setAuthError("Could not start auth session");
+      return;
+    }
+    const { id: sessionId, secret } = await sessionRes.json() as { id: string; secret: string };
 
-    setAuth({ phase: "waiting", command, sessionId: id });
+    // 2. Call the Cloudflare Worker — it logs into Garmin from a non-flagged IP
+    const workerUrl = process.env.NEXT_PUBLIC_GARMIN_WORKER_URL;
+    if (!workerUrl) {
+      setPhase("error");
+      setAuthError("Garmin auth worker is not configured");
+      return;
+    }
 
-    // Poll every 2 s until the script completes or the session expires
+    // Fire-and-forget — Worker calls back to the server when done
+    fetch(workerUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: username.trim(),
+        password,
+        sessionId,
+        secret,
+        callbackUrl: window.location.origin,
+      }),
+    }).catch(() => {}); // errors surface via poll
+
+    // 3. Poll for completion
     pollRef.current = setInterval(async () => {
-      const pollRes = await fetch(`/api/garmin/auth-session/${id}`);
-      if (!pollRes.ok) return;
-      const { status: s } = await pollRes.json() as { status: string };
+      const r = await fetch(`/api/garmin/auth-session/${sessionId}`);
+      if (!r.ok) return;
+      const { status: s, error } = await r.json() as { status: string; error?: string };
+
       if (s === "done") {
         clearInterval(pollRef.current!);
-        setAuth({ phase: "done" });
+        setPhase("done");
+        setUsername("");
+        setPassword("");
         await load();
+      } else if (s === "error") {
+        clearInterval(pollRef.current!);
+        setPhase("error");
+        const msg = error ?? "Garmin login failed";
+        setAuthError(
+          msg.includes("MFA") || msg.includes("Ticket not found")
+            ? "Garmin blocked this sign-in. Check your Garmin email for a security notification, then try again."
+            : `Garmin login failed — ${msg}`
+        );
       } else if (s === "expired") {
         clearInterval(pollRef.current!);
-        setAuth({ phase: "expired" });
+        setPhase("error");
+        setAuthError("Session timed out. Please try again.");
       }
     }, 2000);
-  }
-
-  async function copyCommand() {
-    if (auth.phase !== "waiting") return;
-    await navigator.clipboard.writeText(auth.command);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  async function connectManual() {
-    if (!manualToken.trim()) return;
-    setManualConnecting(true);
-    setManualError("");
-    try {
-      const res = await fetch("/api/garmin/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: manualToken.trim() }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(body.error ?? "Connection failed");
-      }
-      setManualToken("");
-      setShowManual(false);
-      await load();
-    } catch (e) {
-      setManualError(e instanceof Error ? e.message : "Connection failed");
-    } finally {
-      setManualConnecting(false);
-    }
   }
 
   async function disconnect() {
     if (!confirm("Disconnect Garmin? Your imported activities will remain.")) return;
     await fetch("/api/garmin/connect", { method: "DELETE" });
     setStatus({ connected: false, connectedAt: null, lastSyncedAt: null });
-    setAuth({ phase: "idle" });
+    setPhase("idle");
   }
 
   async function sync() {
@@ -163,99 +164,71 @@ export default function GarminSettings() {
           </>
         ) : (
           <>
-            {auth.phase === "idle" && (
-              <>
-                <p className="text-xs text-muted">
-                  Garmin blocks direct logins from cloud servers. The app will give you a command to run once on your computer — it authenticates from your home IP and sends the token here automatically.
-                </p>
-                <button onClick={startAuth} className="btn-primary">
-                  <Link2 size={16} /> Connect Garmin
-                </button>
+            <label>
+              <span className="label">Garmin email</span>
+              <input
+                className="input mt-1"
+                type="email"
+                inputMode="email"
+                autoCapitalize="none"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                disabled={phase === "connecting"}
+              />
+            </label>
+
+            <label>
+              <span className="label">Garmin password</span>
+              <div className="relative mt-1">
+                <input
+                  className="input pr-12"
+                  type={showPass ? "text" : "password"}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={phase === "connecting"}
+                />
                 <button
-                  onClick={() => setShowManual((v) => !v)}
-                  className="text-xs text-muted underline text-center"
+                  type="button"
+                  onClick={() => setShowPass((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+                  aria-label={showPass ? "Hide password" : "Show password"}
                 >
-                  {showManual ? "Hide manual token input" : "Already have a token? Paste it manually"}
+                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
-                {showManual && (
-                  <>
-                    <label>
-                      <span className="label">Garmin token JSON</span>
-                      <textarea
-                        className="input mt-1 font-mono text-xs"
-                        rows={4}
-                        placeholder={'{"oauth1":{...},"oauth2":{...}}'}
-                        value={manualToken}
-                        onChange={(e) => setManualToken(e.target.value)}
-                      />
-                    </label>
-                    {manualError && <p className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{manualError}</p>}
-                    <button onClick={connectManual} disabled={manualConnecting || !manualToken.trim()} className="btn-primary">
-                      {manualConnecting ? "Connecting…" : "Connect with token"}
-                    </button>
-                  </>
-                )}
-              </>
+              </div>
+            </label>
+
+            <div className="flex items-start gap-2 rounded border border-border bg-surface-2 px-3 py-2.5">
+              <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
+              <p className="text-xs text-muted leading-relaxed">
+                Your credentials are sent over HTTPS to a secure auth server and never stored — only the resulting session token is saved, encrypted with AES-256-GCM.
+              </p>
+            </div>
+
+            {authError && (
+              <p className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{authError}</p>
             )}
 
-            {auth.phase === "waiting" && (
-              <>
-                <div className="flex items-center gap-3">
-                  <RefreshCw size={18} className="animate-spin text-accent shrink-0" />
-                  <div>
-                    <p className="font-medium text-sm">Getting Garmin token…</p>
-                    <p className="text-xs text-muted">Waiting for your computer to authenticate</p>
-                  </div>
-                </div>
-
-                <div className="rounded border border-border bg-surface-2 p-3 space-y-2">
-                  <p className="text-xs text-muted font-medium">Run this in your terminal:</p>
-                  <div className="flex items-start gap-2">
-                    <code className="text-[11px] font-mono break-all flex-1 text-text leading-relaxed">
-                      {auth.command}
-                    </code>
-                    <button
-                      onClick={copyCommand}
-                      className="shrink-0 text-muted hover:text-accent transition mt-0.5"
-                      aria-label="Copy command"
-                    >
-                      {copied ? <Check size={14} className="text-accent" /> : <Copy size={14} />}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-muted">
-                    The command includes a one-time session ID. Once the script runs, this page will connect automatically.
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => { if (pollRef.current) clearInterval(pollRef.current); setAuth({ phase: "idle" }); }}
-                  className="btn-ghost w-full"
-                >
-                  Cancel
-                </button>
-              </>
+            {phase === "connecting" ? (
+              <div className="flex items-center justify-center gap-3 py-2">
+                <RefreshCw size={16} className="animate-spin text-accent" />
+                <span className="text-sm text-muted">Getting Garmin token…</span>
+              </div>
+            ) : (
+              <button
+                onClick={connect}
+                disabled={!username.trim() || !password}
+                className="btn-primary"
+              >
+                <Link2 size={16} />
+                {phase === "error" ? "Try again" : "Connect Garmin"}
+              </button>
             )}
 
-            {auth.phase === "done" && (
-              <p className="text-sm text-accent text-center font-medium">Connected successfully!</p>
-            )}
-
-            {auth.phase === "expired" && (
-              <>
-                <p className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">
-                  Session expired (10 min limit). Start again.
-                </p>
-                <button onClick={startAuth} className="btn-primary">
-                  <Link2 size={16} /> Try again
-                </button>
-              </>
-            )}
-
-            {auth.phase === "error" && (
-              <>
-                <p className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{auth.message}</p>
-                <button onClick={() => setAuth({ phase: "idle" })} className="btn-ghost w-full">Dismiss</button>
-              </>
+            {phase === "done" && (
+              <p className="text-sm text-accent text-center font-medium">Connected!</p>
             )}
           </>
         )}
