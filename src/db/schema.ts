@@ -479,6 +479,33 @@ export const garminPendingImports = pgTable(
   ]
 );
 
+// Daily health metrics pulled from Garmin Connect during sync.
+export const garminDailyMetrics = pgTable(
+  "garmin_daily_metrics",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    restingHrBpm: integer("resting_hr_bpm"),
+    hrvScore: integer("hrv_score"),
+    hrvBalanceScore: integer("hrv_balance_score"),
+    sleepDurationSeconds: integer("sleep_duration_seconds"),
+    sleepScoreValue: integer("sleep_score_value"),
+    caloriesActive: integer("calories_active"),
+    caloriesTotal: integer("calories_total"),
+    steps: integer("steps"),
+    syncedAt: timestamp("synced_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("garmin_daily_metrics_user_date_unique").on(
+      table.userId,
+      table.date
+    ),
+  ]
+);
+
 export type Exercise = typeof exercises.$inferSelect;
 export type AppUser = typeof appUsers.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
@@ -503,3 +530,4 @@ export type ActivityInterval = typeof activityIntervals.$inferSelect;
 export type HyroxSegment = typeof hyroxSegments.$inferSelect;
 export type GarminConnection = typeof garminConnections.$inferSelect;
 export type GarminPendingImport = typeof garminPendingImports.$inferSelect;
+export type GarminDailyMetrics = typeof garminDailyMetrics.$inferSelect;

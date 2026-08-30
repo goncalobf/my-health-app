@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { garminConnections, garminPendingImports } from "@/db/schema";
+import { garminConnections, garminPendingImports, garminDailyMetrics } from "@/db/schema";
 import { requireAppUser } from "@/lib/app-user";
 import { decrypt } from "@/lib/garmin-crypto";
-import { fetchRecentActivities } from "@/lib/garmin-client";
+import { fetchRecentActivities, fetchDailyMetrics } from "@/lib/garmin-client";
 
 export async function POST() {
   const user = await requireAppUser();
@@ -48,6 +48,28 @@ export async function POST() {
       // Skip duplicate or malformed entries
     }
   }
+
+  // Pull today's health metrics (RHR, HRV, sleep, calories). Best-effort — never
+  // blocks the sync response if Garmin's wellness endpoints are unavailable.
+  const today = new Date();
+  try {
+    const metrics = await fetchDailyMetrics(username, password, today);
+    const dateStr = today.toISOString().slice(0, 10);
+    await db
+      .insert(garminDailyMetrics)
+      .values({
+        userId: user.id,
+        date: dateStr,
+        ...metrics,
+      })
+      .onConflictDoUpdate({
+        target: [garminDailyMetrics.userId, garminDailyMetrics.date],
+        set: {
+          ...metrics,
+          syncedAt: new Date(),
+        },
+      });
+  } catch { /* optional metrics — never fail the sync */ }
 
   await db
     .update(garminConnections)
