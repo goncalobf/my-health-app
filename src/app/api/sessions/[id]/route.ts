@@ -9,6 +9,7 @@ import {
   trainingPlanState,
 } from "@/db/schema";
 import { getProgressionRecommendation } from "@/lib/progressive-overload";
+import { applySessionExerciseOrder } from "@/lib/workout-flow";
 import { requireAppUser } from "@/lib/app-user";
 
 export async function GET(
@@ -60,8 +61,12 @@ export async function GET(
     .from(trainingPlanState)
     .where(eq(trainingPlanState.userId, user.id));
   const deloadMode = planState?.isDeload ?? false;
+  const orderedBasePlan = applySessionExerciseOrder(
+    basePlan,
+    session.exerciseOrder
+  );
   const plan = deloadMode
-    ? basePlan.map((item) => ({
+    ? orderedBasePlan.map((item) => ({
         ...item,
         targetSets: Math.max(1, Math.ceil(item.targetSets / 2)),
         targetRirMin: 4,
@@ -69,7 +74,7 @@ export async function GET(
         instruction: `Deload: use about 60% of your normal load and RIR 4+.${item.instruction ? ` ${item.instruction}` : ""}`,
         deloadMode: true,
       }))
-    : basePlan.map((item) => ({ ...item, deloadMode: false }));
+    : orderedBasePlan.map((item) => ({ ...item, deloadMode: false }));
 
   // Sets already logged in this session.
   const loggedSets = await db
@@ -182,6 +187,14 @@ export async function PATCH(
     set.notes = body.notes ? String(body.notes) : null;
   if (body.finish === true) set.finishedAt = new Date();
   if (body.finish === false) set.finishedAt = null;
+  if (body.exerciseOrder === null) set.exerciseOrder = null;
+  else if (Array.isArray(body.exerciseOrder)) {
+    const order = body.exerciseOrder.map(Number);
+    if (!order.every(Number.isInteger)) {
+      return NextResponse.json({ error: "invalid exerciseOrder" }, { status: 400 });
+    }
+    set.exerciseOrder = order;
+  }
 
   const [row] = await db
     .update(sessions)

@@ -13,8 +13,26 @@ import {
   ChevronDown,
   LayoutList,
   TrendingDown,
+  GripVertical,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import OpenSpotifyButton from "@/components/OpenSpotifyButton";
 import ExercisePicker from "@/components/ExercisePicker";
 import ExerciseImage from "@/components/ExerciseImage";
 import RestTimer from "@/components/RestTimer";
@@ -27,6 +45,7 @@ import {
   groupLoggedRows,
   nextIncompletePosition,
   nextSetNumber,
+  reorderExerciseIds,
 } from "@/lib/workout-flow";
 
 interface PlanItem {
@@ -535,6 +554,36 @@ export default function SessionPage({
     setOverview(false);
   }
 
+  /** Reorders the not-yet-started exercises; in-progress/completed ones keep
+   *  their current place. `newUnlockedOrder` is the dragged exerciseId order
+   *  of just the unlocked blocks. */
+  async function reorderRemaining(newUnlockedOrder: number[]) {
+    const activeExIdx = active?.exIdx ?? -1;
+    const activeExerciseId =
+      activeExIdx >= 0 ? blocks[activeExIdx].exerciseId : null;
+    const lockedIds = new Set(
+      blocks
+        .filter((b, i) => i === activeExIdx || b.sets.some((s) => s.completed))
+        .map((b) => b.exerciseId)
+    );
+    const newOrder = reorderExerciseIds(
+      blocks.map((b) => b.exerciseId),
+      lockedIds,
+      newUnlockedOrder
+    );
+    const byExerciseId = new Map(blocks.map((b) => [b.exerciseId, b]));
+    const reordered = newOrder.map((exId) => byExerciseId.get(exId)!);
+    setBlocks(reordered);
+    setCursor((prev) => {
+      if (!prev) return prev;
+      const newExIdx = reordered.findIndex(
+        (b) => b.exerciseId === activeExerciseId
+      );
+      return newExIdx === -1 ? prev : { exIdx: newExIdx, setKey: prev.setKey };
+    });
+    await apiPatch(`/api/sessions/${id}`, { exerciseOrder: newOrder });
+  }
+
   async function finish() {
     await apiPatch(`/api/sessions/${id}`, { finish: true });
     router.replace(`/workouts/session/${id}/summary`);
@@ -597,6 +646,7 @@ export default function SessionPage({
             aria-label="Workout name"
             className="min-w-0 flex-1 truncate bg-transparent font-display text-2xl tracking-[0.04em] outline-none focus:text-accent"
           />
+          <OpenSpotifyButton />
           <button
             onClick={finish}
             className="btn-primary h-10 shrink-0 px-3 py-0 text-sm"
@@ -690,6 +740,7 @@ export default function SessionPage({
             setShowWhy(false);
             setOverview(false);
           }}
+          onReorder={reorderRemaining}
           onAddExercise={() => setPicking(true)}
           onDiscard={discard}
           onClose={() => setOverview(false)}
@@ -1078,10 +1129,104 @@ function Stepper({
   );
 }
 
+/** Image, name and progress badge shared by the locked and draggable rows. */
+function ExerciseRowContent({ block }: { block: Block }) {
+  const done = block.sets.filter((s) => s.completed).length;
+  return (
+    <>
+      <ExerciseImage
+        name={block.name}
+        imageUrl={block.imageUrl}
+        className="h-11 w-11"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium">{block.name}</p>
+        <p className="text-[11px] text-muted tabular-nums">
+          {done} of {block.sets.length} sets
+        </p>
+      </div>
+      {done === block.sets.length ? (
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
+          <Check size={15} strokeWidth={3} />
+        </span>
+      ) : (
+        <span className="shrink-0 text-[11px] text-muted tabular-nums">
+          {block.sets.length - done} left
+        </span>
+      )}
+    </>
+  );
+}
+
+/** Completed or currently-active exercise: jumpable, not reorderable. */
+function OverviewRow({
+  block,
+  exIdx,
+  active,
+  onJump,
+}: {
+  block: Block;
+  exIdx: number;
+  active: boolean;
+  onJump: (exIdx: number, setKey: string) => void;
+}) {
+  const target =
+    block.sets.find((s) => !s.completed) ?? block.sets[block.sets.length - 1];
+  return (
+    <button
+      onClick={() => target && onJump(exIdx, target.key)}
+      className={`card flex items-center gap-3 p-3 text-left transition active:scale-[0.99] ${
+        active ? "border-accent/40" : ""
+      }`}
+    >
+      <ExerciseRowContent block={block} />
+    </button>
+  );
+}
+
+/** Not-yet-started exercise: jumpable, and draggable by its handle. */
+function SortableOverviewRow({
+  block,
+  exIdx,
+  onJump,
+}: {
+  block: Block;
+  exIdx: number;
+  onJump: (exIdx: number, setKey: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: block.exerciseId });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  const target = block.sets[0];
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`card flex items-center gap-2 p-3 ${isDragging ? "z-10 opacity-90" : ""}`}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="flex h-9 w-8 shrink-0 touch-none items-center justify-center text-muted active:cursor-grabbing"
+        aria-label={`Reorder ${block.name}`}
+      >
+        <GripVertical size={18} />
+      </button>
+      <button
+        onClick={() => target && onJump(exIdx, target.key)}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+      >
+        <ExerciseRowContent block={block} />
+      </button>
+    </div>
+  );
+}
+
 function Overview({
   blocks,
   activeExIdx,
   onJump,
+  onReorder,
   onAddExercise,
   onDiscard,
   onClose,
@@ -1089,10 +1234,35 @@ function Overview({
   blocks: Block[];
   activeExIdx: number;
   onJump: (exIdx: number, setKey: string) => void;
+  onReorder: (newUnlockedOrder: number[]) => void;
   onAddExercise: () => void;
   onDiscard: () => void;
   onClose: () => void;
 }) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
+  );
+  const indexed = blocks.map((block, exIdx) => ({ block, exIdx }));
+  const locked = indexed.filter(
+    ({ block, exIdx }) =>
+      exIdx === activeExIdx || block.sets.some((s) => s.completed)
+  );
+  const upNext = indexed.filter(
+    ({ block, exIdx }) =>
+      exIdx !== activeExIdx && !block.sets.some((s) => s.completed)
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = upNext.map(({ block }) => block.exerciseId);
+    const oldIndex = ids.indexOf(active.id as number);
+    const newIndex = ids.indexOf(over.id as number);
+    if (oldIndex === -1 || newIndex === -1) return;
+    onReorder(arrayMove(ids, oldIndex, newIndex));
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg/95 backdrop-blur">
       <div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-3 min-[360px]:px-4">
@@ -1108,43 +1278,50 @@ function Overview({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-          <div className="flex flex-col gap-2">
-            {blocks.map((block, exIdx) => {
-              const done = block.sets.filter((s) => s.completed).length;
-              const target =
-                block.sets.find((s) => !s.completed) ?? block.sets[block.sets.length - 1];
-              return (
-                <button
-                  key={`${block.exerciseId}-${exIdx}`}
-                  onClick={() => target && onJump(exIdx, target.key)}
-                  className={`card flex items-center gap-3 p-3 text-left transition active:scale-[0.99] ${
-                    exIdx === activeExIdx ? "border-accent/40" : ""
-                  }`}
+          {locked.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {locked.map(({ block, exIdx }) => (
+                <OverviewRow
+                  key={block.exerciseId}
+                  block={block}
+                  exIdx={exIdx}
+                  active={exIdx === activeExIdx}
+                  onJump={onJump}
+                />
+              ))}
+            </div>
+          )}
+
+          {upNext.length > 0 && (
+            <>
+              {locked.length > 0 && (
+                <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
+                  Up next · drag to reorder
+                </p>
+              )}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={upNext.map(({ block }) => block.exerciseId)}
+                  strategy={verticalListSortingStrategy}
                 >
-                  <ExerciseImage
-                    name={block.name}
-                    imageUrl={block.imageUrl}
-                    className="h-11 w-11"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{block.name}</p>
-                    <p className="text-[11px] text-muted tabular-nums">
-                      {done} of {block.sets.length} sets
-                    </p>
+                  <div className="flex flex-col gap-2">
+                    {upNext.map(({ block, exIdx }) => (
+                      <SortableOverviewRow
+                        key={block.exerciseId}
+                        block={block}
+                        exIdx={exIdx}
+                        onJump={onJump}
+                      />
+                    ))}
                   </div>
-                  {done === block.sets.length ? (
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
-                      <Check size={15} strokeWidth={3} />
-                    </span>
-                  ) : (
-                    <span className="shrink-0 text-[11px] text-muted tabular-nums">
-                      {block.sets.length - done} left
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                </SortableContext>
+              </DndContext>
+            </>
+          )}
 
           <button onClick={onAddExercise} className="btn-ghost mt-4 w-full">
             <Plus size={18} /> Add exercise

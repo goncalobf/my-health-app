@@ -100,6 +100,9 @@ export const sessions = pgTable("sessions", {
   }),
   name: text("name").notNull(),
   notes: text("notes"),
+  // User-chosen display order of exercise IDs for this session only; falls
+  // back to routine/plan position when null or an ID is missing from it.
+  exerciseOrder: integer("exercise_order").array(),
   startedAt: timestamp("started_at").notNull().defaultNow(),
   finishedAt: timestamp("finished_at"),
 });

@@ -1,0 +1,1 @@
+ALTER TABLE "sessions" ADD COLUMN "exercise_order" integer[];

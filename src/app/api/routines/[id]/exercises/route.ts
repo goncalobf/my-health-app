@@ -54,3 +54,51 @@ export async function POST(
     .returning();
   return NextResponse.json(row, { status: 201 });
 }
+
+/** Reorders this routine's exercise slots. Body: `{ order: number[] }`, the
+ *  slot IDs in their new top-to-bottom order. */
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await requireAppUser();
+  const { id } = await params;
+  const routineId = Number(id);
+  const [ownedRoutine] = await db
+    .select({ id: routines.id })
+    .from(routines)
+    .where(and(eq(routines.id, routineId), eq(routines.userId, user.id)));
+  if (!ownedRoutine) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const body = await req.json().catch(() => ({}));
+  const order: number[] | null = Array.isArray(body.order)
+    ? body.order.map(Number).filter((n: number) => Number.isInteger(n))
+    : null;
+  if (!order || order.length === 0) {
+    return NextResponse.json({ error: "order required" }, { status: 400 });
+  }
+
+  const existing = await db
+    .select({ id: routineExercises.id })
+    .from(routineExercises)
+    .where(eq(routineExercises.routineId, routineId));
+  const existingIds = new Set(existing.map((row) => row.id));
+  const isExactMatch =
+    order.length === existingIds.size &&
+    new Set(order).size === order.length &&
+    order.every((slotId) => existingIds.has(slotId));
+  if (!isExactMatch) {
+    return NextResponse.json(
+      { error: "order must contain exactly this routine's exercise slots" },
+      { status: 400 }
+    );
+  }
+
+  for (let i = 0; i < order.length; i++) {
+    await db
+      .update(routineExercises)
+      .set({ position: i + 1 })
+      .where(eq(routineExercises.id, order[i]));
+  }
+  return NextResponse.json({ ok: true });
+}

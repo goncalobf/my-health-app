@@ -2,7 +2,23 @@
 
 import { useCallback, useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Play, Timer } from "lucide-react";
+import { Plus, Trash2, Play, Timer, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import ExercisePicker from "@/components/ExercisePicker";
@@ -61,6 +77,114 @@ function NumField({
   );
 }
 
+function SortableExerciseCard({
+  item,
+  onUpdate,
+  onRemove,
+}: {
+  item: Item;
+  onUpdate: (itemId: number, patch: Record<string, unknown>) => void;
+  onRemove: (itemId: number) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: item.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`card p-3 min-[360px]:p-4 ${isDragging ? "z-10 opacity-90" : ""}`}
+    >
+      <div className="mb-3 flex items-start gap-3">
+        <button
+          {...attributes}
+          {...listeners}
+          className="mt-1 flex h-9 w-8 shrink-0 touch-none items-center justify-center text-muted active:cursor-grabbing"
+          aria-label={`Reorder ${item.name}`}
+        >
+          <GripVertical size={18} />
+        </button>
+        <ExerciseImage
+          name={item.name}
+          imageUrl={item.imageUrl}
+          className="h-14 w-14"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">{item.name}</p>
+          {item.muscleGroup && (
+            <p className="text-xs text-muted">{item.muscleGroup}</p>
+          )}
+        </div>
+        <button
+          onClick={() => onRemove(item.id)}
+          className="shrink-0 p-1 text-muted"
+          aria-label="Remove"
+        >
+          <Trash2 size={18} />
+        </button>
+      </div>
+      <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-2 min-[400px]:gap-3">
+        <label className="flex min-w-0 items-center justify-between gap-2">
+          <span className="text-sm text-muted">Sets</span>
+          <NumField
+            value={item.targetSets}
+            onCommit={(v) => onUpdate(item.id, { targetSets: Number(v) || 1 })}
+          />
+        </label>
+        <label className="flex min-w-0 items-center justify-between gap-2">
+          <span className="text-sm text-muted">Min reps</span>
+          <NumField
+            value={item.minReps}
+            onCommit={(v) => onUpdate(item.id, { minReps: Number(v) || 1 })}
+          />
+        </label>
+        <label className="flex min-w-0 items-center justify-between gap-2">
+          <span className="text-sm text-muted">Max reps</span>
+          <NumField
+            value={item.maxReps}
+            onCommit={(v) => onUpdate(item.id, { maxReps: Number(v) || 1 })}
+          />
+        </label>
+        <label className="flex min-w-0 items-center justify-between gap-2">
+          <span className="text-sm text-muted">Weight</span>
+          <NumField
+            value={item.targetWeightKg}
+            step={0.5}
+            suffix="kg"
+            onCommit={(v) => onUpdate(item.id, { targetWeightKg: v })}
+          />
+        </label>
+        <label className="flex min-w-0 items-center justify-between gap-2">
+          <span className="text-sm text-muted">Increment</span>
+          <NumField
+            value={item.weightIncrementKg}
+            step={0.5}
+            suffix="kg"
+            onCommit={(v) =>
+              onUpdate(item.id, { weightIncrementKg: Number(v) || 0.5 })
+            }
+          />
+        </label>
+        <label className="flex min-w-0 items-center justify-between gap-2">
+          <span className="text-sm text-muted flex items-center gap-1">
+            <Timer size={14} /> Rest
+          </span>
+          <NumField
+            value={item.restSeconds}
+            step={15}
+            suffix="s"
+            onCommit={(v) => onUpdate(item.id, { restSeconds: Number(v) || 0 })}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 export default function RoutineEditorPage({
   params,
 }: {
@@ -71,6 +195,10 @@ export default function RoutineEditorPage({
   const [routine, setRoutine] = useState<Routine | null>(null);
   const [name, setName] = useState("");
   const [picking, setPicking] = useState(false);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
+  );
 
   const load = useCallback(async () => {
     const r = await apiGet<Routine>(`/api/routines/${id}`);
@@ -106,6 +234,19 @@ export default function RoutineEditorPage({
     );
   }
 
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !routine) return;
+    const oldIndex = routine.exercises.findIndex((it) => it.id === active.id);
+    const newIndex = routine.exercises.findIndex((it) => it.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(routine.exercises, oldIndex, newIndex);
+    setRoutine({ ...routine, exercises: reordered });
+    await apiPatch(`/api/routines/${id}/exercises`, {
+      order: reordered.map((it) => it.id),
+    });
+  }
+
   async function removeItem(itemId: number) {
     await apiDelete(`/api/routines/${id}/exercises/${itemId}`);
     setRoutine((r) =>
@@ -139,90 +280,27 @@ export default function RoutineEditorPage({
         className="input text-lg font-semibold mb-4"
       />
 
-      <div className="flex flex-col gap-3">
-        {routine.exercises.map((it) => (
-          <div key={it.id} className="card p-3 min-[360px]:p-4">
-            <div className="mb-3 flex items-start gap-3">
-              <ExerciseImage
-                name={it.name}
-                imageUrl={it.imageUrl}
-                className="h-14 w-14"
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={routine.exercises.map((it) => it.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="flex flex-col gap-3">
+            {routine.exercises.map((it) => (
+              <SortableExerciseCard
+                key={it.id}
+                item={it}
+                onUpdate={updateItem}
+                onRemove={removeItem}
               />
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold">{it.name}</p>
-                {it.muscleGroup && (
-                  <p className="text-xs text-muted">{it.muscleGroup}</p>
-                )}
-              </div>
-              <button
-                onClick={() => removeItem(it.id)}
-                className="shrink-0 p-1 text-muted"
-                aria-label="Remove"
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-            <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-2 min-[400px]:gap-3">
-              <label className="flex min-w-0 items-center justify-between gap-2">
-                <span className="text-sm text-muted">Sets</span>
-                <NumField
-                  value={it.targetSets}
-                  onCommit={(v) =>
-                    updateItem(it.id, { targetSets: Number(v) || 1 })
-                  }
-                />
-              </label>
-              <label className="flex min-w-0 items-center justify-between gap-2">
-                <span className="text-sm text-muted">Min reps</span>
-                <NumField
-                  value={it.minReps}
-                  onCommit={(v) =>
-                    updateItem(it.id, { minReps: Number(v) || 1 })
-                  }
-                />
-              </label>
-              <label className="flex min-w-0 items-center justify-between gap-2">
-                <span className="text-sm text-muted">Max reps</span>
-                <NumField
-                  value={it.maxReps}
-                  onCommit={(v) => updateItem(it.id, { maxReps: Number(v) || 1 })}
-                />
-              </label>
-              <label className="flex min-w-0 items-center justify-between gap-2">
-                <span className="text-sm text-muted">Weight</span>
-                <NumField
-                  value={it.targetWeightKg}
-                  step={0.5}
-                  suffix="kg"
-                  onCommit={(v) => updateItem(it.id, { targetWeightKg: v })}
-                />
-              </label>
-              <label className="flex min-w-0 items-center justify-between gap-2">
-                <span className="text-sm text-muted">Increment</span>
-                <NumField
-                  value={it.weightIncrementKg}
-                  step={0.5}
-                  suffix="kg"
-                  onCommit={(v) => updateItem(it.id, { weightIncrementKg: Number(v) || 0.5 })}
-                />
-              </label>
-              <label className="flex min-w-0 items-center justify-between gap-2">
-                <span className="text-sm text-muted flex items-center gap-1">
-                  <Timer size={14} /> Rest
-                </span>
-                <NumField
-                  value={it.restSeconds}
-                  step={15}
-                  suffix="s"
-                  onCommit={(v) =>
-                    updateItem(it.id, { restSeconds: Number(v) || 0 })
-                  }
-                />
-              </label>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </SortableContext>
+      </DndContext>
 
       <button
         onClick={() => setPicking(true)}
