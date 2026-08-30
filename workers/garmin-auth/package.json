@@ -5,11 +5,12 @@
   "main": "src/index.ts",
   "scripts": {
     "postinstall": "node scripts/patch-deps.js",
+    "test": "node --test scripts/*.test.js",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "garmin-connect": "^1.6.2"
+    "garmin-connect": "1.6.2"
   },
   "devDependencies": {
     "wrangler": "^3.0.0"
