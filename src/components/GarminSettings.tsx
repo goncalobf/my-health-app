@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link2, Link2Off, RefreshCw, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Link2, Link2Off, RefreshCw, ShieldCheck, Terminal } from "lucide-react";
 import { apiGet } from "@/lib/api";
 
 interface ConnectionStatus {
@@ -12,9 +12,7 @@ interface ConnectionStatus {
 
 export default function GarminSettings() {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPass, setShowPass] = useState(false);
+  const [token, setToken] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
@@ -25,27 +23,23 @@ export default function GarminSettings() {
     setStatus(s);
   }
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   async function connect() {
-    if (!username.trim() || !password) return;
+    if (!token.trim()) return;
     setConnecting(true);
     setError("");
     try {
-      await fetch("/api/garmin/connect", {
+      const res = await fetch("/api/garmin/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
-      }).then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({})) as { error?: string };
-          throw new Error(body.error ?? "Connection failed");
-        }
+        body: JSON.stringify({ token: token.trim() }),
       });
-      setUsername("");
-      setPassword("");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? "Connection failed");
+      }
+      setToken("");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Connection failed");
@@ -106,7 +100,7 @@ export default function GarminSettings() {
             <div className="flex items-start gap-2 rounded border border-border bg-surface-2 px-3 py-2.5">
               <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
               <p className="text-xs text-muted leading-relaxed">
-                Your credentials are encrypted with AES-256-GCM and stored only in your private database. No one else — including Fitlog — can read them.
+                Your token is encrypted with AES-256-GCM and stored only in your private database. It gives read-only API access — it cannot change your Garmin password or account settings.
               </p>
             </div>
 
@@ -115,65 +109,49 @@ export default function GarminSettings() {
               {syncing ? "Syncing…" : "Sync now"}
             </button>
 
-            {syncResult && (
-              <p className="text-xs text-accent text-center">{syncResult}</p>
-            )}
+            {syncResult && <p className="text-xs text-accent text-center">{syncResult}</p>}
+            {error && <p className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
           </>
         ) : (
           <>
             <p className="text-xs text-muted">
-              Connect your Garmin account to import completed activities. Strength training
-              sessions are excluded — those should be logged manually for proper tracking.
+              Garmin blocks direct logins from cloud servers. To connect, run a one-time script on your own computer to get a session token, then paste it here.
             </p>
 
-            <label>
-              <span className="label">Garmin username / email</span>
-              <input
-                className="input mt-1"
-                type="email"
-                inputMode="email"
-                autoCapitalize="none"
-                autoComplete="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </label>
+            <div className="flex items-start gap-2 rounded border border-border bg-surface-2 px-3 py-2.5">
+              <Terminal size={14} className="mt-0.5 shrink-0 text-accent" />
+              <div className="text-xs text-muted leading-relaxed space-y-1">
+                <p className="font-medium text-text">Run this once on your computer:</p>
+                <code className="block bg-black/30 rounded px-2 py-1 font-mono text-[11px] break-all">
+                  node scripts/garmin-auth.mjs
+                </code>
+                <p>Then copy the JSON output and paste it below.</p>
+              </div>
+            </div>
 
             <label>
-              <span className="label">Garmin password</span>
-              <div className="relative mt-1">
-                <input
-                  className="input pr-12"
-                  type={showPass ? "text" : "password"}
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted"
-                  aria-label={showPass ? "Hide password" : "Show password"}
-                >
-                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
+              <span className="label">Garmin token</span>
+              <textarea
+                className="input mt-1 font-mono text-xs"
+                rows={4}
+                placeholder={'{"oauth1":{...},"oauth2":{...}}'}
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+              />
             </label>
 
             <div className="flex items-start gap-2 rounded border border-border bg-surface-2 px-3 py-2.5">
               <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
               <p className="text-xs text-muted leading-relaxed">
-                Your credentials are encrypted with AES-256-GCM before being stored. Nobody — including Fitlog — has access to them in plain text.
+                Tokens are encrypted with AES-256-GCM before storage. A token gives read-only API access — it cannot change your Garmin password or account settings, and can be revoked by changing your Garmin password.
               </p>
             </div>
 
-            {error && (
-              <p className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>
-            )}
+            {error && <p className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>}
 
             <button
               onClick={connect}
-              disabled={connecting || !username.trim() || !password}
+              disabled={connecting || !token.trim()}
               className="btn-primary"
             >
               <Link2 size={16} />
