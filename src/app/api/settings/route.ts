@@ -69,6 +69,20 @@ export async function PATCH(req: Request) {
       ? sex
       : "unspecified";
   }
+  if (body.foodRegion !== undefined) {
+    const region = String(body.foodRegion);
+    if (!["PT", "CH", "both"].includes(region)) {
+      return NextResponse.json({ error: "Choose a valid food region." }, { status: 400 });
+    }
+    set.foodRegion = region;
+  }
+  if (body.foodLanguage !== undefined) {
+    const language = String(body.foodLanguage);
+    if (!["pt", "de", "fr", "it", "en"].includes(language)) {
+      return NextResponse.json({ error: "Choose a valid food language." }, { status: 400 });
+    }
+    set.foodLanguage = language;
+  }
 
   const invalid = Object.values(set).some(
     (value) => typeof value === "number" && !Number.isFinite(value)

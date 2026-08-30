@@ -77,6 +77,35 @@ export const getAppUser = cache(async function getAppUser() {
       .limit(1);
   }
 
+  // Registration is open. Neon Auth proves the identity; the application row
+  // is created here on first access so every account still gets an isolated
+  // numeric user ID for its private Fitlog data.
+  if (!appUser) {
+    const [created] = await db
+      .insert(appUsers)
+      .values({
+        authUserId: authUser.id,
+        email,
+        name: authUser.name || null,
+        role: "member",
+        status: "active",
+      })
+      .onConflictDoNothing({ target: appUsers.email })
+      .returning();
+
+    if (created) {
+      appUser = created;
+    } else {
+      // A simultaneous first request may have inserted the row after our first
+      // lookup. Resolve that winner and apply the same identity checks below.
+      [appUser] = await db
+        .select()
+        .from(appUsers)
+        .where(eq(appUsers.email, email))
+        .limit(1);
+    }
+  }
+
   if (!appUser || appUser.status === "revoked") return null;
   if (appUser.authUserId && appUser.authUserId !== authUser.id) return null;
   // The legacy owner must prove knowledge of the old shared password through
@@ -90,13 +119,24 @@ export const getAppUser = cache(async function getAppUser() {
         authUserId: authUser.id,
         name: authUser.name || appUser.name,
         status: "active",
-        joinedAt: new Date(),
       })
       .where(and(eq(appUsers.id, appUser.id), isNull(appUsers.authUserId)))
       .returning();
     if (!linked) return null;
     appUser = linked;
+  }
+
+  // joinedAt doubles as the provisioning-complete marker. If initialization
+  // was interrupted, the next request safely retries these idempotent inserts.
+  if (!appUser.joinedAt) {
     await initializeUserData(appUser.id);
+    const [initialized] = await db
+      .update(appUsers)
+      .set({ status: "active", joinedAt: new Date() })
+      .where(eq(appUsers.id, appUser.id))
+      .returning();
+    if (!initialized) return null;
+    appUser = initialized;
   }
 
   return appUser;

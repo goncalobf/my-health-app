@@ -27,6 +27,8 @@ npm run local:db               # migrate + seed the throwaway local database
 npm run dev:local              # run locally with no auth and no login page
 npm run plan:ppl               # apply the PPL plan; data-changing script
 npm run sync:exercises         # synchronize external exercise data
+npm run sync:foods             # atomically refresh official PT/CH food catalogs
+npm run icons                  # regenerate PWA/iOS/favicon assets from the canonical brand mark
 node --env-file=.env.local scripts/run-migration.mjs drizzle/<file>.sql --dry-run
 ```
 
@@ -57,11 +59,16 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 
 - `src/app/(app)/`: authenticated application pages. Its layout calls `requireAppUser()` and renders the shared bottom navigation.
 - `src/app/api/`: route handlers. Authentication alone is insufficient: every personal query must also be scoped to the current application user.
-- `src/app/auth/[path]/`: custom Neon Auth email/password sign-in and sign-up UI.
-- `src/app/access-pending/`: invitation gate and one-time legacy-owner claim flow.
+- `src/app/auth/[path]/`: custom Neon Auth email/password and Google sign-in/sign-up UI.
+- `src/app/access-pending/`: disabled-account boundary and one-time legacy-owner claim flow.
+- `src/app/privacy/` and `src/app/terms/`: public legal pages; keep both outside the auth gate.
 - `src/app/onboarding/`: required one-time goal and body-profile setup for a new account.
 - `src/proxy.ts`: Neon Auth middleware. Public asset exclusions are declared in its matcher.
 - `src/components/`: client UI and reusable iPhone-oriented components.
+- `assets/brand/fitlog-mark-source.png`: canonical monochrome Fitlog artwork with no text. It is the
+  source for every application icon; it is intentionally not a public runtime asset.
+- `public/icons/`: generated favicon, Apple touch icon, PWA icons, and Android maskable icon. Regenerate
+  them with `npm run icons` instead of editing individual PNGs.
 - `src/db/schema.ts`: canonical Drizzle schema. SQL migrations in `drizzle/` are the production history.
 - `src/lib/app-user.ts`: Neon-session-to-`app_users` mapping and new-member initialization.
 - `src/lib/local-mode.ts`: the single guard for local no-auth mode. Nothing else may bypass auth.
@@ -78,15 +85,16 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 ## Authentication and account model
 
 - Neon Auth owns credentials and sessions. `app_users` maps a Neon auth user ID to one numeric Fitlog user ID.
-- Access is invitation-controlled by exact, normalized email. The owner manages friends at `/settings/friends` through `/api/invitations`.
-- Invited members are linked on first authenticated access and receive blank settings, training-plan state, and seven blank schedule days. They never inherit another user's routines or history.
+- Registration is open. On first authenticated access, `getAppUser()` creates an active member row from the normalized Neon Auth identity and initializes blank settings, training-plan state, and seven blank schedule days. New users never inherit another user's routines or history.
+- The owner manages registered accounts at `/settings/friends` through `/api/accounts` and may disable or restore member access. A disabled member can hold a valid Neon session but must not access application data.
+- `app_users.invited_at` and the `invited` status may exist in old database history only. Migration `0014` activates legacy invitations and changes the default to `active`; do not build new invitation behavior around the legacy column/value.
 - The migrated owner is deliberately not auto-linked. `/api/claim-owner` requires the authenticated owner email plus the former `APP_PASSWORD` once before historical records are attached.
 - `APP_PASSWORD` is legacy claim proof, not the current login system. `/unlock` only redirects to Neon sign-in. Do not reintroduce shared-password authentication.
-- Revoked or uninvited accounts may have a valid Neon session but must not access application data.
+- Revoked accounts may have a valid Neon session but must not access application data.
 - Auth is constructed lazily. Importing `src/lib/auth.ts` must never throw, so a build succeeds without
   secrets; a deployment missing configuration fails closed with `503` rather than serving anything.
 - A new account is redirected to `/onboarding` until `settings.onboarded_at` is set.
-- Production Neon Auth must trust the canonical production origin `https://fitlog.site`. The `www`
+- Google sign-in uses Neon Auth OAuth and the application starts it with `authClient.signIn.social({ provider: "google" })`; the provider must also be enabled for the production branch in Neon. Production Neon Auth must trust the canonical production origin `https://fitlog.site`. The `www`
   origin is also trusted while `https://www.fitlog.site` remains attached to the Vercel project.
 
 ## Data ownership invariants
@@ -109,11 +117,13 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 - A drop set ends the current effort lighter with no rest and is stored under its parent set's number.
 - Workouts support routines, a fixed Monday-Sunday schedule, rest timers, RIR, double-progression
   recommendations, fatigue check-ins, and deload guidance.
-- Signing up requires a one-time onboarding that captures goal and body profile, then derives calories
+- Signing up with email/password or Google requires a one-time onboarding that captures goal and body profile, then derives calories
   deterministically and macros from the existing allocation rules.
 - Motivation is a presentation layer only: seeded hard-toned lines over licensed dark photography, plus
   facts computed from the user's own working sets. It never invents a number.
 - Nutrition is gram-first and stores per-entry totals. USDA FoodData Central supplies cooked/generic foods; Open Food Facts supplies packaged products and barcodes. External macros are normalized per 100 g before quantity scaling.
+- PortFIR/INSA and the Swiss FSVO database are versioned shared catalogs imported from official XLSX downloads. Per-user food region/language settings influence ranking and localized names. See `docs/food-data.md` before changing providers or ingestion.
+- Missing upstream nutrients remain null, and foods without all four core macros are not loggable. PortFIR beverages expressed per 100 ml remain outside the current gram-only flow.
 - Garmin energy expenditure is entered manually; there is no Garmin OAuth/API integration.
 - Body profile, goals, calories, macros, phase start, and adaptive-target preferences live in per-user settings.
 - Fat-loss/recomposition protein is deterministic at 2.4 g/kg; maintenance/muscle-gain protein is 2.0 g/kg. Fat receives about 25% of target calories and carbohydrate receives the remainder. Macro calories must remain internally consistent.
@@ -123,10 +133,21 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 ## UI conventions
 
 - Design for iPhone first, including 320 px-wide screens, then enhance larger layouts.
-- Preserve the dark theme, `max-w-lg` app shell, safe-area helpers, and hidden scrollbars.
+- The Fitlog visual language is a personal **training archive**, not a generic SaaS dashboard: near-black
+  surfaces, warm off-white type, monochrome training photography/illustration, large condensed editorial
+  headings, restrained asymmetric corners, and lime (`accent`) only for primary action or positive progress.
+  Use `font-display`, `.section-title`, `.icon-frame`, and `.data-number` where they clarify hierarchy.
+- Preserve the dark theme, `max-w-xl` app shell, safe-area helpers, and hidden scrollbars.
 - Avoid horizontal overflow, clipped fixed controls, hover-only interactions, and undersized touch targets.
 - Decimal gram/weight fields must accept both `.` and `,` from iPhone keyboards. Reuse `src/lib/decimal-input.ts`; do not rely on `type="number"` parsing alone.
 - Use the shared `.card`, `.btn*`, `.input`, and `.label` classes where practical.
+- The official Fitlog mark is the monochrome illustrated figure **without any text**. The source is
+  `assets/brand/fitlog-mark-source.png`; icons derive from it through `scripts/generate-icons.mjs`.
+  Do not put a slogan, wordmark, or arbitrary crop into app icons. After changing the source or crop rules,
+  run `npm run icons` and verify `favicon.png`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, and
+  `maskable-512.png`. The root metadata and manifest must continue to point at those generated files.
+- PWA icon changes are cached by iOS. In the handoff, tell the user to remove and re-add the Home Screen app
+  if an old icon remains after the production deployment.
 - Motivation posters use `MotivationCard`. Images live in `public/motivation/` and must be free-licence;
   check `premium`/`plus` before adding an Unsplash photo, and record it in `CREDITS.md`.
 - Verify visual changes by running `npm run dev:local` and looking at the screen, not by reasoning alone.
@@ -146,6 +167,7 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 - `NEON_AUTH_COOKIE_SECRET` and `AUTH_SECRET` are sensitive in Vercel, so `vercel env pull` returns them
   empty. A local production build needs a placeholder value for them.
 - Never print, commit, paste, or expose secret values. `.env.local`, `.vercel/`, `.next/`, and `.context/` are local artifacts.
+- `fitlog.site` uses Vercel nameservers. Vercel does not host mailboxes; a provider's MX/TXT records must be added before publishing `support@fitlog.site` as a working contact address. See `docs/authentication.md`.
 
 ## Git and delivery
 

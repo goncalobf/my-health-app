@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { X, Search, ScanLine, Pencil, ChevronLeft, Star, Clock3, Utensils } from "lucide-react";
 import { api, apiGet, apiPost } from "@/lib/api";
@@ -9,6 +9,7 @@ import { normalizeDecimalInput, parseDecimalInput } from "@/lib/decimal-input";
 import BarcodeScanner from "@/components/BarcodeScanner";
 
 interface FoodResult {
+  id?: string;
   barcode: string | null;
   name: string;
   brand: string | null;
@@ -20,6 +21,9 @@ interface FoodResult {
   servingSize: string | null;
   source?: string | null;
   sourceId?: string | null;
+  sourceUrl?: string | null;
+  attribution?: string | null;
+  sourceVersion?: string | null;
 }
 
 interface SavedFood {
@@ -45,6 +49,8 @@ export default function FoodLogger({
   const [tab, setTab] = useState<"quick" | "search" | "manual">("quick");
   const [scanning, setScanning] = useState(false);
   const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const [searchNonce, setSearchNonce] = useState(0);
   const [results, setResults] = useState<FoodResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -71,7 +77,7 @@ export default function FoodLogger({
   }, []);
 
   useEffect(() => {
-    if (query.trim().length < 3) {
+    if (submittedQuery.trim().length < 3) {
       setResults([]);
       setSearchError("");
       return;
@@ -79,10 +85,10 @@ export default function FoodLogger({
     const controller = new AbortController();
     setSearching(true);
     setSearchError("");
-    const t = setTimeout(async () => {
+    (async () => {
       try {
         const r = await api<FoodResult[]>(
-          `/api/foods/search?q=${encodeURIComponent(query.trim())}`,
+          `/api/foods/search?q=${encodeURIComponent(submittedQuery.trim())}`,
           { signal: controller.signal }
         );
         setResults(r);
@@ -96,15 +102,13 @@ export default function FoodLogger({
       } finally {
         if (!controller.signal.aborted) setSearching(false);
       }
-    }, 650);
+    })();
     return () => {
-      clearTimeout(t);
       controller.abort();
     };
-  }, [query]);
+  }, [submittedQuery, searchNonce]);
 
-  async function onScanned(code: string) {
-    setScanning(false);
+  const onScanned = useCallback(async (code: string) => {
     try {
       const food = await apiGet<FoodResult>(`/api/foods/barcode/${code}`);
       setSelected(food);
@@ -113,8 +117,10 @@ export default function FoodLogger({
       // Not found — jump to manual with the barcode name hint.
       setTab("manual");
       setMName("");
+    } finally {
+      setScanning(false);
     }
-  }
+  }, []);
 
   const factor = parseDecimalInput(qty) / 100;
   const preview = selected
@@ -157,11 +163,13 @@ export default function FoodLogger({
 
   async function saveFavorite() {
     if (!selected) return;
-    const servingMatch = selected.servingSize?.match(/[\d.]+/);
+    const servingMatch = selected.servingSize?.match(/[\d.,]+/);
     await apiPost("/api/foods/saved", {
       name: selected.name, barcode: selected.barcode,
       servingName: selected.servingSize || null,
-      servingGrams: servingMatch ? Number(servingMatch[0]) : parseDecimalInput(qty) || 100,
+      servingGrams: servingMatch
+        ? Number(servingMatch[0].replace(",", "."))
+        : parseDecimalInput(qty) || 100,
       caloriesPer100: selected.calories, proteinPer100: selected.proteinG,
       carbsPer100: selected.carbsG, fatPer100: selected.fatG,
     });
@@ -250,6 +258,16 @@ export default function FoodLogger({
                   Per 100g: {selected.calories} kcal · {selected.proteinG}P{" "}
                   {selected.carbsG}C {selected.fatG}F
                 </p>
+                {selected.sourceUrl && (
+                  <a
+                    href={selected.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 block text-[11px] text-muted underline underline-offset-2"
+                  >
+                    {selected.attribution ?? "View source"}
+                  </a>
+                )}
               </div>
             </div>
 
@@ -264,8 +282,8 @@ export default function FoodLogger({
                 onChange={(e) => setQty(normalizeDecimalInput(e.target.value))}
               />
               {selected.servingSize && (() => {
-                const match = selected.servingSize.match(/[\d.]+/);
-                return match ? <button onClick={() => setQty(match[0])} className="text-xs text-accent mt-2">Use serving · {selected.servingSize}</button> : null;
+                const match = selected.servingSize.match(/[\d.,]+/);
+                return match ? <button onClick={() => setQty(match[0].replace(",", "."))} className="text-xs text-accent mt-2">Use serving · {selected.servingSize}</button> : null;
               })()}
             </div>
 
@@ -333,19 +351,39 @@ export default function FoodLogger({
             ) : tab === "search" ? (
               <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
                 <div className="p-4">
-                  <div className="relative">
-                    <Search
-                      size={18}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"
-                    />
-                    <input
-                      autoFocus
-                      className="input pl-10"
-                      placeholder="Search foods (e.g. cooked white rice)"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                  </div>
+                  <form
+                    className="flex gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const nextQuery = query.trim();
+                      if (nextQuery.length < 3) return;
+                      setResults([]);
+                      setSearchError("");
+                      setSubmittedQuery(nextQuery);
+                      setSearchNonce((value) => value + 1);
+                    }}
+                  >
+                    <div className="relative min-w-0 flex-1">
+                      <Search
+                        size={18}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+                      />
+                      <input
+                        autoFocus
+                        className="input pl-10"
+                        placeholder="Search foods (e.g. cooked white rice)"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="btn-primary shrink-0 px-4"
+                      disabled={query.trim().length < 3 || searching}
+                    >
+                      Search
+                    </button>
+                  </form>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 flex flex-col gap-2">
                   {searching && (
@@ -360,7 +398,7 @@ export default function FoodLogger({
                   )}
                   {results.map((f, i) => (
                     <button
-                      key={i}
+                      key={f.id ?? `${f.source}-${f.barcode ?? f.name}-${i}`}
                       onClick={() => {
                         setSelected(f);
                         setQty("100");
@@ -390,7 +428,7 @@ export default function FoodLogger({
                   ))}
                   {!searching &&
                     !searchError &&
-                    query.trim().length >= 3 &&
+                    submittedQuery.trim().length >= 3 &&
                     results.length === 0 && (
                       <p className="text-muted text-sm text-center py-4">
                         No matches. Try the Manual tab.

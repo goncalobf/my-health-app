@@ -190,6 +190,30 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .data-number {
     @apply font-display tracking-[0.02em] tabular-nums;
   }
+
+  .legal-copy {
+    @apply text-sm leading-7 text-muted min-[520px]:text-[15px];
+  }
+
+  .legal-copy > * + * {
+    @apply mt-4;
+  }
+
+  .legal-copy h2 {
+    @apply mt-9 font-display text-2xl tracking-[0.08em] text-text;
+  }
+
+  .legal-copy ul {
+    @apply list-disc space-y-2 pl-5;
+  }
+
+  .legal-copy strong {
+    @apply font-semibold text-text;
+  }
+
+  .legal-note {
+    @apply border-l-2 border-accent bg-surface px-4 py-3 text-xs leading-5;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
