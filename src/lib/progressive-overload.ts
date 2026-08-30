@@ -25,6 +25,17 @@ function rounded(value: number) {
   return Math.round(value * 10) / 10;
 }
 
+function workingWeightOf(sets: ProgressionSet[]) {
+  return Math.max(...sets.map((set) => set.weightKg));
+}
+
+/**
+ * Evaluates the athlete's most recent working sets for one exercise against
+ * its current prescription (sets/rep range/RIR/increment) and recommends the
+ * next load. History is compared against the *current* prescription, so
+ * editing a routine's set count or rep range changes how past sessions read
+ * against it going forward.
+ */
 export function getProgressionRecommendation(
   target: ProgressionTarget,
   history: ProgressionSet[][]
@@ -41,7 +52,7 @@ export function getProgressionRecommendation(
     };
   }
 
-  const workingWeight = Math.max(...latest.map((set) => set.weightKg));
+  const workingWeight = workingWeightOf(latest);
   const enoughSets = latest.length >= target.targetSets;
   const reachedTop =
     enoughSets && latest.slice(0, target.targetSets).every((set) => set.reps >= target.maxReps);
@@ -51,11 +62,15 @@ export function getProgressionRecommendation(
     latest
       .slice(0, target.targetSets)
       .every((set) => set.rir != null && set.rir >= target.targetRirMin!);
+  // Both misses must be at the same load: two bad sessions at unrelated
+  // weights (e.g. an ad hoc substitution) aren't evidence the current load
+  // is too heavy. Mirrors the same-weight guard in findDecliningAnchors.
   const missedMinimumTwice =
     history.length >= 2 &&
     history.slice(0, 2).every((sets) =>
       sets.slice(0, target.targetSets).some((set) => set.reps < target.minReps)
-    );
+    ) &&
+    Math.abs(workingWeightOf(history[0]) - workingWeightOf(history[1])) < 0.05;
 
   if (reachedTop && rirMaintained) {
     const next = rounded(workingWeight + target.weightIncrementKg);
