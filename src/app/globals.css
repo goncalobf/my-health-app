@@ -166,6 +166,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     @apply w-full max-w-full min-w-0 border border-border bg-surface-2 px-4 py-3 text-base text-text placeholder:text-muted outline-none transition focus:border-accent;
     min-height: 3rem;
     border-radius: 2px 10px 2px 2px;
+    /* iOS date/time inputs ignore width unless the native chrome is suppressed */
+    -webkit-appearance: none;
+    appearance: none;
   }
   .label {
     @apply font-display text-sm text-muted uppercase tracking-[0.16em];
