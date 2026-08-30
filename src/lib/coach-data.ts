@@ -1,9 +1,11 @@
 import { and, asc, desc, eq, gte, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  activitySessions,
   bodyweightLogs,
   expenditureLogs,
   exercises,
+  garminDailyMetrics,
   nutritionLogs,
   routineExercises,
   routines,
@@ -35,7 +37,7 @@ export async function getCoachSnapshot({
   const fromTime = startOfAppDay(fromDay);
 
   const [setting] = await db.select().from(settings).where(eq(settings.userId, userId));
-  const [weights, expenditures, foods, sessionRows, setRows, schedule, routineTargets, planStates, checkins] =
+  const [weights, expenditures, foods, sessionRows, setRows, schedule, routineTargets, planStates, checkins, garminHealth, cardioRows] =
     await Promise.all([
       db.select({ day: bodyweightLogs.day, weightKg: bodyweightLogs.weightKg })
         .from(bodyweightLogs).where(and(eq(bodyweightLogs.userId, userId), gte(bodyweightLogs.day, fromDay))).orderBy(asc(bodyweightLogs.day)),
@@ -78,6 +80,34 @@ export async function getCoachSnapshot({
         .where(eq(routines.userId, userId)),
       db.select().from(trainingPlanState).where(eq(trainingPlanState.userId, userId)).limit(1),
       db.select().from(trainingCheckins).where(eq(trainingCheckins.userId, userId)).orderBy(desc(trainingCheckins.day)).limit(1),
+      db.select({
+        date: garminDailyMetrics.date,
+        restingHrBpm: garminDailyMetrics.restingHrBpm,
+        hrvScore: garminDailyMetrics.hrvScore,
+        hrvBalanceScore: garminDailyMetrics.hrvBalanceScore,
+        sleepDurationSeconds: garminDailyMetrics.sleepDurationSeconds,
+        sleepScoreValue: garminDailyMetrics.sleepScoreValue,
+        caloriesActive: garminDailyMetrics.caloriesActive,
+        caloriesTotal: garminDailyMetrics.caloriesTotal,
+        steps: garminDailyMetrics.steps,
+      }).from(garminDailyMetrics)
+        .where(and(eq(garminDailyMetrics.userId, userId), gte(garminDailyMetrics.date, fromDay)))
+        .orderBy(asc(garminDailyMetrics.date)),
+      db.select({
+        id: activitySessions.id,
+        type: activitySessions.type,
+        startedAt: activitySessions.startedAt,
+        durationSeconds: activitySessions.durationSeconds,
+        distanceM: activitySessions.distanceM,
+        elevationM: activitySessions.elevationM,
+        avgHeartRate: activitySessions.avgHeartRate,
+        calories: activitySessions.calories,
+        avgSpeedKmh: activitySessions.avgSpeedKmh,
+        avgPowerW: activitySessions.avgPowerW,
+        division: activitySessions.division,
+      }).from(activitySessions)
+        .where(and(eq(activitySessions.userId, userId), gte(activitySessions.startedAt, fromTime), isNotNull(activitySessions.finishedAt)))
+        .orderBy(desc(activitySessions.startedAt)),
     ]);
 
   const nutritionByDay = new Map<string, { calories: number; proteinG: number; carbsG: number; fatG: number }>();
@@ -154,7 +184,21 @@ export async function getCoachSnapshot({
         fatG: Math.round(targets.fatG - todayNutrition.fatG),
       },
       garminTotalCalories: expenditures.find((x) => x.day === today)?.totalCalories ?? null,
+      garminHealth: garminHealth.find((x) => x.date === today) ?? null,
     },
+    garminHealthTrend: garminHealth,
+    cardioSessions: cardioRows.map((s) => ({
+      type: s.type,
+      date: s.startedAt.toISOString().slice(0, 10),
+      durationMinutes: s.durationSeconds ? Math.round(s.durationSeconds / 60) : null,
+      distanceKm: s.distanceM ? Math.round(s.distanceM / 10) / 100 : null,
+      elevationM: s.elevationM,
+      avgHeartRate: s.avgHeartRate,
+      calories: s.calories,
+      avgSpeedKmh: s.avgSpeedKmh,
+      avgPowerW: s.avgPowerW,
+      division: s.division,
+    })),
     weightTrend: weights,
     expenditureTrend: expenditures,
     nutritionTrend: [...nutritionByDay].map(([day, totals]) => ({ day, ...totals })),
@@ -175,9 +219,11 @@ export async function getCoachSnapshot({
     }),
     dataCoverage: {
       weighIns: weights.length,
-      garminDays: expenditures.length,
+      garminExpendityureDays: expenditures.length,
+      garminHealthDays: garminHealth.length,
       nutritionDays: nutritionByDay.size,
       completedWorkouts: sessionRows.length,
+      cardioSessions: cardioRows.length,
     },
   };
 }
