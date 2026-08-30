@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link2, Link2Off, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { Link2, Link2Off, RefreshCw, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { apiGet } from "@/lib/api";
 
 interface ConnectionStatus {
@@ -103,6 +103,13 @@ export default function GarminSettings() {
               </button>
             </div>
 
+            <div className="flex items-start gap-2 rounded border border-border bg-surface-2 px-3 py-2.5">
+              <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
+              <p className="text-xs text-muted leading-relaxed">
+                Your credentials are encrypted with AES-256-GCM and stored only in your private database. No one else — including Fitlog — can read them.
+              </p>
+            </div>
+
             <button onClick={sync} disabled={syncing} className="btn-ghost w-full">
               <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
               {syncing ? "Syncing…" : "Sync now"}
@@ -152,6 +159,13 @@ export default function GarminSettings() {
                 </button>
               </div>
             </label>
+
+            <div className="flex items-start gap-2 rounded border border-border bg-surface-2 px-3 py-2.5">
+              <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
+              <p className="text-xs text-muted leading-relaxed">
+                Your credentials are encrypted with AES-256-GCM before being stored. Nobody — including Fitlog — has access to them in plain text.
+              </p>
+            </div>
 
             {error && (
               <p className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>
