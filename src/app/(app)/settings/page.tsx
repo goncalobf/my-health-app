@@ -254,7 +254,7 @@ export default function SettingsPage() {
             <option value="muscle_gain">Gain muscle</option>
           </select>
         </label>
-        <label className="block w-full overflow-hidden">
+        <label className="block w-full">
           <span className="label">Goal phase started</span>
           <input
             type="date"
