@@ -8,6 +8,31 @@
  * Never stores credentials — they're used once to get a token and discarded.
  */
 
+// Cloudflare Workers don't implement the `cache` field on RequestInitializerDict.
+// Axios (used by garmin-connect) passes cache:'default' to both fetch() AND the
+// Request() constructor. Patch both globals before requiring garmin-connect so
+// every call inside the library uses the safe wrappers.
+function stripCache(init?: RequestInit): RequestInit | undefined {
+  if (!init || !("cache" in init)) return init;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { cache, ...safe } = init as RequestInit & { cache?: unknown };
+  return safe as RequestInit;
+}
+
+const _nativeFetch = globalThis.fetch;
+(globalThis as Record<string, unknown>).fetch = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> => _nativeFetch(input, stripCache(init));
+
+const _NativeRequest = globalThis.Request;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as Record<string, unknown>).Request = class PatchedRequest extends (_NativeRequest as any) {
+  constructor(input: RequestInfo | URL, init?: RequestInit) {
+    super(input, stripCache(init));
+  }
+};
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { GarminConnect } = require("garmin-connect");
 
