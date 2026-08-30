@@ -12,15 +12,15 @@ import {
   primaryKey,
 } from "drizzle-orm/pg-core";
 
-// Application access is invitation-controlled. Neon Auth owns credentials and
-// sessions; this table maps a Neon user to their private Fitlog data.
+// Neon Auth owns credentials and sessions. This table maps each openly
+// registered Neon user to their private Fitlog data; revoked users stay blocked.
 export const appUsers = pgTable("app_users", {
   id: serial("id").primaryKey(),
   authUserId: text("auth_user_id").unique(),
   email: text("email").notNull().unique(),
   name: text("name"),
   role: text("role").notNull().default("member"),
-  status: text("status").notNull().default("invited"),
+  status: text("status").notNull().default("active"),
   invitedAt: timestamp("invited_at").notNull().defaultNow(),
   joinedAt: timestamp("joined_at"),
 });

@@ -125,7 +125,7 @@ export default function SettingsPage() {
 
       <Link href="/settings/friends" className="card mb-6 flex items-center gap-3 p-4 active:scale-[0.99] transition">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"><Users size={20} /></div>
-        <div className="min-w-0 flex-1"><p className="font-semibold">Accounts & friends</p><p className="text-xs text-muted">Your account, invitations and access</p></div>
+        <div className="min-w-0 flex-1"><p className="font-semibold">Account & access</p><p className="text-xs text-muted">Your account, privacy and other users</p></div>
         <ChevronRight size={19} className="shrink-0 text-muted" />
       </Link>
 
@@ -372,6 +372,11 @@ export default function SettingsPage() {
       <button onClick={logout} className="btn-ghost w-full mt-6">
         <LogOut size={18} /> Sign out
       </button>
+      <p className="mt-4 text-center text-xs text-muted">
+        <Link href="/privacy" className="underline underline-offset-2">Privacy</Link>
+        <span aria-hidden="true"> · </span>
+        <Link href="/terms" className="underline underline-offset-2">Terms</Link>
+      </p>
     </div>
   );
 }

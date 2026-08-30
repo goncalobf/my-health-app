@@ -59,8 +59,9 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 
 - `src/app/(app)/`: authenticated application pages. Its layout calls `requireAppUser()` and renders the shared bottom navigation.
 - `src/app/api/`: route handlers. Authentication alone is insufficient: every personal query must also be scoped to the current application user.
-- `src/app/auth/[path]/`: custom Neon Auth email/password sign-in and sign-up UI.
-- `src/app/access-pending/`: invitation gate and one-time legacy-owner claim flow.
+- `src/app/auth/[path]/`: custom Neon Auth email/password and Google sign-in/sign-up UI.
+- `src/app/access-pending/`: disabled-account boundary and one-time legacy-owner claim flow.
+- `src/app/privacy/` and `src/app/terms/`: public legal pages; keep both outside the auth gate.
 - `src/app/onboarding/`: required one-time goal and body-profile setup for a new account.
 - `src/proxy.ts`: Neon Auth middleware. Public asset exclusions are declared in its matcher.
 - `src/components/`: client UI and reusable iPhone-oriented components.
@@ -84,15 +85,16 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 ## Authentication and account model
 
 - Neon Auth owns credentials and sessions. `app_users` maps a Neon auth user ID to one numeric Fitlog user ID.
-- Access is invitation-controlled by exact, normalized email. The owner manages friends at `/settings/friends` through `/api/invitations`.
-- Invited members are linked on first authenticated access and receive blank settings, training-plan state, and seven blank schedule days. They never inherit another user's routines or history.
+- Registration is open. On first authenticated access, `getAppUser()` creates an active member row from the normalized Neon Auth identity and initializes blank settings, training-plan state, and seven blank schedule days. New users never inherit another user's routines or history.
+- The owner manages registered accounts at `/settings/friends` through `/api/accounts` and may disable or restore member access. A disabled member can hold a valid Neon session but must not access application data.
+- `app_users.invited_at` and the `invited` status may exist in old database history only. Migration `0014` activates legacy invitations and changes the default to `active`; do not build new invitation behavior around the legacy column/value.
 - The migrated owner is deliberately not auto-linked. `/api/claim-owner` requires the authenticated owner email plus the former `APP_PASSWORD` once before historical records are attached.
 - `APP_PASSWORD` is legacy claim proof, not the current login system. `/unlock` only redirects to Neon sign-in. Do not reintroduce shared-password authentication.
-- Revoked or uninvited accounts may have a valid Neon session but must not access application data.
+- Revoked accounts may have a valid Neon session but must not access application data.
 - Auth is constructed lazily. Importing `src/lib/auth.ts` must never throw, so a build succeeds without
   secrets; a deployment missing configuration fails closed with `503` rather than serving anything.
 - A new account is redirected to `/onboarding` until `settings.onboarded_at` is set.
-- Production Neon Auth must trust the canonical production origin `https://fitlog.site`. The `www`
+- Google sign-in uses Neon Auth OAuth and the application starts it with `authClient.signIn.social({ provider: "google" })`; the provider must also be enabled for the production branch in Neon. Production Neon Auth must trust the canonical production origin `https://fitlog.site`. The `www`
   origin is also trusted while `https://www.fitlog.site` remains attached to the Vercel project.
 
 ## Data ownership invariants
@@ -115,7 +117,7 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 - A drop set ends the current effort lighter with no rest and is stored under its parent set's number.
 - Workouts support routines, a fixed Monday-Sunday schedule, rest timers, RIR, double-progression
   recommendations, fatigue check-ins, and deload guidance.
-- Signing up requires a one-time onboarding that captures goal and body profile, then derives calories
+- Signing up with email/password or Google requires a one-time onboarding that captures goal and body profile, then derives calories
   deterministically and macros from the existing allocation rules.
 - Motivation is a presentation layer only: seeded hard-toned lines over licensed dark photography, plus
   facts computed from the user's own working sets. It never invents a number.
@@ -165,6 +167,7 @@ Vercel contains `VERCEL`, which is why `dev:local` clears it. Never point
 - `NEON_AUTH_COOKIE_SECRET` and `AUTH_SECRET` are sensitive in Vercel, so `vercel env pull` returns them
   empty. A local production build needs a placeholder value for them.
 - Never print, commit, paste, or expose secret values. `.env.local`, `.vercel/`, `.next/`, and `.context/` are local artifacts.
+- `fitlog.site` uses Vercel nameservers. Vercel does not host mailboxes; a provider's MX/TXT records must be added before publishing `support@fitlog.site` as a working contact address. See `docs/authentication.md`.
 
 ## Git and delivery
 

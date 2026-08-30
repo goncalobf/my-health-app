@@ -75,7 +75,7 @@ finishes.
 
 `food_catalog_items` and `food_catalog_names` are shared reference tables and
 contain no personal data. `settings.food_region` and `settings.food_language`
-are per-user. Search and barcode routes require an invited Fitlog account.
+are per-user. Search and barcode routes require an active Fitlog account.
 
 The trigram index on `food_catalog_names.search_text` requires PostgreSQL's
 `pg_trgm` extension and is created by migration `0013_late_azazel.sql`.

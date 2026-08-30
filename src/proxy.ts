@@ -3,8 +3,13 @@ import { auth, isAuthConfigured } from "@/lib/auth";
 import { isLocalMode } from "@/lib/local-mode";
 
 let handler: ReturnType<typeof auth.middleware> | null = null;
+const PUBLIC_PATHS = new Set(["/privacy", "/terms"]);
 
 export default function proxy(request: NextRequest) {
+  // Legal information must remain available before sign-in, including on a
+  // deployment whose authentication configuration is temporarily unavailable.
+  if (PUBLIC_PATHS.has(request.nextUrl.pathname)) return NextResponse.next();
+
   // Local mode runs without Neon Auth, so there is no session to check and no
   // login page to redirect to.
   if (isLocalMode()) return NextResponse.next();

@@ -42,9 +42,9 @@ export default function AccessPendingPage() {
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-warn/15 text-warn">
           <ShieldX size={26} />
         </div>
-        <h1 className="mt-4 text-xl font-bold">Invitation required</h1>
+        <h1 className="mt-4 text-xl font-bold">Access unavailable</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
-          This account is valid, but its email has not been invited to this Fitlog yet. Ask the owner to add the exact email you registered with.
+          This account cannot access Fitlog. It may have been disabled by the service owner. If you believe this is a mistake, sign out and contact support.
         </p>
         <details className="mt-5 text-left">
           <summary className="cursor-pointer text-center text-sm font-medium text-accent">I am the existing Fitlog owner</summary>
