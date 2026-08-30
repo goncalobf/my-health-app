@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { garminConnections } from "@/db/schema";
 import { requireAppUser } from "@/lib/app-user";
 import { encrypt } from "@/lib/garmin-crypto";
-import { fetchRecentActivities } from "@/lib/garmin-client";
+import { validateToken, type GarminToken } from "@/lib/garmin-client";
 
 export async function GET() {
   const user = await requireAppUser();
@@ -19,27 +19,27 @@ export async function POST(req: Request) {
   const user = await requireAppUser();
   const body = await req.json().catch(() => ({}));
 
-  const username = String(body.username ?? "").trim();
-  const password = String(body.password ?? "");
-  if (!username || !password) {
-    return NextResponse.json({ error: "username and password are required" }, { status: 400 });
+  const raw = String(body.token ?? "").trim();
+  if (!raw) {
+    return NextResponse.json({ error: "token is required" }, { status: 400 });
   }
 
-  // Verify credentials before storing by attempting a login.
+  let token: GarminToken;
   try {
-    await fetchRecentActivities(username, password, 1);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "";
-    // Garmin throws this when a new-device/location challenge is triggered (not wrong credentials).
-    if (msg.includes("MFA") || msg.includes("Ticket not found")) {
-      return NextResponse.json({
-        error: "Garmin blocked this sign-in as a new device. Check your email for a Garmin security notification, confirm it was you, then try connecting again.",
-      }, { status: 401 });
-    }
-    return NextResponse.json({ error: "Garmin login failed — check your username and password" }, { status: 401 });
+    token = JSON.parse(raw) as GarminToken;
+    if (!token.oauth1 || !token.oauth2) throw new Error("invalid shape");
+  } catch {
+    return NextResponse.json({ error: "Invalid token — paste the full JSON output from the garmin-auth script" }, { status: 400 });
   }
 
-  const encryptedData = encrypt(JSON.stringify({ username, password }));
+  // Validate the token works before storing it.
+  try {
+    await validateToken(token);
+  } catch {
+    return NextResponse.json({ error: "Token validation failed — it may be expired. Run the garmin-auth script again to get a fresh token." }, { status: 401 });
+  }
+
+  const encryptedData = encrypt(JSON.stringify(token));
 
   await db
     .insert(garminConnections)

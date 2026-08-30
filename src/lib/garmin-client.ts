@@ -26,8 +26,9 @@ export interface GarminActivity {
   averageCadence: number;
 }
 
-export function isStrengthActivity(typeKey: string): boolean {
-  return STRENGTH_TYPE_KEYS.has(typeKey);
+export interface GarminToken {
+  oauth1: Record<string, unknown>;
+  oauth2: Record<string, unknown>;
 }
 
 export interface GarminDailyMetricsRaw {
@@ -41,33 +42,38 @@ export interface GarminDailyMetricsRaw {
   steps: number | null;
 }
 
-async function loginClient(username: string, password: string) {
-  const gc = new GarminConnect({ username, password });
-  await gc.login(username, password);
+export function isStrengthActivity(typeKey: string): boolean {
+  return STRENGTH_TYPE_KEYS.has(typeKey);
+}
+
+// Load a previously-exported token. No login request is made from the server —
+// all subsequent calls use the stored OAuth tokens, which auto-refresh when expired.
+function clientFromToken(token: GarminToken) {
+  const gc = new GarminConnect({});
+  gc.loadToken(token.oauth1, token.oauth2);
   return gc;
 }
 
-export async function fetchRecentActivities(
-  username: string,
-  password: string,
+export async function fetchWithToken(
+  token: GarminToken,
   limit = 20
-): Promise<GarminActivity[]> {
-  const gc = await loginClient(username, password);
+): Promise<{ activities: GarminActivity[]; updatedToken: GarminToken }> {
+  const gc = clientFromToken(token);
   const activities = await gc.getActivities(0, limit);
-  return (activities as GarminActivity[]).filter(
+  const filtered = (activities as GarminActivity[]).filter(
     (a) => !isStrengthActivity(a.activityType?.typeKey ?? "")
   );
+  return { activities: filtered, updatedToken: gc.exportToken() as GarminToken };
 }
 
-export async function fetchDailyMetrics(
-  username: string,
-  password: string,
+export async function fetchDailyMetricsWithToken(
+  token: GarminToken,
   date: Date
-): Promise<GarminDailyMetricsRaw> {
-  const gc = await loginClient(username, password);
+): Promise<{ metrics: GarminDailyMetricsRaw; updatedToken: GarminToken }> {
+  const gc = clientFromToken(token);
   const dateStr = date.toISOString().slice(0, 10);
 
-  const result: GarminDailyMetricsRaw = {
+  const metrics: GarminDailyMetricsRaw = {
     restingHrBpm: null,
     hrvScore: null,
     hrvBalanceScore: null,
@@ -78,49 +84,51 @@ export async function fetchDailyMetrics(
     steps: null,
   };
 
-  // Resting HR
   try {
     const hr = await gc.getHeartRate(date) as Record<string, unknown>;
     if (typeof hr?.restingHeartRate === "number") {
-      result.restingHrBpm = hr.restingHeartRate;
+      metrics.restingHrBpm = hr.restingHeartRate;
     }
   } catch { /* optional */ }
 
-  // Sleep
   try {
     const sleep = await gc.getSleepData(date) as Record<string, unknown>;
     const dto = sleep?.dailySleepDTO as Record<string, unknown> | undefined;
     if (typeof dto?.sleepTimeSeconds === "number") {
-      result.sleepDurationSeconds = dto.sleepTimeSeconds;
+      metrics.sleepDurationSeconds = dto.sleepTimeSeconds;
     }
     const scores = dto?.sleepScores as Record<string, unknown> | undefined;
     const overall = scores?.overall as Record<string, unknown> | undefined;
     if (typeof overall?.value === "number") {
-      result.sleepScoreValue = overall.value;
+      metrics.sleepScoreValue = overall.value;
     }
   } catch { /* optional */ }
 
-  // HRV — raw endpoint not wrapped by npm package
   try {
     const hrv = await gc.get(
       `https://connectapi.garmin.com/hrv-service/hrv/${dateStr}`
     ) as Record<string, unknown>;
     if (typeof hrv?.hrvSummary === "object" && hrv.hrvSummary) {
       const s = hrv.hrvSummary as Record<string, unknown>;
-      if (typeof s.lastNight === "number") result.hrvScore = s.lastNight;
-      if (typeof s.lastNightAvg === "number") result.hrvBalanceScore = s.lastNightAvg;
+      if (typeof s.lastNight === "number") metrics.hrvScore = s.lastNight;
+      if (typeof s.lastNightAvg === "number") metrics.hrvBalanceScore = s.lastNightAvg;
     }
   } catch { /* device may not support HRV */ }
 
-  // Daily calories — raw endpoint
   try {
     const cal = await gc.get(
       `https://connectapi.garmin.com/usersummary-service/usersummary/daily/${dateStr}`
     ) as Record<string, unknown>;
-    if (typeof cal?.activeKilocalories === "number") result.caloriesActive = cal.activeKilocalories;
-    if (typeof cal?.totalKilocalories === "number") result.caloriesTotal = cal.totalKilocalories;
-    if (typeof cal?.totalSteps === "number") result.steps = cal.totalSteps;
+    if (typeof cal?.activeKilocalories === "number") metrics.caloriesActive = cal.activeKilocalories;
+    if (typeof cal?.totalKilocalories === "number") metrics.caloriesTotal = cal.totalKilocalories;
+    if (typeof cal?.totalSteps === "number") metrics.steps = cal.totalSteps;
   } catch { /* optional */ }
 
-  return result;
+  return { metrics, updatedToken: gc.exportToken() as GarminToken };
+}
+
+// Validate a token by making a lightweight API call.
+export async function validateToken(token: GarminToken): Promise<void> {
+  const gc = clientFromToken(token);
+  await gc.getActivities(0, 1);
 }
