@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "garmin_pending_imports_user_activity_unique" ON "garmin_pending_imports" USING btree ("user_id","garmin_activity_id");
