@@ -58,7 +58,8 @@ export default function GarminSettings() {
       return;
     }
 
-    // Fire-and-forget — Worker calls back to the server when done
+    // Call the Worker — if the network request itself fails (CORS, DNS, etc.)
+    // surface it immediately rather than letting the poll spin forever.
     fetch(workerUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -69,7 +70,11 @@ export default function GarminSettings() {
         secret,
         callbackUrl: window.location.origin,
       }),
-    }).catch(() => {}); // errors surface via poll
+    }).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      setPhase("error");
+      setAuthError(`Could not reach the Garmin auth server — ${msg}`);
+    });
 
     // 3. Poll for completion — give up after 90 s if the Worker never calls back
     const deadline = Date.now() + 90_000;
