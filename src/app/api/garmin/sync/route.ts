@@ -5,9 +5,13 @@ import { garminConnections, garminPendingImports, garminDailyMetrics } from "@/d
 import { requireAppUser } from "@/lib/app-user";
 import { decrypt, encrypt } from "@/lib/garmin-crypto";
 import { fetchWithToken, fetchDailyMetricsWithToken, type GarminToken } from "@/lib/garmin-client";
+import { isRateLimited } from "@/lib/rate-limit";
 
 export async function POST() {
   const user = await requireAppUser();
+  if (isRateLimited(`garmin-sync:${user.id}`, { max: 6, windowMs: 60 * 60 * 1000 })) {
+    return NextResponse.json({ error: "Too many sync requests. Try again later." }, { status: 429 });
+  }
 
   const [connection] = await db
     .select({ encryptedData: garminConnections.encryptedData })

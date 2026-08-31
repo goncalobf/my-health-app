@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { appUsers } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { isRateLimited } from "@/lib/rate-limit";
 
 function passwordMatches(candidate: string) {
   const expected = process.env.APP_PASSWORD ?? "";
@@ -19,6 +20,9 @@ export async function POST(req: Request) {
   const authUser = session?.user;
   if (!authUser?.id || !authUser.email) {
     return NextResponse.json({ error: "Sign in first" }, { status: 401 });
+  }
+  if (isRateLimited(`claim-owner:${authUser.id}`, { max: 5, windowMs: 15 * 60 * 1000 })) {
+    return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
   }
   const body = await req.json().catch(() => ({}));
   if (!passwordMatches(String(body.password ?? ""))) {

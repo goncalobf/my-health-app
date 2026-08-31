@@ -6,6 +6,9 @@ build
 .env.local
 .env*.local
 .vercel
+.dev.vars
+.wrangler
+.open-next
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store

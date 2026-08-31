@@ -8,6 +8,7 @@ import { getCoachSnapshot } from "@/lib/coach-data";
 import { calculateMacroTargets } from "@/lib/macro-targets";
 import { isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
 import { requireAppUser } from "@/lib/app-user";
+import { isRateLimited } from "@/lib/rate-limit";
 
 export async function POST() {
   const user = await requireAppUser();
@@ -16,6 +17,9 @@ export async function POST() {
       { error: "Add OPENAI_API_KEY in Vercel to enable Fitlog Coach." },
       { status: 503 }
     );
+  }
+  if (isRateLimited(`coach-targets:${user.id}`, { max: 20, windowMs: 10 * 60 * 1000 })) {
+    return NextResponse.json({ error: "Too many requests. Try again shortly." }, { status: 429 });
   }
 
   const snapshot = await getCoachSnapshot({ userId: user.id, days: 28 });
