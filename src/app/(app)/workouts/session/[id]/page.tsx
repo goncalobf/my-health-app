@@ -166,6 +166,7 @@ export default function SessionPage({
     seq: number;
     target: number;
     label: string;
+    upcoming: Cursor | null;
   } | null>(null);
 
   const load = useCallback(async () => {
@@ -409,9 +410,15 @@ export default function SessionPage({
     setRest((prev) => ({
       seq: (prev?.seq ?? 0) + 1,
       target: block.restSeconds,
-      label: upcoming ? describe(blocks, upcoming) : "Last set done",
+      label: upcoming ? describe(blocks, upcoming) : "",
+      upcoming,
     }));
-    setCursor(upcoming);
+  }
+
+  function continueAfterRest() {
+    if (!rest) return;
+    setCursor(rest.upcoming);
+    setRest(null);
     setShowWhy(false);
   }
 
@@ -628,7 +635,7 @@ export default function SessionPage({
   }
 
   return (
-    <div className={rest ? "min-w-0 pb-32" : "min-w-0 pb-8"}>
+    <div className="min-w-0 pb-8">
       <header className="sticky top-[env(safe-area-inset-top)] z-30 -mx-3 mb-5 border-b border-border bg-bg/95 px-3 py-3 backdrop-blur min-[360px]:-mx-4 min-[360px]:px-4">
         <p className="mb-2 pl-12 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Fitlog / live protocol</p>
         <div className="flex items-center gap-2">
@@ -677,6 +684,15 @@ export default function SessionPage({
             <Plus size={18} /> Add exercise
           </button>
         </div>
+      ) : rest ? (
+        <RestTimer
+          key={rest.seq}
+          targetSeconds={rest.target}
+          label={rest.label}
+          note={pickLine("workout", `${id}-${rest.seq}`)}
+          hasNext={!!rest.upcoming}
+          onNext={continueAfterRest}
+        />
       ) : !active ? (
         <div className="card flex flex-col items-center gap-3 p-6 text-center">
           <div className="icon-frame h-14 w-14"><Check size={28} strokeWidth={3} /></div>
@@ -737,6 +753,7 @@ export default function SessionPage({
           activeExIdx={active?.exIdx ?? -1}
           onJump={(exIdx, setKey) => {
             setCursor({ exIdx, setKey });
+            setRest(null);
             setShowWhy(false);
             setOverview(false);
           }}
@@ -749,16 +766,6 @@ export default function SessionPage({
 
       {picking && (
         <ExercisePicker onPick={addExercise} onClose={() => setPicking(false)} />
-      )}
-
-      {rest && (
-        <RestTimer
-          key={rest.seq}
-          targetSeconds={rest.target}
-          label={rest.label}
-          note={pickLine("workout", `${id}-${rest.seq}`)}
-          onEnd={() => setRest(null)}
-        />
       )}
     </div>
   );

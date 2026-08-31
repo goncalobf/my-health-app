@@ -1,19 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Timer } from "lucide-react";
+import { ChevronRight, Timer } from "lucide-react";
 import { formatDuration } from "@/lib/utils";
 
 export default function RestTimer({
   targetSeconds,
   label,
   note,
-  onEnd,
+  hasNext,
+  onNext,
 }: {
   targetSeconds: number;
   label: string;
   note?: string | null;
-  onEnd: () => void;
+  hasNext: boolean;
+  onNext: () => void;
 }) {
   const [elapsed, setElapsed] = useState(0);
   const buzzed = useRef(false);
@@ -39,58 +41,53 @@ export default function RestTimer({
     targetSeconds > 0 ? Math.min(100, (elapsed / targetSeconds) * 100) : 0;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 safe-bottom">
-      <div className="mx-auto max-w-lg px-4">
-        <div className="card pointer-events-auto mb-3 border-accent/40 bg-surface/95 p-3 shadow-xl backdrop-blur">
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-            <Timer
-              size={22}
-              className={reached ? "text-accent" : "text-muted"}
-            />
-            <div className="min-w-0">
-              <div className="flex min-w-0 items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate text-xs text-muted">
-                  Resting · {label}
-                </span>
-                <span
-                  className={`shrink-0 text-lg font-bold tabular-nums ${
-                    reached ? "text-accent" : ""
-                  }`}
-                >
-                  {formatDuration(elapsed)}
-                  {targetSeconds > 0 && (
-                    <span className="text-xs text-muted font-normal">
-                      {" "}
-                      / {formatDuration(targetSeconds)}
-                    </span>
-                  )}
-                </span>
-              </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${pct}%`,
-                    backgroundColor: reached ? "#d6ff45" : "#93ae39",
-                  }}
-                />
-              </div>
-            </div>
-            <button
-              onClick={onEnd}
-              className="btn-primary h-10 shrink-0 px-3 py-0 text-sm"
-              aria-label="End rest timer"
-            >
-              <X size={16} /> End
-            </button>
-          </div>
-          {note && (
-            <p className="mt-2.5 border-t border-border pt-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
-              {note}
-            </p>
-          )}
-        </div>
+    <div className="card min-w-0 overflow-hidden p-4 min-[360px]:p-5">
+      <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+        <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent">
+          Resting
+        </p>
+        <Timer size={18} className={reached ? "text-accent" : "text-muted"} />
       </div>
+
+      <p className="min-w-0 truncate text-sm text-muted">
+        {hasNext ? `Up next · ${label}` : "That's the last set — nice work"}
+      </p>
+
+      <div className="mt-3 flex items-baseline justify-center gap-2">
+        <span
+          className={`font-display text-6xl tabular-nums ${reached ? "text-accent" : ""}`}
+        >
+          {formatDuration(elapsed)}
+        </span>
+        {targetSeconds > 0 && (
+          <span className="text-sm text-muted">
+            / {formatDuration(targetSeconds)}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-2">
+        <div
+          className="h-full rounded-full transition-all"
+          style={{
+            width: `${pct}%`,
+            backgroundColor: reached ? "#d6ff45" : "#93ae39",
+          }}
+        />
+      </div>
+
+      {note && (
+        <p className="mt-4 border-t border-border pt-3 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
+          {note}
+        </p>
+      )}
+
+      <button
+        onClick={onNext}
+        className="btn-primary mt-4 w-full py-3.5 text-base"
+      >
+        {hasNext ? "Next set" : "Continue"} <ChevronRight size={19} strokeWidth={3} />
+      </button>
     </div>
   );
 }
