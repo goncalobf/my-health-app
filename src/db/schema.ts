@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -385,6 +386,19 @@ export const coachMessages = pgTable("coach_messages", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// A small, self-authored profile the coach carries across sessions: durable
+// observations about the person (patterns, preferences), not a chat log.
+// Capped and trimmed in application code (src/lib/coach-memory.ts), oldest first.
+export const coachMemory = pgTable("coach_memory", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .unique()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
+  notes: text("notes").array().notNull().default(sql`'{}'::text[]`),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // Cardio activity sessions (runs, cycling, Hyrox). Resistance sessions use
 // the existing `sessions` + `session_sets` tables.
 // type: run_easy | run_interval | indoor_cycling | outdoor_cycling | hyrox
@@ -528,6 +542,7 @@ export type MealTemplate = typeof mealTemplates.$inferSelect;
 export type MeasurementLog = typeof measurementLogs.$inferSelect;
 export type CoachInsight = typeof coachInsights.$inferSelect;
 export type CoachMessage = typeof coachMessages.$inferSelect;
+export type CoachMemory = typeof coachMemory.$inferSelect;
 export type ActivitySession = typeof activitySessions.$inferSelect;
 export type ActivityInterval = typeof activityIntervals.$inferSelect;
 export type HyroxSegment = typeof hyroxSegments.$inferSelect;
