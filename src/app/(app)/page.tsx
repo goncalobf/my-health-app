@@ -216,7 +216,7 @@ export default async function DashboardPage() {
           <Link
             href={
               lastSession.finishedAt
-                ? "/workouts"
+                ? `/workouts/session/${lastSession.id}/summary`
                 : `/workouts/session/${lastSession.id}`
             }
             className="card p-4 flex items-center justify-between active:scale-[0.98] transition"
