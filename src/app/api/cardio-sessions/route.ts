@@ -59,6 +59,15 @@ export async function POST(req: Request) {
   if (distanceM != null && (!isFinite(distanceM) || distanceM < 0)) {
     return NextResponse.json({ error: "Invalid distance" }, { status: 400 });
   }
+  if (body.notes != null && String(body.notes).length > 1000) {
+    return NextResponse.json({ error: "Notes must be 1000 characters or fewer." }, { status: 400 });
+  }
+  if (body.division != null && String(body.division).length > 200) {
+    return NextResponse.json({ error: "Division must be 200 characters or fewer." }, { status: 400 });
+  }
+  if (body.location != null && String(body.location).length > 200) {
+    return NextResponse.json({ error: "Location must be 200 characters or fewer." }, { status: 400 });
+  }
 
   const [session] = await db
     .insert(activitySessions)

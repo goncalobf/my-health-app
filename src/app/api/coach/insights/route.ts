@@ -7,6 +7,7 @@ import { CoachInsightPayload, insightSchema } from "@/lib/coach";
 import { COACH_MODEL, isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
 import { todayISO } from "@/lib/utils";
 import { requireAppUser } from "@/lib/app-user";
+import { isRateLimited } from "@/lib/rate-limit";
 
 function publicRow(row: typeof coachInsights.$inferSelect) {
   return { ...row, payload: JSON.parse(row.payloadJson) as CoachInsightPayload, payloadJson: undefined };
@@ -36,6 +37,10 @@ export async function POST(req: Request) {
       .where(and(eq(coachInsights.userId, user.id), eq(coachInsights.kind, kind), eq(coachInsights.sourceKey, sourceKey), isNull(coachInsights.dismissedAt)))
       .orderBy(desc(coachInsights.createdAt)).limit(1);
     if (cached) return NextResponse.json(publicRow(cached));
+  }
+
+  if (isRateLimited(`coach-insights:${user.id}`, { max: 20, windowMs: 10 * 60 * 1000 })) {
+    return NextResponse.json({ error: "Too many requests. Try again shortly." }, { status: 429 });
   }
 
   const snapshot = await getCoachSnapshot({ userId: user.id, days: kind === "weekly" ? 28 : 14, sessionId });

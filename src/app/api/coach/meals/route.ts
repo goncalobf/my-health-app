@@ -6,10 +6,14 @@ import { getCoachSnapshot } from "@/lib/coach-data";
 import { COACH_MODEL, isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
 import { todayISO } from "@/lib/utils";
 import { requireAppUser } from "@/lib/app-user";
+import { isRateLimited } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   const user = await requireAppUser();
   if (!isCoachConfigured()) return NextResponse.json({ error: "Add OPENAI_API_KEY in Vercel to enable Fitlog Coach." }, { status: 503 });
+  if (isRateLimited(`coach-meals:${user.id}`, { max: 20, windowMs: 10 * 60 * 1000 })) {
+    return NextResponse.json({ error: "Too many requests. Try again shortly." }, { status: 429 });
+  }
   const body = await req.json().catch(() => ({}));
   const meal = String(body.meal || "next meal").slice(0, 40);
   const snapshot = await getCoachSnapshot({ userId: user.id, days: 14 });

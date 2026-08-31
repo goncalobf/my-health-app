@@ -6,6 +6,7 @@ import { CoachChatPayload, chatSchema } from "@/lib/coach";
 import { getCoachSnapshot } from "@/lib/coach-data";
 import { isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
 import { requireAppUser } from "@/lib/app-user";
+import { isRateLimited } from "@/lib/rate-limit";
 
 export async function GET() {
   const user = await requireAppUser();
@@ -16,6 +17,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await requireAppUser();
   if (!isCoachConfigured()) return NextResponse.json({ error: "Add OPENAI_API_KEY in Vercel to enable Fitlog Coach." }, { status: 503 });
+  if (isRateLimited(`coach-chat:${user.id}`, { max: 20, windowMs: 10 * 60 * 1000 })) {
+    return NextResponse.json({ error: "Too many requests. Try again shortly." }, { status: 429 });
+  }
   const body = await req.json().catch(() => ({}));
   const message = String(body.message ?? "").trim();
   if (!message || message.length > 1200) return NextResponse.json({ error: "Enter a question up to 1200 characters." }, { status: 400 });

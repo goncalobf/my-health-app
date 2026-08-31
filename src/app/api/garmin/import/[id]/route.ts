@@ -37,6 +37,12 @@ export async function POST(
   if (!VALID_TYPES.has(body.type)) {
     return NextResponse.json({ error: "Invalid activity type" }, { status: 400 });
   }
+  if (body.notes != null && String(body.notes).length > 1000) {
+    return NextResponse.json({ error: "Notes must be 1000 characters or fewer." }, { status: 400 });
+  }
+  if (body.division != null && String(body.division).length > 200) {
+    return NextResponse.json({ error: "Division must be 200 characters or fewer." }, { status: 400 });
+  }
 
   const raw = JSON.parse(pending.garminDataJson) as GarminActivity;
 
