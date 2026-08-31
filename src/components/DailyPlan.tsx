@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { Check, Flame, Play } from "lucide-react";
 import { apiPost } from "@/lib/api";
 
-export default function DailyPlan({ day, routine, activeSessionId, garminCalories }: {
+export default function DailyPlan({ day, routine, activeSessionId, completedToday, garminCalories }: {
   day: string;
   routine: { id: number; name: string } | null;
   activeSessionId: number | null;
+  completedToday: boolean;
   garminCalories: number | null;
 }) {
   const router = useRouter();
@@ -41,9 +42,17 @@ export default function DailyPlan({ day, routine, activeSessionId, garminCalorie
         <div className="flex items-end gap-3">
           <div className="min-w-0 flex-1">
             <p className="break-words font-display text-3xl uppercase leading-none tracking-[0.025em] min-[360px]:text-4xl">{activeSessionId ? "Workout in progress" : routine?.name ?? "Rest & recovery"}</p>
-            <p className="mt-2 text-xs uppercase tracking-[0.12em] text-muted">{routine ? "Scheduled session" : "No workout scheduled"}</p>
+            <p className="mt-2 text-xs uppercase tracking-[0.12em] text-muted">
+              {!routine ? "No workout scheduled" : completedToday && !activeSessionId ? "Completed today" : "Scheduled session"}
+            </p>
           </div>
-          {(routine || activeSessionId) && <button onClick={start} disabled={starting} className="btn-primary h-12 shrink-0 px-3 min-[360px]:px-4"><Play size={17} fill="currentColor" /> {activeSessionId ? "Resume" : "Start"}</button>}
+          {activeSessionId ? (
+            <button onClick={start} disabled={starting} className="btn-primary h-12 shrink-0 px-3 min-[360px]:px-4"><Play size={17} fill="currentColor" /> Resume</button>
+          ) : completedToday ? (
+            <span className="flex h-12 shrink-0 items-center gap-1.5 px-3 text-accent min-[360px]:px-4"><Check size={17} /> Done</span>
+          ) : routine ? (
+            <button onClick={start} disabled={starting} className="btn-primary h-12 shrink-0 px-3 min-[360px]:px-4"><Play size={17} fill="currentColor" /> Start</button>
+          ) : null}
         </div>
       </div>
 

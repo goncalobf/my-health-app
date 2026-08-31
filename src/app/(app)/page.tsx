@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, eq, ilike, gte, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, gte, isNotNull, sql } from "drizzle-orm";
 import { Dumbbell, Apple, Settings, ChevronRight, Scale } from "lucide-react";
 import { db } from "@/db";
 import { nutritionLogs, sessions, bodyweightLogs, workoutSchedule, routines, expenditureLogs } from "@/db/schema";
@@ -115,6 +115,23 @@ export default async function DashboardPage() {
       .from(routines).where(and(eq(routines.userId, user.id), ilike(routines.name, `%${term}%`))).limit(1);
   }
 
+  let completedToday = false;
+  if (scheduled) {
+    const [doneToday] = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.userId, user.id),
+          eq(sessions.routineId, scheduled.id),
+          gte(sessions.startedAt, startOfAppDay(today)),
+          isNotNull(sessions.finishedAt)
+        )
+      )
+      .limit(1);
+    completedToday = !!doneToday;
+  }
+
   const slipping = isSlipping(motivation);
   const motivationFact = topMotivationFact(motivation);
   // Seeded per user per day: the poster holds still until tomorrow.
@@ -153,6 +170,7 @@ export default async function DashboardPage() {
         day={today}
         routine={scheduled ?? null}
         activeSessionId={lastSession && !lastSession.finishedAt ? lastSession.id : null}
+        completedToday={completedToday}
         garminCalories={todayBurn?.totalCalories ?? null}
       />
 
