@@ -3,6 +3,7 @@ import { db } from "@/db";
 import {
   activitySessions,
   bodyweightLogs,
+  coachMemory,
   expenditureLogs,
   exercises,
   garminDailyMetrics,
@@ -23,6 +24,7 @@ import {
   todayISO,
 } from "@/lib/utils";
 import { buildNutritionPhase } from "@/lib/nutrition-phase";
+import { appendMemoryNote } from "@/lib/coach-memory";
 
 function isoDaysAgo(days: number) {
   return shiftISODate(todayISO(), -days);
@@ -37,6 +39,7 @@ export async function getCoachSnapshot({
   const fromTime = startOfAppDay(fromDay);
 
   const [setting] = await db.select().from(settings).where(eq(settings.userId, userId));
+  const [memoryRow] = await db.select({ notes: coachMemory.notes }).from(coachMemory).where(eq(coachMemory.userId, userId));
   const [weights, expenditures, foods, sessionRows, setRows, schedule, routineTargets, planStates, checkins, garminHealth, cardioRows] =
     await Promise.all([
       db.select({ day: bodyweightLogs.day, weightKg: bodyweightLogs.weightKg })
@@ -210,6 +213,7 @@ export async function getCoachSnapshot({
       latestRecoveryCheckin: checkins[0] ?? null,
     },
     commonFoods,
+    coachMemory: memoryRow?.notes ?? [],
     nutritionPhase: buildNutritionPhase({
       goal: setting?.goal ?? "recomposition",
       startedOn: setting?.goalStartedOn ?? null,
@@ -226,4 +230,17 @@ export async function getCoachSnapshot({
       cardioSessions: cardioRows.length,
     },
   };
+}
+
+export type CoachSnapshot = Awaited<ReturnType<typeof getCoachSnapshot>>;
+
+/** Appends a coach-authored memory note for one user, capped and trimmed. No-op for an empty/whitespace note. */
+export async function saveCoachMemoryNote(userId: number, note: string | null | undefined) {
+  if (!note || !note.trim()) return;
+  const [existing] = await db.select({ notes: coachMemory.notes }).from(coachMemory).where(eq(coachMemory.userId, userId));
+  const next = appendMemoryNote(existing?.notes ?? [], note);
+  await db
+    .insert(coachMemory)
+    .values({ userId, notes: next })
+    .onConflictDoUpdate({ target: coachMemory.userId, set: { notes: next, updatedAt: new Date() } });
 }

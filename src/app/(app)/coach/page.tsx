@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Brain, Send, Sparkles, Utensils, Trash2 } from "lucide-react";
-import { api, apiGet, apiPatch, apiPost } from "@/lib/api";
+import { Brain, Send, Sparkles, Utensils, Trash2, X } from "lucide-react";
+import { api, apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import type { CoachChatPayload, CoachMealPayload } from "@/lib/coach";
 import CoachInsightCard, { CoachInsightRow } from "@/components/CoachInsightCard";
 import PageHeader from "@/components/PageHeader";
@@ -19,17 +19,29 @@ export default function CoachPage() {
   const [chatting, setChatting] = useState(false);
   const [mealLoading, setMealLoading] = useState(false);
   const [mealIdeas, setMealIdeas] = useState<CoachMealPayload | null>(null);
+  const [memoryNotes, setMemoryNotes] = useState<string[]>([]);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   async function load() {
-    const [coach, chat] = await Promise.all([
+    const [coach, chat, memory] = await Promise.all([
       apiGet<{ configured: boolean; insights: CoachInsightRow[] }>("/api/coach/insights"),
       apiGet<{ configured: boolean; messages: Message[] }>("/api/coach/chat"),
+      apiGet<{ notes: string[] }>("/api/coach/memory").catch(() => ({ notes: [] })),
     ]);
     setConfigured(coach.configured); setInsights(coach.insights); setMessages(chat.messages);
+    setMemoryNotes(memory.notes);
   }
   useEffect(() => { load().catch(() => setConfigured(false)); }, []);
+
+  async function forgetNote(index: number) {
+    const result = await apiDelete<{ notes: string[] }>(`/api/coach/memory?index=${index}`);
+    setMemoryNotes(result.notes);
+  }
+  async function forgetEverything() {
+    const result = await apiDelete<{ notes: string[] }>("/api/coach/memory");
+    setMemoryNotes(result.notes);
+  }
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   async function generateWeekly() {
@@ -81,6 +93,33 @@ export default function CoachPage() {
       </div>
 
       <section className="mb-6">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="section-title mb-0 min-w-0">What Coach remembers</h2>
+          {memoryNotes.length > 0 && (
+            <button onClick={forgetEverything} className="flex shrink-0 items-center gap-1 text-xs text-muted">
+              <Trash2 size={13} /> Forget everything
+            </button>
+          )}
+        </div>
+        {memoryNotes.length === 0 ? (
+          <div className="card p-4 text-center">
+            <p className="text-sm text-muted">Nothing durable yet. As you chat and review insights, Coach may keep a short note about a pattern worth remembering — you can review or clear it here any time.</p>
+          </div>
+        ) : (
+          <div className="card flex flex-col gap-2 p-3">
+            {memoryNotes.map((note, index) => (
+              <div key={`${index}-${note.slice(0, 24)}`} className="flex items-start gap-2 border-l border-border bg-surface-2 p-2.5">
+                <p className="min-w-0 flex-1 break-words text-sm">{note}</p>
+                <button onClick={() => forgetNote(index)} className="shrink-0 p-0.5 text-muted" aria-label="Forget this">
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mb-6">
         <div className="mb-2 flex items-center justify-between gap-2"><h2 className="section-title mb-0 min-w-0">Weekly review</h2><button onClick={generateWeekly} disabled={generating} className="flex shrink-0 items-center gap-1 font-display tracking-[0.06em] text-accent"><Sparkles size={15} /> {generating ? "Reviewing…" : "Generate"}</button></div>
         {weekly[0] ? <CoachInsightCard row={weekly[0]} onDismiss={async (id) => { await apiPatch("/api/coach/insights", { id }); setInsights((rows) => rows.filter((x) => x.id !== id)); }} /> : <div className="card p-5 text-center"><p className="text-sm text-muted">Generate a review after you have logged several days of training, food, weight and Garmin totals.</p></div>}
       </section>
@@ -118,7 +157,7 @@ function ChatBubble({ message, onFollowUp }: { message: Message; onFollowUp: (va
   if (message.role === "user") return <div className="max-w-[86%] self-end break-words rounded-2xl rounded-br-md bg-accent px-3 py-2 text-sm text-bg">{message.content}</div>;
   let payload: CoachChatPayload;
   try { payload = JSON.parse(message.content) as CoachChatPayload; }
-  catch { payload = { answer: message.content, followUpQuestions: [], caution: null }; }
+  catch { payload = { answer: message.content, followUpQuestions: [], caution: null, memoryNote: null }; }
   return <div className="max-w-[92%] self-start break-words rounded-2xl rounded-bl-md bg-surface-2 px-3 py-3 text-sm">
     <p className="whitespace-pre-wrap break-words">{payload.answer}</p>
     {payload.caution && <p className="text-xs text-warn mt-2">{payload.caution}</p>}

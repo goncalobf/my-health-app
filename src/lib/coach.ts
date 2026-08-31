@@ -12,12 +12,14 @@ export interface CoachInsightPayload {
   headline: string;
   insights: CoachInsightItem[];
   caution: string | null;
+  memoryNote: string | null;
 }
 
 export interface CoachChatPayload {
   answer: string;
   followUpQuestions: string[];
   caution: string | null;
+  memoryNote: string | null;
 }
 
 export interface CoachMealPayload {
@@ -62,7 +64,7 @@ export type CoachCaloriePayload = Omit<
 export const insightSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["headline", "insights", "caution"],
+  required: ["headline", "insights", "caution", "memoryNote"],
   properties: {
     headline: { type: "string" },
     insights: {
@@ -85,17 +87,19 @@ export const insightSchema = {
       },
     },
     caution: { type: ["string", "null"] },
+    memoryNote: { type: ["string", "null"] },
   },
 } as const;
 
 export const chatSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["answer", "followUpQuestions", "caution"],
+  required: ["answer", "followUpQuestions", "caution", "memoryNote"],
   properties: {
     answer: { type: "string" },
     followUpQuestions: { type: "array", items: { type: "string" }, maxItems: 3 },
     caution: { type: ["string", "null"] },
+    memoryNote: { type: ["string", "null"] },
   },
 } as const;
 

@@ -5,6 +5,7 @@ import {
   CoachTargetPayload,
 } from "@/lib/coach";
 import { getCoachSnapshot } from "@/lib/coach-data";
+import { formatCoachSnapshotAsMarkdown } from "@/lib/coach-snapshot-markdown";
 import { calculateMacroTargets } from "@/lib/macro-targets";
 import { isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
 import { requireAppUser } from "@/lib/app-user";
@@ -40,7 +41,7 @@ Use their current weight, goal weight, height, age, biological sex, target weekl
 Prefer observed Garmin and weight-trend evidence over a generic activity multiplier. When evidence is missing, clearly lower dataQuality and explain the uncertainty.
 For body recomposition, prioritize a modest sustainable deficit. Do not recommend crash dieting or compensatory restriction.
 Do not calculate or discuss the macro split; Fitlog calculates protein, fat, and carbohydrate deterministically after you establish calories. Return a whole-number daily calorie target and concise rationale bullets.`,
-      data: snapshot,
+      data: formatCoachSnapshotAsMarkdown(snapshot),
       maxOutputTokens: 2400,
     });
 

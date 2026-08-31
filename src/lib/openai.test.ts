@@ -11,7 +11,7 @@ const args = {
     additionalProperties: false,
   },
   task: "Return the test response.",
-  data: { value: 1 },
+  data: "## Data\n| value |\n| --- |\n| 1 |",
   maxOutputTokens: 1400,
 };
 

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { coachInsights } from "@/db/schema";
-import { getCoachSnapshot } from "@/lib/coach-data";
+import { getCoachSnapshot, saveCoachMemoryNote } from "@/lib/coach-data";
+import { formatCoachSnapshotAsMarkdown } from "@/lib/coach-snapshot-markdown";
 import { CoachInsightPayload, insightSchema } from "@/lib/coach";
 import { COACH_MODEL, isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
 import { todayISO } from "@/lib/utils";
@@ -51,11 +52,12 @@ export async function POST(req: Request) {
   };
   try {
     const payload = await structuredCoachResponse<CoachInsightPayload>({
-      name: "fitlog_coach_insights", schema: insightSchema, task: tasks[kind], data: snapshot,
+      name: "fitlog_coach_insights", schema: insightSchema, task: tasks[kind], data: formatCoachSnapshotAsMarkdown(snapshot),
     });
     const [row] = await db.insert(coachInsights).values({
       userId: user.id, kind, sourceKey, payloadJson: JSON.stringify(payload), model: COACH_MODEL,
     }).returning();
+    await saveCoachMemoryNote(user.id, payload.memoryNote);
     return NextResponse.json(publicRow(row), { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Coach request failed." }, { status: 502 });

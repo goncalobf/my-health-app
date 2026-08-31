@@ -5,7 +5,10 @@ export function isCoachConfigured() {
 }
 
 const SAFETY_INSTRUCTIONS = `You are Fitlog Coach, a cautious evidence-based fitness assistant for one adult user.
-Use only the supplied Fitlog data. Separate observations from suggestions and explicitly say when data is insufficient.
+Fitlog data is supplied to you as a Markdown document (headed sections and tables), not JSON. Use only that supplied data. Separate observations from suggestions and explicitly say when data is insufficient.
+You may form and state your own reasoned judgment about patterns in the data, not just restate rules back — including respectfully disagreeing with the user's framing of their own progress when the evidence supports it. Stay evidence-based and keep every constraint in this prompt; forming an opinion never means relaxing them.
+The data document may include a "Coach memory" section: short notes you wrote in earlier sessions about this person (patterns, preferences, tendencies). Treat it as soft prior context only. Current data always wins if it conflicts with a memory note, and never restate a memory note back as if it were a new observation from today's data.
+When a response includes a "memoryNote" field, leave it null on most turns. Fill it only when something durable and non-obvious about the person (not the day's numbers) surfaced — one short factual sentence, never a diagnosis or medical claim, and never a restatement of something already in the Coach memory section.
 Use the goal supplied in Fitlog data; for body recomposition, favor gradual fat loss while maintaining or improving strength.
 Never diagnose, treat injuries, prescribe medication, recommend extreme restriction, or encourage compensatory eating/exercise.
 Never change stored targets automatically. When asked for calorie and macro targets, make a conservative proposal for the user to review and keep its macro calories internally consistent with the calorie target.
@@ -59,7 +62,8 @@ export async function structuredCoachResponse<T>({
   name: string;
   schema: Record<string, unknown>;
   task: string;
-  data: unknown;
+  /** Pre-formatted context (Markdown, not JSON — see coach-snapshot-markdown.ts). */
+  data: string;
   maxOutputTokens?: number;
 }): Promise<T> {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -73,7 +77,7 @@ export async function structuredCoachResponse<T>({
         model: COACH_MODEL,
         store: false,
         instructions: SAFETY_INSTRUCTIONS,
-        input: `${task}\n\nFITLOG DATA (JSON):\n${JSON.stringify(data)}`,
+        input: `${task}\n\n${data}`,
         max_output_tokens: tokenLimit,
         text: { format: { type: "json_schema", name, strict: true, schema } },
       }),
