@@ -73,7 +73,7 @@ export default function CoachPage() {
         <Brain size={34} className="text-accent mx-auto" /><h2 className="text-xl font-bold mt-3">Ready to connect</h2>
         <p className="text-sm text-muted mt-2">Add <code className="text-text">OPENAI_API_KEY</code> to the Vercel project environment, then redeploy. The key stays on the server.</p>
         <div className="bg-surface-2 rounded-xl p-3 text-left text-xs text-muted mt-4">
-          Fitlog sends aggregated workout, nutrition, weight and Garmin data. Progress photos and private measurement notes are excluded. Requests use <code className="text-text">store: false</code>; standard API abuse-monitoring retention may still apply for up to 30 days. AI never changes your plan automatically.
+          Fitlog sends aggregated workout, nutrition, weight and Garmin data. Progress photos and private measurement notes are excluded. Requests use <code className="text-text">store: false</code>; standard API abuse-monitoring retention may still apply for up to 30 days. Coach also keeps a short, reviewable memory of durable patterns it notices about you across sessions. AI never changes your plan automatically.
         </div>
       </div>
     </div>

@@ -52,4 +52,5 @@ Use targeted tests while iterating. Before handoff, run `npm test` and `npm run 
 - Authentication and account lifecycle: `docs/authentication.md`
 - Food providers and normalization: `docs/food-data.md`
 - Garmin connection and worker boundary: `docs/garmin.md`
+- AI Coach data feed and memory: `docs/coach.md`
 - Repeated workflows: `/implement-fitlog-feature`, `/migrate-fitlog-database`, `/audit-fitlog`, and user-invoked `/release-fitlog`

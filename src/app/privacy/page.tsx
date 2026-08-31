@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalPage eyebrow="Your data" title="Privacy policy" updated="30 August 2026">
+    <LegalPage eyebrow="Your data" title="Privacy policy" updated="31 August 2026">
       <p>
         Fitlog is a personal fitness-tracking service. This policy explains what information Fitlog handles, why it is used, which providers help operate the service, and the choices available to you. Fitness and body information can be sensitive, so each account&apos;s records are separated from every other user&apos;s records.
       </p>
@@ -21,7 +21,7 @@ export default function PrivacyPage() {
         <li>workouts, exercise performance, routines, fatigue check-ins and training schedules;</li>
         <li>foods, quantities, calorie and macro intake, meal templates and manually entered Garmin energy expenditure;</li>
         <li>measurements, progress photos, notes, goals and goal-phase dates; and</li>
-        <li>questions sent to the AI coach and the coach responses shown or saved in Fitlog.</li>
+        <li>questions sent to the AI coach, the coach responses shown or saved in Fitlog, and a small set of coach-authored notes about durable patterns it observes over time (reviewable and deletable from the Coach page).</li>
       </ul>
 
       <h2>Information collected automatically</h2>
@@ -36,7 +36,7 @@ export default function PrivacyPage() {
 
       <h2>AI coach</h2>
       <p>
-        When you use coach features, Fitlog may send aggregated workout, nutrition, weight and manually entered Garmin data to OpenAI to produce an explanation or suggestion. Progress photos and private measurement notes are excluded. Model requests are made with storage disabled, although the provider&apos;s limited abuse-monitoring retention may still apply. AI output is guidance only and never changes your plan automatically.
+        When you use coach features, Fitlog may send aggregated workout, nutrition, weight and manually entered Garmin data to OpenAI to produce an explanation or suggestion. Progress photos and private measurement notes are excluded. Model requests are made with storage disabled, although the provider&apos;s limited abuse-monitoring retention may still apply. Fitlog also keeps a short, coach-authored memory of durable patterns or preferences it notices about you across sessions &mdash; not raw conversation content &mdash; to make future guidance more relevant; you can review and delete this memory at any time from the Coach page. AI output is guidance only and never changes your plan automatically.
       </p>
 
       <h2>Service providers and data sources</h2>
