@@ -40,6 +40,8 @@ Use **Progress** to record bodyweight, measurements, photos, workout volume, and
 
 The Coach can explain trends, review your week, suggest meals, and propose calorie adjustments. Calculations such as macros and progressive overload remain deterministic, and no recommendation changes your plan without your approval.
 
+The Coach also keeps a short memory of durable patterns it notices about you across sessions — not raw conversation content. You can review and delete any of it from the Coach page at any time.
+
 ## Your privacy
 
 Your account data is private and separated from other users. Progress photos and private measurement notes are not sent to the AI Coach.

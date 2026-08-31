@@ -25,6 +25,7 @@ paths:
 - Onboarding uses Mifflin-St Jeor plus the documented activity/goal adjustment and safety floor; adaptive changes need adequate recent data and conservative bounds.
 - Phase advice uses the stored start date and observed trend. Do not invent universal cut limits or make maintenance breaks mandatory.
 - A coach/adaptive proposal is never applied without explicit user confirmation. Medical language stays cautious and escalates serious symptoms.
-- `getCoachSnapshot()` remains user-scoped and excludes progress photos and private measurement notes.
-- OpenAI requests use strict structured output, `store: false`, bounded tokens/time, and diagnostics without health or model content.
+- `getCoachSnapshot()` remains user-scoped and excludes progress photos and private measurement notes; it also includes `coachMemory`, a capped/trimmed list of coach-authored notes that the user can review and delete from the Coach page.
+- Coach memory is soft context, never a source of truth: it must never let the model bypass macro/progression math or the explicit-confirmation gate on applying a target. Cap and trim it server-side (`coach-memory.ts`) regardless of what the model returns.
+- OpenAI requests use strict structured output, `store: false`, bounded tokens/time, and diagnostics without health or model content. Data sent to the model is Markdown (`coach-snapshot-markdown.ts`), not JSON — extend that formatter, not ad hoc `JSON.stringify`, when the snapshot shape changes.
 - Add boundary-focused tests when changing formulas, rounding, dates, RIR, duplicated weigh-ins, prefill, or phase transitions.
