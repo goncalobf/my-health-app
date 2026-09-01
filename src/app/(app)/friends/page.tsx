@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, ChevronRight, UserPlus, Users, X } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
@@ -14,29 +14,49 @@ export default function FriendsPage() {
   const [data, setData] = useState<FriendsResponse | null>(null);
   const [username, setUsername] = useState("");
   const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+  const latestQueryRef = useRef("");
+  const justPickedRef = useRef(false);
 
   async function load() {
     setData(await apiGet<FriendsResponse>("/api/friends"));
   }
   useEffect(() => { load(); }, []);
 
+  // Debounced search. A ref (not effect-scoped state) tracks the latest query
+  // so a slow, stale response can't clobber a newer one that already landed.
   useEffect(() => {
     const query = username.trim().toLowerCase();
+    latestQueryRef.current = query;
+    if (justPickedRef.current) { justPickedRef.current = false; return; }
     if (query.length < 2) { setSuggestions([]); return; }
     const timer = setTimeout(() => {
       apiGet<UserSuggestion[]>(`/api/friends/search?q=${encodeURIComponent(query)}`)
-        .then(setSuggestions)
-        .catch(() => setSuggestions([]));
+        .then((results) => {
+          if (latestQueryRef.current === query) setSuggestions(results);
+        })
+        .catch(() => {});
     }, 250);
     return () => clearTimeout(timer);
   }, [username]);
 
-  async function sendRequest(e?: FormEvent, targetUsername?: string) {
+  // Close the dropdown on an outside click/tap, not on blur — blur fires
+  // before a suggestion's click event, which was fighting the dropdown.
+  useEffect(() => {
+    function handlePointerDown(e: PointerEvent) {
+      if (formRef.current && !formRef.current.contains(e.target as Node)) {
+        setSuggestions([]);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  async function sendRequest(e?: FormEvent) {
     e?.preventDefault();
-    const value = (targetUsername ?? username).trim().toLowerCase();
+    const value = username.trim().toLowerCase();
     if (!value) return;
     setSending(true);
     setError("");
@@ -44,13 +64,18 @@ export default function FriendsPage() {
       await apiPost("/api/friends", { username: value });
       setUsername("");
       setSuggestions([]);
-      setShowSuggestions(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send request.");
     } finally {
       setSending(false);
     }
+  }
+
+  function pickSuggestion(s: UserSuggestion) {
+    justPickedRef.current = true;
+    setUsername(s.username ?? "");
+    setSuggestions([]);
   }
 
   async function respond(friendshipId: number, action: "accept" | "decline") {
@@ -71,12 +96,10 @@ export default function FriendsPage() {
 
       <div className="card p-4">
         <div className="mb-3 flex items-center gap-2"><UserPlus size={18} className="text-accent" /><p className="font-semibold">Add a friend</p></div>
-        <form onSubmit={sendRequest} className="relative flex gap-2">
+        <form ref={formRef} onSubmit={sendRequest} className="relative flex gap-2">
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            onFocus={() => setShowSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
             placeholder="username"
             className="input min-w-0 flex-1"
             autoCapitalize="none"
@@ -84,14 +107,13 @@ export default function FriendsPage() {
           />
           <button className="btn-primary shrink-0 px-4" disabled={sending || !username.trim()}>Request</button>
 
-          {showSuggestions && suggestions.length > 0 && (
+          {suggestions.length > 0 && (
             <div className="absolute left-0 right-[4.5rem] top-full z-10 mt-1 flex flex-col overflow-hidden border border-border bg-surface-2 [border-radius:2px_9px_2px_2px]">
               {suggestions.map((s) => (
                 <button
                   key={s.id}
                   type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => sendRequest(undefined, s.username ?? "")}
+                  onClick={() => pickSuggestion(s)}
                   className="flex items-center gap-2 px-3 py-2.5 text-left text-sm active:bg-surface"
                 >
                   <span className="min-w-0 flex-1 truncate">{s.name || s.username}</span>
