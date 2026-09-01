@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { appUsers } from "@/db/schema";
 import { requireAppUser } from "@/lib/app-user";
+import { isValidUsername } from "@/lib/username";
 
 export async function GET() {
   const user = await requireAppUser();
@@ -10,9 +11,35 @@ export async function GET() {
     id: user.id,
     email: user.email,
     name: user.name,
+    username: user.username,
     role: user.role,
     status: user.status,
   });
+}
+
+export async function PATCH(req: Request) {
+  const user = await requireAppUser();
+  const body = await req.json().catch(() => ({}));
+  const username = String(body.username ?? "").trim().toLowerCase();
+  if (!isValidUsername(username)) {
+    return NextResponse.json(
+      { error: "Usernames are 3-30 characters: lowercase letters, numbers, underscore." },
+      { status: 400 }
+    );
+  }
+  const [taken] = await db
+    .select({ id: appUsers.id })
+    .from(appUsers)
+    .where(and(eq(appUsers.username, username), ne(appUsers.id, user.id)));
+  if (taken) {
+    return NextResponse.json({ error: "That username is already taken." }, { status: 409 });
+  }
+  const [row] = await db
+    .update(appUsers)
+    .set({ username })
+    .where(eq(appUsers.id, user.id))
+    .returning();
+  return NextResponse.json({ id: row.id, username: row.username });
 }
 
 // Deletes this app_users row; every personal table cascades from it (see

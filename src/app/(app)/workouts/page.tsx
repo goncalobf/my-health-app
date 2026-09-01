@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Play, Dumbbell, History, ListChecks, Zap, TrendingUp, Footprints } from "lucide-react";
+import { Plus, Play, Dumbbell, History, ListChecks, Zap, TrendingUp, Footprints, CalendarPlus } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import ActivityTypePicker from "@/components/ActivityTypePicker";
+import LogPastActivityModal from "@/components/LogPastActivityModal";
 
 interface RoutineRow {
   id: number;
@@ -27,6 +28,7 @@ export default function WorkoutsPage() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [showCardio, setShowCardio] = useState(false);
+  const [showLogPast, setShowLogPast] = useState(false);
 
   async function load() {
     const [r, s] = await Promise.all([
@@ -107,12 +109,19 @@ export default function WorkoutsPage() {
         >
           <Footprints size={18} /> Cardio
         </button>
-        <Link href="/workouts/exercises" className="btn-ghost col-span-2 min-w-0 px-2 min-[360px]:px-4">
+        <button
+          onClick={() => setShowLogPast(true)}
+          className="btn-ghost min-w-0 px-2 min-[360px]:px-4"
+        >
+          <CalendarPlus size={18} /> Log past activity
+        </button>
+        <Link href="/workouts/exercises" className="btn-ghost min-w-0 px-2 min-[360px]:px-4">
           <ListChecks size={18} /> Exercises
         </Link>
       </div>
 
       {showCardio && <ActivityTypePicker onClose={() => setShowCardio(false)} />}
+      {showLogPast && <LogPastActivityModal onClose={() => setShowLogPast(false)} />}
 
       <Link href="/workouts/plan" className="card mb-6 flex items-center gap-3 p-4 active:scale-[0.98] transition">
         <div className="icon-frame"><TrendingUp size={20} /></div>
