@@ -1,17 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, Copy, ShieldCheck, Users } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
-import { apiGet, apiPatch } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
 
 interface Account { email: string; name: string | null; role: string; status: string; }
 interface Member extends Account { id: number; joinedAt: string | null; }
 
+const DELETE_CONFIRMATION = "DELETE";
+
 export default function FriendsPage() {
+  const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [copied, setCopied] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   async function load() {
     const current = await apiGet<Account>("/api/account");
@@ -30,6 +39,23 @@ export default function FriendsPage() {
     await navigator.clipboard.writeText(`${window.location.origin}/auth/sign-up`);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function deleteAccount() {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await apiDelete("/api/account");
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Could not delete account.");
+      setDeleting(false);
+      return;
+    }
+    // The account is already gone server-side at this point, so a sign-out
+    // hiccup is best-effort cleanup, not a reason to report "delete failed".
+    await authClient.signOut().catch(() => {});
+    router.replace("/auth/sign-in");
+    router.refresh();
   }
 
   if (!account) return <p className="text-sm text-muted">Loading account…</p>;
@@ -68,6 +94,52 @@ export default function FriendsPage() {
       ) : (
         <p className="card mt-5 p-4 text-sm text-muted">Your account and all associated health data are private. Other Fitlog users cannot see your records.</p>
       )}
+
+      <h2 className="mb-2 mt-6 text-sm font-semibold text-danger">Danger zone</h2>
+      <div className="card border-danger/30 p-4">
+        {!confirmingDelete ? (
+          <>
+            <p className="text-sm text-muted">Permanently delete your account and every workout, nutrition log, measurement, photo, and coach conversation tied to it. This cannot be undone.</p>
+            <button type="button" onClick={() => setConfirmingDelete(true)} className="btn-danger mt-3">Delete account</button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted">
+              {account.role === "owner"
+                ? "You're the app owner: deleting your account also removes the only account able to manage other members. This cannot be undone."
+                : "This permanently deletes your account and every record tied to it. This cannot be undone."}
+            </p>
+            <p className="mt-3 text-xs text-muted">Type <strong className="text-text">{DELETE_CONFIRMATION}</strong> to confirm.</p>
+            <input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="input mt-2"
+              placeholder={DELETE_CONFIRMATION}
+              autoCapitalize="characters"
+              aria-label={`Type ${DELETE_CONFIRMATION} to confirm account deletion`}
+            />
+            {deleteError && <p className="mt-2 text-xs text-danger">{deleteError}</p>}
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setConfirmingDelete(false); setDeleteConfirmText(""); setDeleteError(""); }}
+                className="btn-ghost flex-1"
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={deleteAccount}
+                disabled={deleteConfirmText !== DELETE_CONFIRMATION || deleting}
+                className="btn-danger flex-1"
+              >
+                {deleting ? "Deleting…" : "Permanently delete"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

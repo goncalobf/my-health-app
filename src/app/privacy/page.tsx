@@ -46,7 +46,7 @@ export default function PrivacyPage() {
 
       <h2>Retention and your choices</h2>
       <p>
-        Account and fitness records are kept while your account is active and for as long as reasonably necessary to operate, secure and comply with legal obligations for the service. You may stop adding information at any time. You may request access, correction, export or deletion of your account and personal records. Some information may be retained when required for security, fraud prevention or legal compliance.
+        Account and fitness records are kept while your account is active and for as long as reasonably necessary to operate, secure and comply with legal obligations for the service. You may stop adding information at any time. You may permanently delete your account and its records yourself at any time from Settings &rarr; Account &amp; access, or request access, correction or export by contacting us. Some information may be retained when required for security, fraud prevention or legal compliance.
       </p>
 
       <h2>Security and account separation</h2>

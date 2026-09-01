@@ -59,6 +59,28 @@ has no Neon user ID, the matching authenticated email is redirected to
 `/api/claim-owner`. The password is legacy migration proof, not a sign-in
 method.
 
+## Self-service account deletion
+
+`DELETE /api/account` (Settings → Account & access, behind a typed
+confirmation) deletes the caller's `app_users` row. Every personal table has
+a cascading foreign key to `app_users.id` (directly, or transitively through
+a table that does), so this one delete removes all of that account's
+workouts, nutrition, measurements, photos, coach history and memory — see
+`src/db/schema.ts` for the cascade graph before adding a new personal table.
+
+This does **not** delete the underlying Neon Auth identity or session — Neon
+Auth is a separate system and deleting a user there is not something this
+app currently controls. The client signs the user out immediately after the
+delete succeeds specifically because of this: `getAppUser()` auto-provisions
+a fresh `app_users` row for any authenticated identity with no matching row,
+so a lingering session would otherwise silently hand the same person a new,
+empty account. If the same person signs back in later, that is expected and
+correct — a brand new account, none of the deleted data recoverable.
+
+The owner role has no special server-side protection against self-deletion;
+the UI shows an extra warning instead, since deleting the owner account
+removes the only account able to use `/api/accounts` to manage members.
+
 ## Public and protected routes
 
 `src/proxy.ts` runs Neon Auth protection for application and API routes.
