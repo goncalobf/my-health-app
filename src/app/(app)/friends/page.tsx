@@ -8,10 +8,13 @@ import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 
 interface FriendSummary { id: number; username: string | null; name: string | null; friendshipId: number; }
 interface FriendsResponse { friends: FriendSummary[]; incoming: FriendSummary[]; outgoing: FriendSummary[]; }
+interface UserSuggestion { id: number; username: string | null; name: string | null; }
 
 export default function FriendsPage() {
   const [data, setData] = useState<FriendsResponse | null>(null);
   const [username, setUsername] = useState("");
+  const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
@@ -20,15 +23,28 @@ export default function FriendsPage() {
   }
   useEffect(() => { load(); }, []);
 
-  async function sendRequest(e: FormEvent) {
-    e.preventDefault();
-    const value = username.trim().toLowerCase();
+  useEffect(() => {
+    const query = username.trim().toLowerCase();
+    if (query.length < 2) { setSuggestions([]); return; }
+    const timer = setTimeout(() => {
+      apiGet<UserSuggestion[]>(`/api/friends/search?q=${encodeURIComponent(query)}`)
+        .then(setSuggestions)
+        .catch(() => setSuggestions([]));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  async function sendRequest(e?: FormEvent, targetUsername?: string) {
+    e?.preventDefault();
+    const value = (targetUsername ?? username).trim().toLowerCase();
     if (!value) return;
     setSending(true);
     setError("");
     try {
       await apiPost("/api/friends", { username: value });
       setUsername("");
+      setSuggestions([]);
+      setShowSuggestions(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send request.");
@@ -51,20 +67,39 @@ export default function FriendsPage() {
 
   return (
     <div>
-      <PageHeader title="Friends" back="/settings" />
+      <PageHeader title="Friends" back="/" />
 
       <div className="card p-4">
         <div className="mb-3 flex items-center gap-2"><UserPlus size={18} className="text-accent" /><p className="font-semibold">Add a friend</p></div>
-        <form onSubmit={sendRequest} className="flex gap-2">
+        <form onSubmit={sendRequest} className="relative flex gap-2">
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
             placeholder="username"
             className="input min-w-0 flex-1"
             autoCapitalize="none"
             autoCorrect="off"
           />
           <button className="btn-primary shrink-0 px-4" disabled={sending || !username.trim()}>Request</button>
+
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute left-0 right-[4.5rem] top-full z-10 mt-1 flex flex-col overflow-hidden border border-border bg-surface-2 [border-radius:2px_9px_2px_2px]">
+              {suggestions.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => sendRequest(undefined, s.username ?? "")}
+                  className="flex items-center gap-2 px-3 py-2.5 text-left text-sm active:bg-surface"
+                >
+                  <span className="min-w-0 flex-1 truncate">{s.name || s.username}</span>
+                  <span className="shrink-0 text-xs text-muted">@{s.username}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </form>
         {error && <p className="mt-2 text-xs text-danger">{error}</p>}
       </div>
