@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq, ilike, gte, isNotNull, sql } from "drizzle-orm";
-import { Dumbbell, Apple, Settings, ChevronRight, Scale } from "lucide-react";
+import { Dumbbell, Apple, Settings, ChevronRight, Scale, Users } from "lucide-react";
 import { db } from "@/db";
 import { nutritionLogs, sessions, bodyweightLogs, workoutSchedule, routines, expenditureLogs } from "@/db/schema";
 import { getTargets } from "@/lib/server-data";
@@ -149,13 +149,22 @@ export default async function DashboardPage() {
           <h1 className="truncate font-display text-4xl leading-none tracking-[0.035em] min-[360px]:text-5xl">{greeting}</h1>
           <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-muted">{formatDate(today)}</p>
         </div>
-        <Link
-          href="/settings"
-          className="flex h-11 w-11 shrink-0 items-center justify-center border border-border bg-surface-2 text-muted [border-radius:2px_11px_2px_2px]"
-          aria-label="Settings"
-        >
-          <Settings size={20} />
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href="/friends"
+            className="flex h-11 w-11 shrink-0 items-center justify-center border border-border bg-surface-2 text-muted [border-radius:2px_11px_2px_2px]"
+            aria-label="Friends"
+          >
+            <Users size={20} />
+          </Link>
+          <Link
+            href="/settings"
+            className="flex h-11 w-11 shrink-0 items-center justify-center border border-border bg-surface-2 text-muted [border-radius:2px_11px_2px_2px]"
+            aria-label="Settings"
+          >
+            <Settings size={20} />
+          </Link>
+        </div>
       </header>
 
       <MotivationCard
