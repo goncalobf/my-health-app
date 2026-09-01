@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server";
-import { and, eq, ilike, notInArray, or } from "drizzle-orm";
+import { and, eq, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { appUsers, friendships } from "@/db/schema";
 import { requireAppUser } from "@/lib/app-user";
 
-/** Prefix-only suggestions while typing a username to add — not a browsable
- *  directory: requires auth, a 2+ character prefix, and excludes people
- *  already friends or with a pending request either way. */
+/** Escapes literal LIKE/ILIKE wildcards so a query containing "%" or "_"
+ *  matches those characters literally instead of acting as a wildcard. */
+function escapeLikePattern(value: string) {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+/** Suggestions while typing a friend's username or name — not a browsable
+ *  directory: requires auth, a 2+ character query, matches anywhere in
+ *  either field (not just a prefix, so searching a last name still finds
+ *  them), and excludes people already friends or with a pending request
+ *  either way. */
 export async function GET(req: Request) {
   const user = await requireAppUser();
   const raw = new URL(req.url).searchParams.get("q") ?? "";
-  const q = raw.trim().toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 30);
+  const q = raw.trim().slice(0, 30);
   if (q.length < 2) return NextResponse.json([]);
+  const pattern = `%${escapeLikePattern(q)}%`;
 
   const related = await db
     .select({ requesterId: friendships.requesterId, recipientId: friendships.recipientId })
@@ -32,7 +41,7 @@ export async function GET(req: Request) {
     .from(appUsers)
     .where(
       and(
-        ilike(appUsers.username, `${q}%`),
+        sql`(${appUsers.username} ILIKE ${pattern} OR ${appUsers.name} ILIKE ${pattern})`,
         notInArray(appUsers.id, excludeIds),
         eq(appUsers.status, "active")
       )
