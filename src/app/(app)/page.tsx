@@ -2,7 +2,7 @@ import Link from "next/link";
 import { and, desc, eq, ilike, gte, isNotNull, sql } from "drizzle-orm";
 import { Dumbbell, Apple, Settings, ChevronRight, Scale, Users } from "lucide-react";
 import { db } from "@/db";
-import { nutritionLogs, sessions, bodyweightLogs, workoutSchedule, routines, expenditureLogs } from "@/db/schema";
+import { nutritionLogs, sessions, bodyweightLogs, workoutSchedule, routines, expenditureLogs, friendships } from "@/db/schema";
 import { getTargets } from "@/lib/server-data";
 import {
   dayOfWeekISO,
@@ -40,6 +40,7 @@ export default async function DashboardPage() {
     trainingRows,
     nutritionDayRows,
     motivation,
+    pendingFriendRequests,
   ] = await Promise.all([
     getTargets(user.id),
     db
@@ -92,7 +93,12 @@ export default async function DashboardPage() {
         )
       ),
     getMotivationInput(user.id),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(friendships)
+      .where(and(eq(friendships.recipientId, user.id), eq(friendships.status, "pending"))),
   ]);
+  const hasPendingFriendRequests = (pendingFriendRequests[0]?.count ?? 0) > 0;
   const lastSession = lastSessions[0];
   const latestWeight = latestWeights[0];
   let scheduled = scheduledRoutines[0];
@@ -152,10 +158,13 @@ export default async function DashboardPage() {
         <div className="flex shrink-0 items-center gap-2">
           <Link
             href="/friends"
-            className="flex h-11 w-11 shrink-0 items-center justify-center border border-border bg-surface-2 text-muted [border-radius:2px_11px_2px_2px]"
-            aria-label="Friends"
+            className="relative flex h-11 w-11 shrink-0 items-center justify-center border border-border bg-surface-2 text-muted [border-radius:2px_11px_2px_2px]"
+            aria-label={hasPendingFriendRequests ? "Friends (pending request)" : "Friends"}
           >
             <Users size={20} />
+            {hasPendingFriendRequests && (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger" aria-hidden="true" />
+            )}
           </Link>
           <Link
             href="/settings"
