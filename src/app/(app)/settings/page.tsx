@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, Check, Sparkles, Users, ChevronRight } from "lucide-react";
+import { LogOut, Check, Sparkles, Users, UserPlus, ChevronRight } from "lucide-react";
 import { apiGet, apiPatch, api, apiPost } from "@/lib/api";
 import type { CoachTargetPayload } from "@/lib/coach";
 import PageHeader from "@/components/PageHeader";
@@ -124,9 +124,15 @@ export default function SettingsPage() {
     <div>
       <PageHeader title="Settings" back="/" />
 
-      <Link href="/settings/friends" className="card mb-6 flex items-center gap-3 p-4 active:scale-[0.99] transition">
+      <Link href="/settings/access" className="card mb-6 flex items-center gap-3 p-4 active:scale-[0.99] transition">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"><Users size={20} /></div>
         <div className="min-w-0 flex-1"><p className="font-semibold">Account & access</p><p className="text-xs text-muted">Your account, privacy and other users</p></div>
+        <ChevronRight size={19} className="shrink-0 text-muted" />
+      </Link>
+
+      <Link href="/friends" className="card mb-6 flex items-center gap-3 p-4 active:scale-[0.99] transition">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"><UserPlus size={20} /></div>
+        <div className="min-w-0 flex-1"><p className="font-semibold">Friends</p><p className="text-xs text-muted">Requests, training plans and history</p></div>
         <ChevronRight size={19} className="shrink-0 text-muted" />
       </Link>
 

@@ -12,6 +12,23 @@ import {
 import { auth } from "@/lib/auth";
 import { isLocalMode, LOCAL_USER_EMAIL, LOCAL_USER_NAME } from "@/lib/local-mode";
 import { todayISO } from "@/lib/utils";
+import { deriveUsernameBase } from "@/lib/username";
+
+/** Appends a numeric suffix until the candidate is free. Every new account
+ *  gets a username immediately so friend requests always have one to search. */
+async function resolveUniqueUsername(name: string | null, email: string) {
+  const base = deriveUsernameBase(name, email);
+  let candidate = base;
+  for (let suffix = 2; ; suffix++) {
+    const [taken] = await db
+      .select({ id: appUsers.id })
+      .from(appUsers)
+      .where(eq(appUsers.username, candidate))
+      .limit(1);
+    if (!taken) return candidate;
+    candidate = `${base.slice(0, 24 - String(suffix).length - 1)}_${suffix}`;
+  }
+}
 
 async function initializeUserData(userId: number) {
   await db
@@ -49,6 +66,7 @@ export const getAppUser = cache(async function getAppUser() {
       .values({
         email: LOCAL_USER_EMAIL,
         name: LOCAL_USER_NAME,
+        username: await resolveUniqueUsername(LOCAL_USER_NAME, LOCAL_USER_EMAIL),
         role: "owner",
         status: "active",
         authUserId: "local-dev-user",
@@ -87,6 +105,7 @@ export const getAppUser = cache(async function getAppUser() {
         authUserId: authUser.id,
         email,
         name: authUser.name || null,
+        username: await resolveUniqueUsername(authUser.name ?? null, email),
         role: "member",
         status: "active",
       })

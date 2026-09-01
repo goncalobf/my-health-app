@@ -2,21 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, ShieldCheck, Users } from "lucide-react";
+import { Check, Copy, Pencil, ShieldCheck, Users } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { apiDelete, apiGet, apiPatch } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 
-interface Account { email: string; name: string | null; role: string; status: string; }
-interface Member extends Account { id: number; joinedAt: string | null; }
+interface Account { email: string; name: string | null; username: string | null; role: string; status: string; }
+interface Member { email: string; name: string | null; role: string; status: string; id: number; joinedAt: string | null; }
 
 const DELETE_CONFIRMATION = "DELETE";
 
-export default function FriendsPage() {
+export default function AccountAccessPage() {
   const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [copied, setCopied] = useState(false);
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [savingUsername, setSavingUsername] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -25,10 +29,25 @@ export default function FriendsPage() {
   async function load() {
     const current = await apiGet<Account>("/api/account");
     setAccount(current);
+    setUsernameInput(current.username ?? "");
     if (current.role === "owner") setMembers(await apiGet<Member[]>("/api/accounts"));
   }
 
   useEffect(() => { load(); }, []);
+
+  async function saveUsername() {
+    setSavingUsername(true);
+    setUsernameError("");
+    try {
+      await apiPatch("/api/account", { username: usernameInput.trim().toLowerCase() });
+      setEditingUsername(false);
+      await load();
+    } catch (e) {
+      setUsernameError(e instanceof Error ? e.message : "Could not save username.");
+    } finally {
+      setSavingUsername(false);
+    }
+  }
 
   async function setAccess(member: Member, status: "active" | "revoked") {
     await apiPatch("/api/accounts", { id: member.id, status });
@@ -66,7 +85,35 @@ export default function FriendsPage() {
       <section className="card p-4">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"><ShieldCheck size={20} /></div>
-          <div className="min-w-0"><p className="font-semibold">{account.name || "Fitlog account"}</p><p className="break-all text-xs text-muted">{account.email}</p><p className="mt-1 text-[11px] uppercase tracking-wide text-accent">{account.role}</p></div>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">{account.name || "Fitlog account"}</p>
+            <p className="break-all text-xs text-muted">{account.email}</p>
+            <p className="mt-1 text-[11px] uppercase tracking-wide text-accent">{account.role}</p>
+          </div>
+        </div>
+        <div className="mt-3 border-t border-border pt-3">
+          {editingUsername ? (
+            <>
+              <p className="mb-1.5 text-xs text-muted">Your friends look you up by this username.</p>
+              <div className="flex gap-2">
+                <input
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
+                  className="input min-w-0 flex-1"
+                  placeholder="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+                <button onClick={saveUsername} disabled={savingUsername || !usernameInput.trim()} className="btn-primary shrink-0 px-3">Save</button>
+                <button onClick={() => { setEditingUsername(false); setUsernameInput(account.username ?? ""); setUsernameError(""); }} className="btn-ghost shrink-0 px-3">Cancel</button>
+              </div>
+              {usernameError && <p className="mt-1.5 text-xs text-danger">{usernameError}</p>}
+            </>
+          ) : (
+            <button onClick={() => setEditingUsername(true)} className="flex items-center gap-1.5 text-sm text-muted">
+              @{account.username ?? "add a username"} <Pencil size={13} />
+            </button>
+          )}
         </div>
       </section>
 

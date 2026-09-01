@@ -20,11 +20,42 @@ export const appUsers = pgTable("app_users", {
   authUserId: text("auth_user_id").unique(),
   email: text("email").notNull().unique(),
   name: text("name"),
+  // Lowercase handle used for friend requests. Nullable at the DB level
+  // (kept simple, no two-phase NOT NULL migration) but every account-creation
+  // path assigns one deterministically — see src/lib/username.ts.
+  username: text("username").unique(),
   role: text("role").notNull().default("member"),
   status: text("status").notNull().default("active"),
   invitedAt: timestamp("invited_at").notNull().defaultNow(),
   joinedAt: timestamp("joined_at"),
 });
+
+// A friend request/relationship between two accounts. status: pending |
+// accepted | declined. The unique index only blocks an exact duplicate
+// (same requester, same recipient) — the reverse-direction and
+// already-friends checks happen in application code (src/lib/friends-data.ts)
+// since Postgres has no unordered-pair uniqueness without a generated column.
+export const friendships = pgTable(
+  "friendships",
+  {
+    id: serial("id").primaryKey(),
+    requesterId: integer("requester_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    recipientId: integer("recipient_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("pending"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    respondedAt: timestamp("responded_at"),
+  },
+  (table) => [
+    uniqueIndex("friendships_requester_recipient_unique").on(
+      table.requesterId,
+      table.recipientId
+    ),
+  ]
+);
 
 // Built-in and user-created exercise library.
 export const exercises = pgTable(
@@ -525,6 +556,7 @@ export const garminDailyMetrics = pgTable(
 
 export type Exercise = typeof exercises.$inferSelect;
 export type AppUser = typeof appUsers.$inferSelect;
+export type Friendship = typeof friendships.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
 export type RoutineExercise = typeof routineExercises.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
