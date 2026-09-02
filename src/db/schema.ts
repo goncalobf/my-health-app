@@ -207,6 +207,9 @@ export const settings = pgTable("settings", {
   // Null until the account finishes onboarding; existing accounts are
   // backfilled so they are never sent through it.
   onboardedAt: timestamp("onboarded_at"),
+  // Self-reported: widens the deterministic hydration target while true
+  // (src/lib/hydration.ts). Not a supplement log, just a hydration flag.
+  creatineLoading: boolean("creatine_loading").notNull().default(false),
 });
 
 // Bodyweight measurements over time.

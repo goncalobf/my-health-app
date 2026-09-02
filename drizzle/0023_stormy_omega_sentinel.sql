@@ -1,0 +1,1 @@
+ALTER TABLE "settings" ADD COLUMN "creatine_loading" boolean DEFAULT false NOT NULL;
