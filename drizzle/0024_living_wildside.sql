@@ -1,0 +1,1 @@
+ALTER TABLE "settings" ADD COLUMN "creatine_maintenance" boolean DEFAULT false NOT NULL;
