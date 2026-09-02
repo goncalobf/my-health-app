@@ -83,6 +83,7 @@ export async function PATCH(req: Request) {
     }
     set.foodLanguage = language;
   }
+  if (body.creatineLoading !== undefined) set.creatineLoading = !!body.creatineLoading;
 
   const invalid = Object.values(set).some(
     (value) => typeof value === "number" && !Number.isFinite(value)

@@ -8,6 +8,7 @@ import { parseDecimalInput } from "@/lib/decimal-input";
 import MacroSummary from "@/components/MacroSummary";
 import FoodLogger from "@/components/FoodLogger";
 import PageHeader from "@/components/PageHeader";
+import HydrationCard from "@/components/HydrationCard";
 import { preloadBarcodeReader } from "@/lib/barcode-scanner-loader";
 
 interface Log {
@@ -31,6 +32,8 @@ interface Targets {
   targetProteinG: number;
   targetCarbsG: number;
   targetFatG: number;
+  currentWeightKg: number | null;
+  creatineLoading: boolean;
 }
 
 const MEALS = ["breakfast", "lunch", "dinner", "snack"];
@@ -49,6 +52,8 @@ export default function NutritionPage() {
     targetProteinG: 160,
     targetCarbsG: 220,
     targetFatG: 70,
+    currentWeightKg: null,
+    creatineLoading: false,
   });
   const [logging, setLogging] = useState<string | null>(null);
 
@@ -79,6 +84,11 @@ export default function NutritionPage() {
     if (quantityG <= 0) return;
     await apiPatch(`/api/nutrition/${log.id}`, { quantityG });
     loadDay();
+  }
+
+  async function toggleCreatineLoading(value: boolean) {
+    setTargets((t) => ({ ...t, creatineLoading: value }));
+    await apiPatch("/api/settings", { creatineLoading: value });
   }
 
   async function saveMeal(meal: string, items: Log[]) {
@@ -125,6 +135,14 @@ export default function NutritionPage() {
       </div>
 
       <MacroSummary totals={totals} targets={targets} />
+
+      <div className="mt-4">
+        <HydrationCard
+          weightKg={targets.currentWeightKg}
+          creatineLoading={targets.creatineLoading}
+          onToggleCreatineLoading={toggleCreatineLoading}
+        />
+      </div>
 
       <div className="flex flex-col gap-4 mt-5">
         {MEALS.map((meal, mealIndex) => {
