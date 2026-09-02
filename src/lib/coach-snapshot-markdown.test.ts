@@ -19,7 +19,7 @@ function baseSnapshot(overrides: Partial<CoachSnapshot> = {}): CoachSnapshot {
       biologicalSex: "male",
     },
     targets: { calories: 2450, proteinG: 197, carbsG: 255, fatG: 68 },
-    hydration: { creatineLoading: false, baselineLiters: 3.1, creatineBonusLiters: 0, targetLiters: 3.1 },
+    hydration: { creatinePhase: "none", baselineLiters: 3.1, creatineBonusLiters: 0, targetLiters: 3.1 },
     today: {
       nutrition: { calories: 1200, proteinG: 90, carbsG: 120, fatG: 30 },
       remaining: { calories: 1250, proteinG: 107, carbsG: 135, fatG: 38 },

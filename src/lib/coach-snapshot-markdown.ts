@@ -70,9 +70,9 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
     [
       "## Hydration",
       hydration.targetLiters != null
-        ? `- Daily water target: ${hydration.targetLiters} L (${hydration.baselineLiters} L baseline at ~37.5 ml/kg${hydration.creatineLoading ? ` + ${hydration.creatineBonusLiters} L for an active creatine-loading phase` : ""})`
+        ? `- Daily water target: ${hydration.targetLiters} L (${hydration.baselineLiters} L baseline at ~37.5 ml/kg${hydration.creatinePhase === "loading" ? ` + ${hydration.creatineBonusLiters} L for an active creatine-loading phase` : ""})`
         : "- No current weight on file, so no water target could be calculated.",
-      `- Creatine loading phase: ${hydration.creatineLoading ? "yes" : "no"}`,
+      `- Creatine phase: ${hydration.creatinePhase}${hydration.creatinePhase === "maintenance" ? " (no extra hydration bump — baseline already covers the commonly cited maintenance range)" : ""}`,
     ].join("\n")
   );
 

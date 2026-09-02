@@ -83,7 +83,14 @@ export async function PATCH(req: Request) {
     }
     set.foodLanguage = language;
   }
-  if (body.creatineLoading !== undefined) set.creatineLoading = !!body.creatineLoading;
+  if (body.creatinePhase !== undefined) {
+    const phase = String(body.creatinePhase);
+    if (!["none", "loading", "maintenance"].includes(phase)) {
+      return NextResponse.json({ error: "Choose a valid creatine phase." }, { status: 400 });
+    }
+    set.creatineLoading = phase === "loading";
+    set.creatineMaintenance = phase === "maintenance";
+  }
 
   const invalid = Object.values(set).some(
     (value) => typeof value === "number" && !Number.isFinite(value)

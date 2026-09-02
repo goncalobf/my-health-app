@@ -169,6 +169,13 @@
       "when": 1788347481011,
       "tag": "0023_stormy_omega_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788348204356,
+      "tag": "0024_living_wildside",
+      "breakpoints": true
     }
   ]
 }

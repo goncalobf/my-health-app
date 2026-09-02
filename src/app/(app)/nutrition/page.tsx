@@ -9,6 +9,7 @@ import MacroSummary from "@/components/MacroSummary";
 import FoodLogger from "@/components/FoodLogger";
 import PageHeader from "@/components/PageHeader";
 import HydrationCard from "@/components/HydrationCard";
+import type { CreatinePhase } from "@/lib/hydration";
 import { preloadBarcodeReader } from "@/lib/barcode-scanner-loader";
 
 interface Log {
@@ -34,6 +35,7 @@ interface Targets {
   targetFatG: number;
   currentWeightKg: number | null;
   creatineLoading: boolean;
+  creatineMaintenance: boolean;
 }
 
 const MEALS = ["breakfast", "lunch", "dinner", "snack"];
@@ -54,6 +56,7 @@ export default function NutritionPage() {
     targetFatG: 70,
     currentWeightKg: null,
     creatineLoading: false,
+    creatineMaintenance: false,
   });
   const [logging, setLogging] = useState<string | null>(null);
 
@@ -86,9 +89,9 @@ export default function NutritionPage() {
     loadDay();
   }
 
-  async function toggleCreatineLoading(value: boolean) {
-    setTargets((t) => ({ ...t, creatineLoading: value }));
-    await apiPatch("/api/settings", { creatineLoading: value });
+  async function changeCreatinePhase(phase: CreatinePhase) {
+    setTargets((t) => ({ ...t, creatineLoading: phase === "loading", creatineMaintenance: phase === "maintenance" }));
+    await apiPatch("/api/settings", { creatinePhase: phase });
   }
 
   async function saveMeal(meal: string, items: Log[]) {
@@ -139,8 +142,8 @@ export default function NutritionPage() {
       <div className="mt-4">
         <HydrationCard
           weightKg={targets.currentWeightKg}
-          creatineLoading={targets.creatineLoading}
-          onToggleCreatineLoading={toggleCreatineLoading}
+          creatinePhase={targets.creatineLoading ? "loading" : targets.creatineMaintenance ? "maintenance" : "none"}
+          onChangePhase={changeCreatinePhase}
         />
       </div>
 

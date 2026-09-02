@@ -25,7 +25,7 @@ import {
 } from "@/lib/utils";
 import { buildNutritionPhase } from "@/lib/nutrition-phase";
 import { appendMemoryNote } from "@/lib/coach-memory";
-import { calculateHydrationTarget } from "@/lib/hydration";
+import { calculateHydrationTarget, type CreatinePhase } from "@/lib/hydration";
 
 function isoDaysAgo(days: number) {
   return shiftISODate(todayISO(), -days);
@@ -165,7 +165,11 @@ export async function getCoachSnapshot({
 
   const effectiveWeightKg =
     setting?.currentWeightKg ?? weights[weights.length - 1]?.weightKg ?? null;
-  const creatineLoading = setting?.creatineLoading ?? false;
+  const creatinePhase: CreatinePhase = setting?.creatineLoading
+    ? "loading"
+    : setting?.creatineMaintenance
+      ? "maintenance"
+      : "none";
 
   return {
     generatedFor: today,
@@ -182,12 +186,9 @@ export async function getCoachSnapshot({
       biologicalSex: setting?.biologicalSex ?? "unspecified",
     },
     targets,
-    hydration: {
-      creatineLoading,
-      ...(effectiveWeightKg
-        ? calculateHydrationTarget({ weightKg: effectiveWeightKg, creatineLoading })
-        : { baselineLiters: null, creatineBonusLiters: null, targetLiters: null }),
-    },
+    hydration: effectiveWeightKg
+      ? calculateHydrationTarget({ weightKg: effectiveWeightKg, creatinePhase })
+      : { creatinePhase, baselineLiters: null, creatineBonusLiters: null, targetLiters: null },
     today: {
       nutrition: todayNutrition,
       remaining: {
