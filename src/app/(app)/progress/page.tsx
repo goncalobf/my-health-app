@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { Plus, Trophy, ChevronDown, Ruler, Camera, Gauge } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
+import { normalizeDecimalInput } from "@/lib/decimal-input";
 import PageHeader from "@/components/PageHeader";
 import { formatDate, todayISO } from "@/lib/utils";
 
@@ -136,7 +137,7 @@ export default function ProgressPage() {
 
   async function logWeight(e: React.FormEvent) {
     e.preventDefault();
-    const w = Number(weightInput);
+    const w = Number(normalizeDecimalInput(weightInput));
     if (!w) return;
     await apiPost("/api/bodyweight", { weightKg: w, day: todayISO() });
     setWeightInput("");
@@ -177,12 +178,11 @@ export default function ProgressPage() {
           {recentWeightAvg != null && <p className="text-xs text-muted text-center -mt-1 mb-2">Recent average: <span className="text-text font-semibold">{Math.round(recentWeightAvg * 10) / 10} kg</span></p>}
           <form onSubmit={logWeight} className="flex gap-2 mt-3">
             <input
-              type="number"
+              type="text"
               inputMode="decimal"
-              step={0.1}
               placeholder="Today's weight (kg)"
               value={weightInput}
-              onChange={(e) => setWeightInput(e.target.value)}
+              onChange={(e) => setWeightInput(normalizeDecimalInput(e.target.value))}
               className="input min-w-0 flex-1"
             />
             <button className="btn-primary shrink-0" disabled={!weightInput}>
