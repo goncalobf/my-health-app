@@ -10,8 +10,8 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { Plus, Trophy, ChevronDown, Ruler, Camera, Gauge } from "lucide-react";
-import { apiGet, apiPost } from "@/lib/api";
+import { Plus, Trophy, ChevronDown, Ruler, Camera, Gauge, Trash2 } from "lucide-react";
+import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { normalizeDecimalInput } from "@/lib/decimal-input";
 import PageHeader from "@/components/PageHeader";
 import { formatDate, todayISO } from "@/lib/utils";
@@ -144,6 +144,11 @@ export default function ProgressPage() {
     setBw(await apiGet<BW[]>("/api/bodyweight"));
   }
 
+  async function deleteWeight(id: number) {
+    await apiDelete(`/api/bodyweight/${id}`);
+    setBw(await apiGet<BW[]>("/api/bodyweight"));
+  }
+
   async function toggleExercise(exerciseId: number) {
     if (expanded === exerciseId) {
       setExpanded(null);
@@ -189,6 +194,26 @@ export default function ProgressPage() {
               <Plus size={18} /> Log
             </button>
           </form>
+          {bw.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-1">
+              {[...bw].reverse().slice(0, 5).map((entry) => (
+                <li key={entry.id} className="flex items-center justify-between text-sm">
+                  <span className="text-muted">{formatDate(entry.day)}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-semibold tabular-nums">{entry.weightKg} kg</span>
+                    <button
+                      type="button"
+                      onClick={() => deleteWeight(entry.id)}
+                      className="text-muted hover:text-red-400 transition-colors p-1"
+                      aria-label="Delete entry"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 
