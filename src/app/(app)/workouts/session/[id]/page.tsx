@@ -837,6 +837,7 @@ function ActiveSet({
             name={block.name}
             imageUrl={block.imageUrl}
             className="h-14 w-14"
+            expandable
           />
           <div className="min-w-0 flex-1">
             <p className="min-w-0 break-words font-display text-2xl leading-none tracking-[0.035em]">
@@ -1145,6 +1146,7 @@ function ExerciseRowContent({ block }: { block: Block }) {
         name={block.name}
         imageUrl={block.imageUrl}
         className="h-11 w-11"
+        expandable
       />
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">{block.name}</p>
