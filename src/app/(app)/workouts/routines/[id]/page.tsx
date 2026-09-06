@@ -112,6 +112,7 @@ function SortableExerciseCard({
           name={item.name}
           imageUrl={item.imageUrl}
           className="h-14 w-14"
+          expandable
         />
         <div className="min-w-0 flex-1">
           <p className="font-semibold">{item.name}</p>
