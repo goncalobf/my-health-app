@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Pencil, BookmarkPlus } from "lucide-react";
 import { apiGet, apiDelete, apiPatch, apiPost } from "@/lib/api";
 import { todayISO, formatDate, round, shiftISODate } from "@/lib/utils";
@@ -101,6 +101,7 @@ export default function NutritionPage() {
   }
 
   const isToday = day === todayISO();
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div>
@@ -113,18 +114,32 @@ export default function NutritionPage() {
         >
           <ChevronLeft size={20} />
         </button>
-        <div className="min-w-0 flex-1 px-2 text-center">
+        <div className="relative min-w-0 flex-1 px-2 text-center">
           <p className="label mb-1">Food log / date</p>
-          <h2 className="truncate font-display text-2xl leading-none tracking-[0.04em]">
+          <button
+            onClick={() => dateInputRef.current?.showPicker()}
+            className="truncate font-display text-2xl leading-none tracking-[0.04em] underline-offset-4 hover:underline"
+          >
             {isToday ? "Today" : formatDate(day)}
-          </h2>
+          </button>
+          <input
+            ref={dateInputRef}
+            type="date"
+            value={day}
+            max={todayISO()}
+            onChange={(e) => { if (e.target.value) setDay(e.target.value); }}
+            className="pointer-events-none absolute inset-0 h-0 w-0 opacity-0"
+            aria-hidden
+          />
           {!isToday && (
-            <button
-              onClick={() => setDay(todayISO())}
-              className="text-xs text-accent"
-            >
-              Back to today
-            </button>
+            <div>
+              <button
+                onClick={() => setDay(todayISO())}
+                className="text-xs text-accent"
+              >
+                Back to today
+              </button>
+            </div>
           )}
         </div>
         <button
