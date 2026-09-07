@@ -7,13 +7,13 @@ import { requireAppUser } from "@/lib/app-user";
 export async function GET() {
   const user = await requireAppUser();
   const favorites = await db.select().from(savedFoods).where(eq(savedFoods.userId, user.id)).orderBy(desc(savedFoods.createdAt));
-  const logs = await db.select().from(nutritionLogs).where(eq(nutritionLogs.userId, user.id)).orderBy(desc(nutritionLogs.createdAt)).limit(80);
+  const logs = await db.select().from(nutritionLogs).where(eq(nutritionLogs.userId, user.id)).orderBy(desc(nutritionLogs.createdAt)).limit(200);
   const seen = new Set<string>();
   const recent = logs.filter((x) => {
     const key = x.name.toLowerCase();
     if (seen.has(key) || x.quantityG <= 0) return false;
     seen.add(key); return true;
-  }).slice(0, 12).map((x) => ({
+  }).slice(0, 30).map((x) => ({
     name: x.name, barcode: x.barcode, servingName: null, servingGrams: x.quantityG,
     caloriesPer100: (x.calories / x.quantityG) * 100,
     proteinPer100: (x.proteinG / x.quantityG) * 100,
