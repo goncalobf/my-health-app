@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, useCallback } from "react";
+import { useEffect, useState, use, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -42,13 +42,22 @@ import { normalizeDecimalInput, parseDecimalInput } from "@/lib/decimal-input";
 import { prefillSet, suggestDropWeight } from "@/lib/set-prefill";
 import {
   firstIncompletePosition,
-  groupLoggedRows,
+  restorePlannedSets,
   nextIncompletePosition,
   nextSetNumber,
   reorderExerciseIds,
 } from "@/lib/workout-flow";
 
+import WarmupLogger from "@/components/WarmupLogger";
+import {
+  contextLabels,
+  type PerformanceContext,
+  type SkippedSet,
+  type EquipmentProfile,
+} from "@/lib/training-prescription";
+
 interface PlanItem {
+  equipmentProfile: EquipmentProfile | null;
   exerciseId: number;
   name: string;
   imageUrl: string | null;
@@ -83,12 +92,24 @@ interface Recommendation {
   weightKg: number | null;
   message: string;
   reason: string;
+  sources?: { sessionId: number; startedAt: string }[];
+  nextReps?: number[];
 }
 interface SessionData {
-  session: { id: number; name: string; startedAt: string; finishedAt: string | null };
+  session: {
+    id: number;
+    name: string;
+    startedAt: string;
+    finishedAt: string | null;
+    skippedSets: SkippedSet[];
+    performanceContext: PerformanceContext;
+  };
   plan: PlanItem[];
   loggedSets: LoggedSet[];
-  lastSets: Record<number, { weightKg: number; reps: number; rir: number | null }[]>;
+  lastSets: Record<
+    number,
+    { weightKg: number; reps: number; rir: number | null }[]
+  >;
   recommendations: Record<number, Recommendation>;
 }
 
@@ -110,6 +131,7 @@ interface LocalSet {
   completed: boolean;
 }
 interface Block {
+  equipmentProfile?: EquipmentProfile | null;
   exerciseId: number;
   name: string;
   imageUrl: string | null;
@@ -144,7 +166,9 @@ function rirTarget(min: number | null, max: number | null) {
 }
 
 function numberText(value: number) {
-  return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
+  return Number.isInteger(value)
+    ? String(value)
+    : String(Math.round(value * 1000) / 1000);
 }
 
 export default function SessionPage({
@@ -154,6 +178,29 @@ export default function SessionPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const [skipped, setSkipped] = useState<SkippedSet[]>([]);
+  const [warmups, setWarmups] = useState<LoggedSet[]>([]);
+  const [context, setContext] = useState<PerformanceContext>("normal");
+  const [dirty, setDirty] = useState(false);
+  async function run(action: () => Promise<unknown>) {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await action();
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Could not save. Please retry.",
+      );
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -173,7 +220,7 @@ export default function SessionPage({
     const [data, exercises] = await Promise.all([
       apiGet<SessionData>(`/api/sessions/${id}`),
       apiGet<{ id: number; name: string; imageUrl: string | null }[]>(
-        "/api/exercises"
+        "/api/exercises",
       ),
     ]);
     const exMap = new Map(exercises.map((exercise) => [exercise.id, exercise]));
@@ -182,6 +229,9 @@ export default function SessionPage({
       return;
     }
     setName(data.session.name);
+    setSkipped(data.session.skippedSets);
+    setWarmups(data.loggedSets.filter((s) => s.isWarmup));
+    setContext(data.session.performanceContext);
 
     const built: Block[] = [];
     const seen = new Set<number>();
@@ -204,58 +254,70 @@ export default function SessionPage({
         supersetGroup: string | null;
         isAnchor: boolean;
         deloadMode: boolean;
-      }
+        equipmentProfile?: EquipmentProfile | null;
+      },
     ): Block => {
-      const logged = data.loggedSets.filter((s) => s.exerciseId === exerciseId);
+      const logged = data.loggedSets.filter(
+        (s) => s.exerciseId === exerciseId && !s.isWarmup,
+      );
       const last = data.lastSets[exerciseId] ?? [];
       const recommendation = data.recommendations[exerciseId];
 
-      let sets: LocalSet[];
-      if (logged.length) {
-        sets = groupLoggedRows(logged).map((group) => ({
+      const sets: LocalSet[] = restorePlannedSets(
+        opts.targetSets,
+        logged,
+        data.session.skippedSets
+          .filter((s) => s.exerciseId === exerciseId)
+          .map((s) => s.setNumber),
+      ).map((group) => {
+        const i = group.setNumber - 1;
+        const filled = prefillSet(
+          {
+            minReps: opts.minReps,
+            maxReps: opts.maxReps,
+            recommendedWeightKg: recommendation?.weightKg ?? null,
+            recommendationAction: recommendation?.action ?? null,
+          },
+          last[i] ?? last[last.length - 1] ?? null,
+        );
+        return {
           key: nk(),
           setNumber: group.setNumber,
           completed: group.completed,
-          entries: group.rows.map((row) => ({
-            key: nk(),
-            dbId: row.id,
-            weight: numberText(row.weightKg),
-            reps: String(row.reps),
-            rir: row.rir == null ? "" : String(row.rir),
-            isDrop: row.isDropSet,
-          })),
-        }));
-      } else {
-        const count = Math.max(1, opts.targetSets);
-        sets = Array.from({ length: count }, (_, i) => {
-          const filled = prefillSet(
-            {
-              minReps: opts.minReps,
-              maxReps: opts.maxReps,
-              recommendedWeightKg: recommendation?.weightKg ?? null,
-              recommendationAction: recommendation?.action ?? null,
-            },
-            last[i] ?? last[last.length - 1] ?? null
-          );
-          return {
-            key: nk(),
-            setNumber: i + 1,
-            completed: false,
-            entries: [
-              {
+          entries: group.rows.length
+            ? group.rows.map((row) => ({
                 key: nk(),
-                weight: filled.weightKg ? numberText(filled.weightKg) : "",
-                reps: filled.reps ? String(filled.reps) : "",
-                rir: opts.targetRirMin == null ? "" : String(opts.targetRirMin),
-                isDrop: false,
-              },
-            ],
-          };
-        });
-      }
+                dbId: row.id,
+                weight: numberText(row.weightKg),
+                reps: String(row.reps),
+                rir: row.rir == null ? "" : String(row.rir),
+                isDrop: row.isDropSet,
+              }))
+            : [
+                {
+                  key: nk(),
+                  weight:
+                    filled.weightKg ||
+                    recommendation?.weightKg === 0 ||
+                    last[i]?.weightKg === 0 ||
+                    opts.equipmentProfile?.loading === "bodyweight"
+                      ? numberText(filled.weightKg)
+                      : "",
+                  reps: recommendation?.nextReps?.[i]
+                    ? String(recommendation.nextReps[i])
+                    : filled.reps
+                      ? String(filled.reps)
+                      : "",
+                  rir: "",
+                  isDrop: false,
+                },
+              ],
+        };
+      });
       return {
         exerciseId,
         name: opts.name,
+        equipmentProfile: opts.equipmentProfile,
         imageUrl: opts.imageUrl,
         targetReps: opts.targetReps,
         minReps: opts.minReps,
@@ -280,6 +342,7 @@ export default function SessionPage({
       built.push(
         makeBlock(p.exerciseId, {
           name: p.name,
+          equipmentProfile: p.equipmentProfile,
           imageUrl: p.imageUrl,
           targetSets: p.targetSets,
           targetReps: p.targetReps,
@@ -294,7 +357,7 @@ export default function SessionPage({
           supersetGroup: p.supersetGroup,
           isAnchor: p.isAnchor,
           deloadMode: p.deloadMode,
-        })
+        }),
       );
     }
     for (const s of data.loggedSets) {
@@ -318,7 +381,7 @@ export default function SessionPage({
           supersetGroup: null,
           isAnchor: false,
           deloadMode: false,
-        })
+        }),
       );
     }
 
@@ -328,7 +391,10 @@ export default function SessionPage({
   }, [id, router]);
 
   useEffect(() => {
-    load();
+    load().catch(() => {
+      setError("Could not load workout. Reload to retry.");
+      setLoading(false);
+    });
   }, [load]);
 
   useEffect(() => {
@@ -336,12 +402,21 @@ export default function SessionPage({
     setHype(new URLSearchParams(window.location.search).get("hype") === "1");
   }, []);
 
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (dirty || busyRef.current) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
   function patchEntry(
     exIdx: number,
     setKey: string,
     entryKey: string,
-    patch: Partial<SetEntry>
+    patch: Partial<SetEntry>,
   ) {
+    setDirty(true);
     setBlocks((bs) =>
       bs.map((b, i) =>
         i !== exIdx
@@ -354,12 +429,12 @@ export default function SessionPage({
                   : {
                       ...s,
                       entries: s.entries.map((e) =>
-                        e.key === entryKey ? { ...e, ...patch } : e
+                        e.key === entryKey ? { ...e, ...patch } : e,
                       ),
-                    }
+                    },
               ),
-            }
-      )
+            },
+      ),
     );
   }
 
@@ -367,10 +442,10 @@ export default function SessionPage({
     block: Block,
     set: LocalSet,
     entry: SetEntry,
-    completed: boolean
+    completed: boolean,
   ) {
     const payload = {
-      weightKg: parseDecimalInput(entry.weight),
+      weightKg: entry.weight.trim() ? parseDecimalInput(entry.weight) : null,
       reps: Number(entry.reps) || 0,
       rir: entry.rir,
       completed,
@@ -393,6 +468,7 @@ export default function SessionPage({
     const { block, exIdx, set, entry } = active;
     const dbId = await persistEntry(block, set, entry, true);
     patchEntry(exIdx, set.key, entry.key, { dbId });
+    setDirty(false);
     setBlocks((bs) =>
       bs.map((b, i) =>
         i !== exIdx
@@ -400,10 +476,10 @@ export default function SessionPage({
           : {
               ...b,
               sets: b.sets.map((s) =>
-                s.key === set.key ? { ...s, completed: true } : s
+                s.key === set.key ? { ...s, completed: true } : s,
               ),
-            }
-      )
+            },
+      ),
     );
 
     const upcoming = nextIncompletePosition(blocks, exIdx, set.key);
@@ -427,9 +503,11 @@ export default function SessionPage({
     if (!active) return;
     const { block, exIdx, set, entry } = active;
     const dbId = await persistEntry(block, set, entry, true);
+    setDirty(false);
     const dropWeight = suggestDropWeight(
       parseDecimalInput(entry.weight),
-      block.weightIncrementKg
+      block.weightIncrementKg,
+      block.equipmentProfile,
     );
     setBlocks((bs) =>
       bs.map((b, i) =>
@@ -444,7 +522,7 @@ export default function SessionPage({
                       ...s,
                       entries: [
                         ...s.entries.map((e) =>
-                          e.key === entry.key ? { ...e, dbId } : e
+                          e.key === entry.key ? { ...e, dbId } : e,
                         ),
                         {
                           key: nk(),
@@ -454,10 +532,10 @@ export default function SessionPage({
                           isDrop: true,
                         },
                       ],
-                    }
+                    },
               ),
-            }
-      )
+            },
+      ),
     );
   }
 
@@ -474,10 +552,13 @@ export default function SessionPage({
               sets: b.sets.map((s) =>
                 s.key !== set.key
                   ? s
-                  : { ...s, entries: s.entries.filter((e) => e.key !== entry.key) }
+                  : {
+                      ...s,
+                      entries: s.entries.filter((e) => e.key !== entry.key),
+                    },
               ),
-            }
-      )
+            },
+      ),
     );
   }
 
@@ -486,20 +567,25 @@ export default function SessionPage({
     const previous = block.sets[block.sets.length - 1]?.entries[0];
     const created: LocalSet = {
       key: nk(),
-      setNumber: nextSetNumber(block.sets),
+      setNumber: nextSetNumber([
+        ...block.sets,
+        ...skipped.filter((s) => s.exerciseId === block.exerciseId),
+      ]),
       completed: false,
       entries: [
         {
           key: nk(),
           weight: previous?.weight ?? "",
           reps: previous?.reps ?? (block.minReps ? String(block.minReps) : ""),
-          rir: block.targetRirMin == null ? "" : String(block.targetRirMin),
+          rir: "",
           isDrop: false,
         },
       ],
     };
     setBlocks((bs) =>
-      bs.map((b, i) => (i === exIdx ? { ...b, sets: [...b.sets, created] } : b))
+      bs.map((b, i) =>
+        i === exIdx ? { ...b, sets: [...b.sets, created] } : b,
+      ),
     );
     setCursor({ exIdx, setKey: created.key });
   }
@@ -507,27 +593,48 @@ export default function SessionPage({
   async function removeSet(exIdx: number, setKey: string) {
     const set = blocks[exIdx].sets.find((s) => s.key === setKey);
     if (!set) return;
+    if (
+      set.completed &&
+      !window.confirm("Remove this logged set from the workout?")
+    )
+      return;
+    const skippedSet = {
+      exerciseId: blocks[exIdx].exerciseId,
+      setNumber: set.setNumber,
+    };
+    await apiPatch(`/api/sessions/${id}`, { skipSet: skippedSet });
+    setSkipped((previous) => [...previous, skippedSet]);
     for (const entry of set.entries) {
       if (entry.dbId) await apiDelete(`/api/sessions/${id}/sets/${entry.dbId}`);
     }
     const remaining = blocks[exIdx].sets.filter((s) => s.key !== setKey);
     setBlocks((bs) =>
-      bs.map((b, i) => (i === exIdx ? { ...b, sets: remaining } : b))
+      bs.map((b, i) => (i === exIdx ? { ...b, sets: remaining } : b)),
     );
     if (cursor?.setKey === setKey) {
       setCursor(
         remaining.length
           ? { exIdx, setKey: remaining[remaining.length - 1].key }
-          : firstIncompletePosition(blocks)
+          : firstIncompletePosition(
+              blocks.map((b, i) =>
+                i === exIdx ? { ...b, sets: remaining } : b,
+              ),
+            ),
       );
     }
   }
 
   async function addExercise(exerciseId: number) {
+    if (blocks.some((b) => b.exerciseId === exerciseId)) {
+      setPicking(false);
+      setError("This exercise is already in the workout.");
+      return;
+    }
     setPicking(false);
-    const exercises = await apiGet<
-      { id: number; name: string; imageUrl: string | null }[]
-    >("/api/exercises");
+    const exercises =
+      await apiGet<{ id: number; name: string; imageUrl: string | null }[]>(
+        "/api/exercises",
+      );
     const ex = exercises.find((e) => e.id === exerciseId);
     const created: Block = {
       exerciseId,
@@ -552,7 +659,9 @@ export default function SessionPage({
           key: nk(),
           setNumber: 1,
           completed: false,
-          entries: [{ key: nk(), weight: "", reps: "", rir: "", isDrop: false }],
+          entries: [
+            { key: nk(), weight: "", reps: "", rir: "", isDrop: false },
+          ],
         },
       ],
     };
@@ -571,12 +680,12 @@ export default function SessionPage({
     const lockedIds = new Set(
       blocks
         .filter((b, i) => i === activeExIdx || b.sets.some((s) => s.completed))
-        .map((b) => b.exerciseId)
+        .map((b) => b.exerciseId),
     );
     const newOrder = reorderExerciseIds(
       blocks.map((b) => b.exerciseId),
       lockedIds,
-      newUnlockedOrder
+      newUnlockedOrder,
     );
     const byExerciseId = new Map(blocks.map((b) => [b.exerciseId, b]));
     const reordered = newOrder.map((exId) => byExerciseId.get(exId)!);
@@ -584,7 +693,7 @@ export default function SessionPage({
     setCursor((prev) => {
       if (!prev) return prev;
       const newExIdx = reordered.findIndex(
-        (b) => b.exerciseId === activeExerciseId
+        (b) => b.exerciseId === activeExerciseId,
       );
       return newExIdx === -1 ? prev : { exIdx: newExIdx, setKey: prev.setKey };
     });
@@ -592,6 +701,13 @@ export default function SessionPage({
   }
 
   async function finish() {
+    if (
+      (dirty || completedCount < totalSets) &&
+      !window.confirm(
+        "Finish with unfinished sets or unsaved edits? Only logged sets will count.",
+      )
+    )
+      return;
     await apiPatch(`/api/sessions/${id}`, { finish: true });
     router.replace(`/workouts/session/${id}/summary`);
   }
@@ -605,9 +721,11 @@ export default function SessionPage({
   const totalSets = blocks.reduce((total, b) => total + b.sets.length, 0);
   const completedCount = blocks.reduce(
     (total, b) => total + b.sets.filter((s) => s.completed).length,
-    0
+    0,
   );
-  const progress = totalSets ? Math.round((completedCount / totalSets) * 100) : 0;
+  const progress = totalSets
+    ? Math.round((completedCount / totalSets) * 100)
+    : 0;
 
   const active = resolve(blocks, cursor);
 
@@ -637,25 +755,34 @@ export default function SessionPage({
   return (
     <div className="min-w-0 pb-8">
       <header className="sticky top-[env(safe-area-inset-top)] z-30 -mx-3 mb-5 border-b border-border bg-bg/95 px-3 py-3 backdrop-blur min-[360px]:-mx-4 min-[360px]:px-4">
-        <p className="mb-2 pl-12 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Fitlog / live protocol</p>
+        <p className="mb-2 pl-12 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">
+          Fitlog / live protocol
+        </p>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => router.push("/workouts")}
+            onClick={() => {
+              if (
+                !dirty ||
+                window.confirm("Leave unsaved edits? Logged sets are saved.")
+              )
+                router.push("/workouts");
+            }}
             className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-muted transition active:scale-95 [border-radius:2px_10px_2px_2px]"
-            aria-label="Save and exit workout"
+            aria-label="Exit workout"
           >
             <X size={22} />
           </button>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            onBlur={() => apiPatch(`/api/sessions/${id}`, { name })}
+            onBlur={() => run(() => apiPatch(`/api/sessions/${id}`, { name }))}
             aria-label="Workout name"
             className="min-w-0 flex-1 truncate bg-transparent font-display text-2xl tracking-[0.04em] outline-none focus:text-accent"
           />
           <OpenSpotifyButton />
           <button
-            onClick={finish}
+            onClick={() => run(finish)}
+            disabled={busy}
             className="btn-primary h-10 shrink-0 px-3 py-0 text-sm"
           >
             <Flag size={15} /> Finish
@@ -674,70 +801,139 @@ export default function SessionPage({
         </div>
       </header>
 
-      {blocks.length === 0 ? (
-        <div className="card flex flex-col items-center gap-3 p-6 text-center">
-          <Dumbbell className="text-muted" size={32} />
-          <p className="text-sm text-muted">
-            Empty workout. Add an exercise to get started.
-          </p>
-          <button onClick={() => setPicking(true)} className="btn-primary w-full">
-            <Plus size={18} /> Add exercise
-          </button>
-        </div>
-      ) : rest ? (
-        <RestTimer
-          key={rest.seq}
-          targetSeconds={rest.target}
-          label={rest.label}
-          note={pickLine("workout", `${id}-${rest.seq}`)}
-          hasNext={!!rest.upcoming}
-          onNext={continueAfterRest}
-        />
-      ) : !active ? (
-        <div className="card flex flex-col items-center gap-3 p-6 text-center">
-          <div className="icon-frame h-14 w-14"><Check size={28} strokeWidth={3} /></div>
-          <p className="font-display text-2xl tracking-[0.04em]">Every set is logged</p>
-          <p className="text-sm text-muted">
-            {completedCount} sets done. Finish up to see your summary and next targets.
-          </p>
-          <button onClick={finish} className="btn-primary w-full">
-            <Flag size={18} /> Finish workout
-          </button>
-        </div>
-      ) : (
-        <ActiveSet
-          key={active.entry.key}
-          block={active.block}
-          set={active.set}
-          setIdx={active.setIdx}
-          entry={active.entry}
-          showWhy={showWhy}
-          onToggleWhy={() => setShowWhy((v) => !v)}
-          onChange={(patch) =>
-            patchEntry(active.exIdx, active.set.key, active.entry.key, patch)
+      {error && (
+        <p role="alert" className="mb-3 text-sm text-danger">
+          {error}
+        </p>
+      )}
+      <p role="status" className="mb-3 text-xs text-muted">
+        {busy
+          ? "Saving…"
+          : dirty
+            ? "Edits pending · log the set to save"
+            : "Logged sets saved"}
+        {skipped.length ? ` · ${skipped.length} sets skipped/removed` : ""}
+      </p>
+      <label className="mb-3 block text-xs text-muted">
+        Session context
+        <select
+          className="input mt-1"
+          disabled={busy}
+          aria-label="Session context"
+          value={context}
+          onChange={(e) =>
+            run(async () => {
+              const next = e.target.value as PerformanceContext;
+              await apiPatch(`/api/sessions/${id}`, {
+                performanceContext: next,
+              });
+              setContext(next);
+            })
           }
-          onCommit={() => {
-            if (active.entry.dbId) {
-              persistEntry(
-                active.block,
-                active.set,
-                active.entry,
-                active.set.completed
-              );
-            }
+        >
+          {Object.entries(contextLabels).map(([v, label]) => (
+            <option key={v} value={v}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {context !== "normal" && (
+        <p className="mb-3 text-xs text-muted">
+          This session stays in your log but will not change your normal
+          progression baseline.
+        </p>
+      )}
+      {active && !rest && (
+        <WarmupLogger
+          key={active.block.exerciseId}
+          logged={warmups.filter(
+            (s) => s.exerciseId === active.block.exerciseId,
+          )}
+          onLog={async (weight, reps) => {
+            const row = await apiPost<LoggedSet>(`/api/sessions/${id}/sets`, {
+              exerciseId: active.block.exerciseId,
+              setNumber: 1000 + warmups.length + 1,
+              weightKg: weight,
+              reps,
+              rir: null,
+              isWarmup: true,
+              completed: true,
+            });
+            setWarmups((w) => [...w, row]);
           }}
-          onLog={() => logSet()}
-          onDrop={() => addDrop()}
-          onDiscardDrop={() => discardDrop()}
-          onJump={(setKey) => {
-            setCursor({ exIdx: active.exIdx, setKey });
-            setShowWhy(false);
-          }}
-          onAddSet={() => addSet(active.exIdx)}
-          onRemoveSet={() => removeSet(active.exIdx, active.set.key)}
         />
       )}
-
+      <fieldset disabled={busy} className="min-w-0">
+        {blocks.length === 0 ? (
+          <div className="card flex flex-col items-center gap-3 p-6 text-center">
+            <Dumbbell className="text-muted" size={32} />
+            <p className="text-sm text-muted">
+              Empty workout. Add an exercise to get started.
+            </p>
+            <button
+              onClick={() => setPicking(true)}
+              className="btn-primary w-full"
+            >
+              <Plus size={18} /> Add exercise
+            </button>
+          </div>
+        ) : rest ? (
+          <RestTimer
+            key={rest.seq}
+            targetSeconds={rest.target}
+            label={rest.label}
+            note={pickLine("workout", `${id}-${rest.seq}`)}
+            hasNext={!!rest.upcoming}
+            onNext={continueAfterRest}
+          />
+        ) : !active ? (
+          <div className="card flex flex-col items-center gap-3 p-6 text-center">
+            <div className="icon-frame h-14 w-14">
+              <Check size={28} strokeWidth={3} />
+            </div>
+            <p className="font-display text-2xl tracking-[0.04em]">
+              Every set is logged
+            </p>
+            <p className="text-sm text-muted">
+              {completedCount} sets done. Finish up to see your summary and next
+              targets.
+            </p>
+            <button
+              onClick={() => run(finish)}
+              disabled={busy}
+              className="btn-primary w-full"
+            >
+              <Flag size={18} /> Finish workout
+            </button>
+          </div>
+        ) : (
+          <ActiveSet
+            key={active.entry.key}
+            block={active.block}
+            set={active.set}
+            setIdx={active.setIdx}
+            entry={active.entry}
+            showWhy={showWhy}
+            onToggleWhy={() => setShowWhy((v) => !v)}
+            onChange={(patch) =>
+              patchEntry(active.exIdx, active.set.key, active.entry.key, patch)
+            }
+            onCommit={() => {}}
+            onLog={() => run(logSet)}
+            onDrop={() => run(addDrop)}
+            onDiscardDrop={() => run(discardDrop)}
+            onJump={(setKey) => {
+              setCursor({ exIdx: active.exIdx, setKey });
+              setShowWhy(false);
+            }}
+            onAddSet={() => addSet(active.exIdx)}
+            onRemoveSet={() =>
+              run(() => removeSet(active.exIdx, active.set.key))
+            }
+          />
+        )}
+      </fieldset>
       {blocks.length > 0 && (
         <button
           onClick={() => setOverview(true)}
@@ -757,15 +953,18 @@ export default function SessionPage({
             setShowWhy(false);
             setOverview(false);
           }}
-          onReorder={reorderRemaining}
+          onReorder={(order) => run(() => reorderRemaining(order))}
           onAddExercise={() => setPicking(true)}
-          onDiscard={discard}
+          onDiscard={() => run(discard)}
           onClose={() => setOverview(false)}
         />
       )}
 
       {picking && (
-        <ExercisePicker onPick={addExercise} onClose={() => setPicking(false)} />
+        <ExercisePicker
+          onPick={(ex) => run(() => addExercise(ex))}
+          onClose={() => setPicking(false)}
+        />
       )}
     </div>
   );
@@ -786,7 +985,7 @@ function resolve(blocks: Block[], cursor: Cursor | null) {
 function describe(blocks: Block[], cursor: Cursor) {
   const block = blocks[cursor.exIdx];
   const setIdx = block.sets.findIndex((s) => s.key === cursor.setKey);
-  return `${block.name} · set ${setIdx + 1}`;
+  return `${block.name} · set ${block.sets[setIdx]?.setNumber ?? setIdx + 1}`;
 }
 
 function ActiveSet({
@@ -822,15 +1021,20 @@ function ActiveSet({
 }) {
   const previousEntries = set.entries.slice(0, -1);
   const dropIndex = entry.isDrop ? previousEntries.length : 0;
-  const reference = block.lastSets[setIdx] ?? block.lastSets[block.lastSets.length - 1];
-  const canLog = (Number(entry.reps) || 0) > 0;
+  const reference =
+    block.lastSets[setIdx] ?? block.lastSets[block.lastSets.length - 1];
+  const canLog = entry.weight.trim() !== "" && (Number(entry.reps) || 0) > 0;
 
   return (
     <div className="min-w-0">
       <div className="card min-w-0 overflow-hidden p-4 min-[360px]:p-5">
         <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
-          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent">Active movement</p>
-          <span className="font-display text-lg text-muted/35">{String(setIdx + 1).padStart(2, "0")}</span>
+          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent">
+            Active movement
+          </p>
+          <span className="font-display text-lg text-muted/35">
+            {String(setIdx + 1).padStart(2, "0")}
+          </span>
         </div>
         <div className="flex items-start gap-3">
           <ExerciseImage
@@ -896,13 +1100,26 @@ function ActiveSet({
               />
             </button>
             {showWhy && (
-              <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-                {block.recommendation.reason}
-              </p>
+              <div>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+                  {block.recommendation.reason}
+                </p>
+                <p className="mt-1 text-[11px] text-muted">
+                  {block.recommendation.sources?.length
+                    ? `Compared with ${block.recommendation.sources.map((s) => new Date(s.startedAt).toLocaleDateString()).join(", ")}`
+                    : "No comparable exposure yet"}
+                </p>
+              </div>
             )}
           </div>
         )}
 
+        {block.equipmentProfile && (
+          <p className="mt-2 break-words text-xs text-muted">
+            {block.equipmentProfile.machine} · {block.equipmentProfile.setup} ·{" "}
+            {block.equipmentProfile.loading.replaceAll("_", " ")}
+          </p>
+        )}
         {block.instruction && (
           <p className="mt-2 rounded-lg border border-border bg-surface-2 px-2.5 py-2 text-[11px] leading-relaxed text-muted">
             {block.instruction}
@@ -914,7 +1131,7 @@ function ActiveSet({
             {entry.isDrop ? (
               <span className="text-warn">Drop {dropIndex}</span>
             ) : (
-              `Set ${setIdx + 1} of ${block.sets.length}`
+              `Set ${set.setNumber} · ${block.sets.filter((s) => s.completed).length} of ${block.sets.length} done`
             )}
           </p>
           {reference && (
@@ -962,9 +1179,15 @@ function ActiveSet({
         </div>
 
         <div className="mt-3">
-          <p className="label">Reps in reserve</p>
-          <div className="mt-1.5 flex gap-1.5">
-            {["0", "1", "2", "3", "4", "5"].map((value) => {
+          <p className="label">
+            Actual reps in reserve · {entry.rir === "" ? "unknown" : entry.rir}
+          </p>
+          <p className="mt-1 text-[11px] text-muted">
+            Good reps you could still perform. Leave unknown if unsure; tap a
+            selected value to clear.
+          </p>
+          <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+            {["0", "1", "2", "3", "4", "5", "6", ""].map((value) => {
               const selected = entry.rir === value;
               return (
                 <button
@@ -979,9 +1202,9 @@ function ActiveSet({
                       : "border border-border bg-surface-2 text-muted"
                   }`}
                   aria-pressed={selected}
-                  aria-label={`Reps in reserve ${value}`}
+                  aria-label={`Reps in reserve ${value || "unknown"}`}
                 >
-                  {value}
+                  {value || "?"}
                 </button>
               );
             })}
@@ -994,13 +1217,25 @@ function ActiveSet({
           className="btn-primary mt-4 w-full py-3.5 text-base"
         >
           <Check size={19} strokeWidth={3} />
-          {canLog ? "Log set" : "Add reps to log"}
+          {canLog
+            ? set.completed
+              ? "Save set changes"
+              : "Log set"
+            : "Enter weight and reps"}
         </button>
 
         <div className="mt-2 flex gap-2">
           <button
             onClick={onDrop}
-            disabled={!canLog}
+            disabled={
+              !canLog ||
+              block.equipmentProfile?.loading === "bodyweight" ||
+              suggestDropWeight(
+                parseDecimalInput(entry.weight),
+                block.weightIncrementKg,
+                block.equipmentProfile,
+              ) === parseDecimalInput(entry.weight)
+            }
             className="btn-ghost min-w-0 flex-1 py-2 text-sm text-warn"
           >
             <TrendingDown size={16} /> Drop set
@@ -1016,21 +1251,21 @@ function ActiveSet({
           )}
         </div>
         <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-          Drop keeps you on this set: it saves what you just did, strips the weight
-          and skips the rest so you can carry on lighter.
+          Drop keeps you on this set: it saves what you just did, selects an
+          easier setting and skips the rest so you can continue.
         </p>
       </div>
 
       <div className="mt-3 flex items-center gap-1.5">
         <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-          {block.sets.map((s, i) => {
+          {block.sets.map((s) => {
             const current = s.key === set.key;
             const drops = s.entries.length - 1;
             return (
               <button
                 key={s.key}
                 onClick={() => onJump(s.key)}
-                aria-label={`Go to set ${i + 1}`}
+                aria-label={`Go to set ${s.setNumber}`}
                 aria-current={current}
                 className={`relative flex h-9 w-9 items-center justify-center rounded-xl text-sm font-medium tabular-nums transition active:scale-95 ${
                   current
@@ -1040,7 +1275,11 @@ function ActiveSet({
                       : "border border-border bg-surface-2 text-muted"
                 }`}
               >
-                {s.completed && !current ? <Check size={15} strokeWidth={3} /> : i + 1}
+                {s.completed && !current ? (
+                  <Check size={15} strokeWidth={3} />
+                ) : (
+                  s.setNumber
+                )}
                 {drops > 0 && (
                   <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-warn text-[9px] font-bold text-bg">
                     {drops}
@@ -1091,14 +1330,16 @@ function Stepper({
   const current = decimal ? parseDecimalInput(value) : Number(value) || 0;
 
   function nudge(delta: number) {
-    const next = Math.max(0, Math.round((current + delta) * 100) / 100);
+    const next = Math.max(0, Math.round((current + delta) * 1000) / 1000);
     onChange(decimal ? numberText(next) : String(Math.round(next)));
     onCommit();
   }
 
   return (
     <div className="border border-border bg-surface-2 p-2.5 [border-radius:2px_12px_2px_2px]">
-      <p className="mb-1 text-center font-display text-sm uppercase tracking-[0.12em] text-muted">{label}</p>
+      <p className="mb-1 text-center font-display text-sm uppercase tracking-[0.12em] text-muted">
+        {label}
+      </p>
       <div className="flex items-center gap-2">
         <button
           onClick={() => nudge(-step)}
@@ -1117,7 +1358,7 @@ function Stepper({
               onChange(
                 decimal
                   ? normalizeDecimalInput(e.target.value)
-                  : e.target.value.replace(/[^\d]/g, "")
+                  : e.target.value.replace(/[^\d]/g, ""),
               )
             }
             onBlur={onCommit}
@@ -1203,8 +1444,14 @@ function SortableOverviewRow({
   exIdx: number;
   onJump: (exIdx: number, setKey: string) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: block.exerciseId });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: block.exerciseId });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const target = block.sets[0];
   return (
@@ -1250,16 +1497,18 @@ function Overview({
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 8 },
+    }),
   );
   const indexed = blocks.map((block, exIdx) => ({ block, exIdx }));
   const locked = indexed.filter(
     ({ block, exIdx }) =>
-      exIdx === activeExIdx || block.sets.some((s) => s.completed)
+      exIdx === activeExIdx || block.sets.some((s) => s.completed),
   );
   const upNext = indexed.filter(
     ({ block, exIdx }) =>
-      exIdx !== activeExIdx && !block.sets.some((s) => s.completed)
+      exIdx !== activeExIdx && !block.sets.some((s) => s.completed),
   );
 
   function handleDragEnd(event: DragEndEvent) {
@@ -1276,7 +1525,14 @@ function Overview({
     <div className="fixed inset-0 z-50 flex flex-col bg-bg/95 backdrop-blur">
       <div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-3 min-[360px]:px-4">
         <div className="flex shrink-0 items-center gap-2 py-3 safe-top">
-          <div className="min-w-0 flex-1"><p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent">Fitlog / session map</p><h2 className="font-display text-3xl tracking-[0.04em]">Workout overview</h2></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent">
+              Fitlog / session map
+            </p>
+            <h2 className="font-display text-3xl tracking-[0.04em]">
+              Workout overview
+            </h2>
+          </div>
           <button
             onClick={onClose}
             className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-muted transition active:scale-95 [border-radius:2px_9px_2px_2px]"

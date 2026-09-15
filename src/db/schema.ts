@@ -1,6 +1,13 @@
+import type {
+  EquipmentProfile,
+  MuscleProfile,
+  WorkoutSnapshot,
+  SkippedSet,
+} from "@/lib/training-prescription";
 import { sql } from "drizzle-orm";
 import {
   pgTable,
+  jsonb,
   serial,
   text,
   integer,
@@ -52,9 +59,9 @@ export const friendships = pgTable(
   (table) => [
     uniqueIndex("friendships_requester_recipient_unique").on(
       table.requesterId,
-      table.recipientId
+      table.recipientId,
     ),
-  ]
+  ],
 );
 
 // Built-in and user-created exercise library.
@@ -78,9 +85,9 @@ export const exercises = pgTable(
   (table) => [
     uniqueIndex("exercises_source_external_id_unique").on(
       table.source,
-      table.externalId
+      table.externalId,
     ),
-  ]
+  ],
 );
 
 // A saved workout plan (e.g. "Push A", "Legs").
@@ -119,6 +126,8 @@ export const routineExercises = pgTable("routine_exercises", {
   instruction: text("instruction"),
   supersetGroup: text("superset_group"),
   isAnchor: boolean("is_anchor").notNull().default(false),
+  equipmentProfile: jsonb("equipment_profile").$type<EquipmentProfile>(),
+  muscleProfile: jsonb("muscle_profile").$type<MuscleProfile>(),
 });
 
 // A performed workout instance.
@@ -135,6 +144,12 @@ export const sessions = pgTable("sessions", {
   // User-chosen display order of exercise IDs for this session only; falls
   // back to routine/plan position when null or an ID is missing from it.
   exerciseOrder: integer("exercise_order").array(),
+  prescriptionSnapshot: jsonb("prescription_snapshot").$type<WorkoutSnapshot>(),
+  performanceContext: text("performance_context").notNull().default("normal"),
+  skippedSets: jsonb("skipped_sets")
+    .$type<SkippedSet[]>()
+    .notNull()
+    .default([]),
   startedAt: timestamp("started_at").notNull().defaultNow(),
   finishedAt: timestamp("finished_at"),
 });
@@ -238,7 +253,7 @@ export const workoutSchedule = pgTable(
       onDelete: "set null",
     }),
   },
-  (table) => [primaryKey({ columns: [table.userId, table.dayOfWeek] })]
+  (table) => [primaryKey({ columns: [table.userId, table.dayOfWeek] })],
 );
 
 // State for the current training block and its autoregulated deload week.
@@ -270,8 +285,11 @@ export const trainingCheckins = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("training_checkins_user_day_unique").on(table.userId, table.day),
-  ]
+    uniqueIndex("training_checkins_user_day_unique").on(
+      table.userId,
+      table.day,
+    ),
+  ],
 );
 
 // Daily energy expenditure copied from Garmin Connect.
@@ -286,7 +304,7 @@ export const expenditureLogs = pgTable(
     activeCalories: real("active_calories"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (table) => [primaryKey({ columns: [table.userId, table.day] })]
+  (table) => [primaryKey({ columns: [table.userId, table.day] })],
 );
 
 // Reusable foods keep gram-based nutrition while also supporting a serving label.
@@ -336,13 +354,13 @@ export const foodCatalogItems = pgTable(
   (table) => [
     uniqueIndex("food_catalog_provider_id_unique").on(
       table.provider,
-      table.providerId
+      table.providerId,
     ),
     index("food_catalog_country_provider_idx").on(
       table.countryCode,
-      table.provider
+      table.provider,
     ),
-  ]
+  ],
 );
 
 export const foodCatalogNames = pgTable(
@@ -362,13 +380,13 @@ export const foodCatalogNames = pgTable(
   (table) => [
     uniqueIndex("food_catalog_name_language_unique").on(
       table.foodId,
-      table.language
+      table.language,
     ),
     index("food_catalog_names_search_idx").using(
       "gin",
-      table.searchText.asc().op("gin_trgm_ops")
+      table.searchText.asc().op("gin_trgm_ops"),
     ),
-  ]
+  ],
 );
 
 // A compact JSON snapshot is intentional: meal templates are private, immutable
@@ -433,7 +451,10 @@ export const coachMemory = pgTable("coach_memory", {
     .notNull()
     .unique()
     .references(() => appUsers.id, { onDelete: "cascade" }),
-  notes: text("notes").array().notNull().default(sql`'{}'::text[]`),
+  notes: text("notes")
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -529,9 +550,9 @@ export const garminPendingImports = pgTable(
   (table) => [
     uniqueIndex("garmin_pending_imports_user_activity_unique").on(
       table.userId,
-      table.garminActivityId
+      table.garminActivityId,
     ),
-  ]
+  ],
 );
 
 // Daily health metrics pulled from Garmin Connect during sync.
@@ -556,9 +577,9 @@ export const garminDailyMetrics = pgTable(
   (table) => [
     uniqueIndex("garmin_daily_metrics_user_date_unique").on(
       table.userId,
-      table.date
+      table.date,
     ),
-  ]
+  ],
 );
 
 export type Exercise = typeof exercises.$inferSelect;

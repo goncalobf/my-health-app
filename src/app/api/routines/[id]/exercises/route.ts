@@ -4,28 +4,77 @@ import { db } from "@/db";
 import { exercises, routineExercises, routines } from "@/db/schema";
 import { requireAppUser } from "@/lib/app-user";
 
+import {
+  prescriptionPatch,
+  validPrescription,
+  defaultPrescription,
+} from "@/lib/training-validation";
+
 export async function POST(
   req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireAppUser();
   const { id } = await params;
+  if(![Number(id)].every(n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647)) return NextResponse.json({error:"Invalid identifier"},{status:400});
   const routineId = Number(id);
   const body = await req.json().catch(() => ({}));
   const [ownedRoutine] = await db
     .select({ id: routines.id })
     .from(routines)
     .where(and(eq(routines.id, routineId), eq(routines.userId, user.id)));
-  if (!ownedRoutine) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const exerciseId = Number(body.exerciseId);
-  if (!exerciseId) {
+  if (!ownedRoutine)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    return NextResponse.json(
+      { error: "Invalid prescription" },
+      { status: 400 },
+    );
+  const { exerciseId: rawId, ...fields } = body;
+  const patch = prescriptionPatch.safeParse(fields);
+  if (!patch.success)
+    return NextResponse.json(
+      { error: "Invalid prescription" },
+      { status: 400 },
+    );
+  const validated = validPrescription.safeParse({
+    ...defaultPrescription,
+    ...patch.data,
+  });
+  if (!validated.success)
+    return NextResponse.json(
+      { error: validated.error.issues[0].message },
+      { status: 400 },
+    );
+  const exerciseId = Number(rawId);
+  if (!Number.isInteger(exerciseId) || exerciseId < 1) {
     return NextResponse.json({ error: "exerciseId required" }, { status: 400 });
   }
   const [availableExercise] = await db
     .select({ id: exercises.id })
     .from(exercises)
-    .where(and(eq(exercises.id, exerciseId), or(isNull(exercises.ownerUserId), eq(exercises.ownerUserId, user.id))));
-  if (!availableExercise) return NextResponse.json({ error: "Exercise not found" }, { status: 404 });
+    .where(
+      and(
+        eq(exercises.id, exerciseId),
+        or(isNull(exercises.ownerUserId), eq(exercises.ownerUserId, user.id)),
+      ),
+    );
+  if (!availableExercise)
+    return NextResponse.json({ error: "Exercise not found" }, { status: 404 });
+  const [duplicate] = await db
+    .select({ id: routineExercises.id })
+    .from(routineExercises)
+    .where(
+      and(
+        eq(routineExercises.routineId, routineId),
+        eq(routineExercises.exerciseId, exerciseId),
+      ),
+    );
+  if (duplicate)
+    return NextResponse.json(
+      { error: "This exercise is already in the routine" },
+      { status: 400 },
+    );
   const [{ max }] = await db
     .select({
       max: sql<number>`coalesce(max(${routineExercises.position}), 0)::int`,
@@ -38,18 +87,9 @@ export async function POST(
     .values({
       routineId,
       exerciseId,
+      ...validated.data,
       position: (max ?? 0) + 1,
-      targetSets: body.targetSets ? Number(body.targetSets) : 3,
-      targetReps: body.targetReps ? Number(body.targetReps) : 10,
-      minReps: body.minReps ? Number(body.minReps) : 8,
-      maxReps: body.maxReps ? Number(body.maxReps) : 12,
-      targetWeightKg:
-        body.targetWeightKg != null && body.targetWeightKg !== ""
-          ? Number(body.targetWeightKg)
-          : null,
-      weightIncrementKg:
-        body.weightIncrementKg != null ? Number(body.weightIncrementKg) : 2.5,
-      restSeconds: body.restSeconds ? Number(body.restSeconds) : 120,
+      targetReps: validated.data.maxReps,
     })
     .returning();
   return NextResponse.json(row, { status: 201 });
@@ -59,16 +99,18 @@ export async function POST(
  *  slot IDs in their new top-to-bottom order. */
 export async function PATCH(
   req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireAppUser();
   const { id } = await params;
+  if(![Number(id)].every(n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647)) return NextResponse.json({error:"Invalid identifier"},{status:400});
   const routineId = Number(id);
   const [ownedRoutine] = await db
     .select({ id: routines.id })
     .from(routines)
     .where(and(eq(routines.id, routineId), eq(routines.userId, user.id)));
-  if (!ownedRoutine) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!ownedRoutine)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
   const order: number[] | null = Array.isArray(body.order)
@@ -90,7 +132,7 @@ export async function PATCH(
   if (!isExactMatch) {
     return NextResponse.json(
       { error: "order must contain exactly this routine's exercise slots" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 

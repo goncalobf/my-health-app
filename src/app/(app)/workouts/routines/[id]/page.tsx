@@ -24,7 +24,22 @@ import PageHeader from "@/components/PageHeader";
 import ExercisePicker from "@/components/ExercisePicker";
 import ExerciseImage from "@/components/ExerciseImage";
 
+import PrescriptionSettings from "@/components/PrescriptionSettings";
+import type {
+  EquipmentProfile,
+  MuscleProfile,
+} from "@/lib/training-prescription";
+import { normalizeDecimalInput } from "@/lib/decimal-input";
+
 interface Item {
+  targetRirMin: number | null;
+  targetRirMax: number | null;
+  avoidFailure: boolean;
+  isAnchor: boolean;
+  instruction: string | null;
+  supersetGroup: string | null;
+  equipmentProfile: EquipmentProfile | null;
+  muscleProfile: MuscleProfile | null;
   id: number;
   exerciseId: number;
   name: string;
@@ -48,7 +63,6 @@ function NumField({
   value,
   onCommit,
   suffix,
-  step = 1,
   width = "w-16",
 }: {
   value: number | null;
@@ -64,12 +78,13 @@ function NumField({
   return (
     <div className="flex items-baseline gap-1">
       <input
-        type="number"
+        type="text"
         inputMode="decimal"
-        step={step}
         value={v}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={() => onCommit(v)}
+        onChange={(e) => setV(normalizeDecimalInput(e.target.value))}
+        onBlur={() => {
+          void Promise.resolve(onCommit(v)).catch(() => {});
+        }}
         className={`${width} bg-surface-2 border border-border rounded-lg px-2 py-1.5 text-center tabular-nums outline-none focus:border-accent`}
       />
       {suffix && <span className="text-xs text-muted">{suffix}</span>}
@@ -83,11 +98,17 @@ function SortableExerciseCard({
   onRemove,
 }: {
   item: Item;
-  onUpdate: (itemId: number, patch: Record<string, unknown>) => void;
+  onUpdate: (itemId: number, patch: Record<string, unknown>) => Promise<void>;
   onRemove: (itemId: number) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: item.id });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -133,21 +154,21 @@ function SortableExerciseCard({
           <span className="text-sm text-muted">Sets</span>
           <NumField
             value={item.targetSets}
-            onCommit={(v) => onUpdate(item.id, { targetSets: Number(v) || 1 })}
+            onCommit={(v) => onUpdate(item.id, { targetSets: v })}
           />
         </label>
         <label className="flex min-w-0 items-center justify-between gap-2">
           <span className="text-sm text-muted">Min reps</span>
           <NumField
             value={item.minReps}
-            onCommit={(v) => onUpdate(item.id, { minReps: Number(v) || 1 })}
+            onCommit={(v) => onUpdate(item.id, { minReps: v })}
           />
         </label>
         <label className="flex min-w-0 items-center justify-between gap-2">
           <span className="text-sm text-muted">Max reps</span>
           <NumField
             value={item.maxReps}
-            onCommit={(v) => onUpdate(item.id, { maxReps: Number(v) || 1 })}
+            onCommit={(v) => onUpdate(item.id, { maxReps: v })}
           />
         </label>
         <label className="flex min-w-0 items-center justify-between gap-2">
@@ -165,9 +186,7 @@ function SortableExerciseCard({
             value={item.weightIncrementKg}
             step={0.5}
             suffix="kg"
-            onCommit={(v) =>
-              onUpdate(item.id, { weightIncrementKg: Number(v) || 0.5 })
-            }
+            onCommit={(v) => onUpdate(item.id, { weightIncrementKg: v })}
           />
         </label>
         <label className="flex min-w-0 items-center justify-between gap-2">
@@ -178,10 +197,14 @@ function SortableExerciseCard({
             value={item.restSeconds}
             step={15}
             suffix="s"
-            onCommit={(v) => onUpdate(item.id, { restSeconds: Number(v) || 0 })}
+            onCommit={(v) => onUpdate(item.id, { restSeconds: v })}
           />
         </label>
       </div>
+      <PrescriptionSettings
+        value={item}
+        onSave={(patch) => onUpdate(item.id, patch)}
+      />
     </div>
   );
 }
@@ -195,10 +218,13 @@ export default function RoutineEditorPage({
   const router = useRouter();
   const [routine, setRoutine] = useState<Routine | null>(null);
   const [name, setName] = useState("");
+  const [error, setError] = useState("");
   const [picking, setPicking] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 8 },
+    }),
   );
 
   const load = useCallback(async () => {
@@ -207,7 +233,7 @@ export default function RoutineEditorPage({
     setName(r.name);
   }, [id]);
   useEffect(() => {
-    load();
+    load().catch(() => setError("Could not load routine"));
   }, [load]);
 
   async function saveName() {
@@ -222,17 +248,26 @@ export default function RoutineEditorPage({
   }
 
   async function updateItem(itemId: number, patch: Record<string, unknown>) {
-    await apiPatch(`/api/routines/${id}/exercises/${itemId}`, patch);
-    setRoutine((r) =>
-      r
-        ? {
-            ...r,
-            exercises: r.exercises.map((it) =>
-              it.id === itemId ? { ...it, ...patch } : it
-            ),
-          }
-        : r
-    );
+    setError("");
+    try {
+      const saved = await apiPatch<Item>(
+        `/api/routines/${id}/exercises/${itemId}`,
+        patch,
+      );
+      setRoutine((r) =>
+        r
+          ? {
+              ...r,
+              exercises: r.exercises.map((it) =>
+                it.id === itemId ? { ...it, ...saved } : it,
+              ),
+            }
+          : r,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save changes");
+      throw e;
+    }
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -251,7 +286,7 @@ export default function RoutineEditorPage({
   async function removeItem(itemId: number) {
     await apiDelete(`/api/routines/${id}/exercises/${itemId}`);
     setRoutine((r) =>
-      r ? { ...r, exercises: r.exercises.filter((it) => it.id !== itemId) } : r
+      r ? { ...r, exercises: r.exercises.filter((it) => it.id !== itemId) } : r,
     );
   }
 
@@ -268,11 +303,21 @@ export default function RoutineEditorPage({
     router.push(`/workouts/session/${created.id}`);
   }
 
-  if (!routine) return <p className="text-muted text-sm">Loading…</p>;
+  if (!routine)
+    return (
+      <p role="status" className="text-muted text-sm">
+        {error || "Loading…"}
+      </p>
+    );
 
   return (
     <div>
       <PageHeader title="Edit routine" back="/workouts" />
+      {error && (
+        <p role="alert" className="mb-3 text-sm text-danger">
+          {error}
+        </p>
+      )}
 
       <input
         value={name}
@@ -316,10 +361,7 @@ export default function RoutineEditorPage({
         </button>
       )}
 
-      <button
-        onClick={deleteRoutine}
-        className="btn-danger w-full mt-6"
-      >
+      <button onClick={deleteRoutine} className="btn-danger w-full mt-6">
         <Trash2 size={18} /> Delete routine
       </button>
 

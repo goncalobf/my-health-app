@@ -17,7 +17,7 @@ test("opens an added-load set at the bottom of the rep range", () => {
 test("opens a held-load set at last session's reps so they can be beaten", () => {
   const result = prefillSet(
     { ...target, recommendedWeightKg: 80, recommendationAction: "repeat" },
-    { weightKg: 80, reps: 7 }
+    { weightKg: 80, reps: 7 },
   );
   assert.deepEqual(result, { weightKg: 80, reps: 7 });
 });
@@ -28,10 +28,13 @@ test("falls back to last session, then to the previous set of this session", () 
     recommendedWeightKg: null,
     recommendationAction: null,
   };
-  assert.equal(prefillSet(noRecommendation, { weightKg: 70, reps: 8 }).weightKg, 70);
+  assert.equal(
+    prefillSet(noRecommendation, { weightKg: 70, reps: 8 }).weightKg,
+    70,
+  );
   assert.equal(
     prefillSet(noRecommendation, null, { weightKg: 65, reps: 8 }).weightKg,
-    65
+    65,
   );
 });
 
@@ -68,4 +71,30 @@ test("keeps a drop at least one increment below the effort it follows", () => {
 
 test("treats a bodyweight exercise as having nothing to strip", () => {
   assert.equal(suggestDropWeight(0, 2.5), 0);
+});
+
+test("zero-assistance recommendation overrides previous assistance", () => {
+  assert.equal(
+    prefillSet(
+      {
+        minReps: 8,
+        maxReps: 12,
+        recommendedWeightKg: 0,
+        recommendationAction: "increase",
+      },
+      { weightKg: 5, reps: 12 },
+    ).weightKg,
+    0,
+  );
+});
+test("assisted drops increase assistance and use an available setting", () => {
+  assert.equal(
+    suggestDropWeight(20, 2.5, {
+      machine: "Pull-up",
+      setup: "",
+      loading: "assistance",
+      availableLoads: [10, 20, 30, 40],
+    }),
+    30,
+  );
 });
