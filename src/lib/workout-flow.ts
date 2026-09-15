@@ -36,7 +36,7 @@ export interface FlowPosition {
  */
 export function groupLoggedRows<T extends LoggedRow>(rows: T[]): RowGroup<T>[] {
   const ordered = [...rows].sort(
-    (a, b) => a.setNumber - b.setNumber || a.id - b.id
+    (a, b) => a.setNumber - b.setNumber || a.id - b.id,
   );
   const grouped = new Map<number, T[]>();
   for (const row of ordered) {
@@ -55,7 +55,7 @@ export function nextSetNumber(sets: { setNumber: number }[]): number {
 }
 
 export function firstIncompletePosition(
-  blocks: FlowBlock[]
+  blocks: FlowBlock[],
 ): FlowPosition | null {
   for (let exIdx = 0; exIdx < blocks.length; exIdx++) {
     const set = blocks[exIdx].sets.find((s) => !s.completed);
@@ -71,11 +71,11 @@ export function firstIncompletePosition(
 export function nextIncompletePosition(
   blocks: FlowBlock[],
   exIdx: number,
-  setKey: string
+  setKey: string,
 ): FlowPosition | null {
   const order: FlowPosition[] = [];
   blocks.forEach((block, i) =>
-    block.sets.forEach((set) => order.push({ exIdx: i, setKey: set.key }))
+    block.sets.forEach((set) => order.push({ exIdx: i, setKey: set.key })),
   );
   const at = order.findIndex((p) => p.exIdx === exIdx && p.setKey === setKey);
   const rotated =
@@ -96,7 +96,7 @@ export function nextIncompletePosition(
  */
 export function applySessionExerciseOrder<T extends { exerciseId: number }>(
   plan: T[],
-  order: number[] | null | undefined
+  order: number[] | null | undefined,
 ): T[] {
   if (!order || order.length === 0) return plan;
   const rank = new Map(order.map((exerciseId, i) => [exerciseId, i]));
@@ -119,8 +119,21 @@ export function applySessionExerciseOrder<T extends { exerciseId: number }>(
 export function reorderExerciseIds(
   currentOrder: number[],
   lockedExerciseIds: ReadonlySet<number>,
-  newUnlockedOrder: number[]
+  newUnlockedOrder: number[],
 ): number[] {
   const locked = currentOrder.filter((id) => lockedExerciseIds.has(id));
   return [...locked, ...newUnlockedOrder];
+}
+
+/** Restore prescribed slots without fabricating persisted observations. */
+export function restorePlannedSets<T extends LoggedRow>(
+  targetSets: number,
+  rows: T[],
+  skipped: number[] = [],
+): RowGroup<T>[] {
+  const groups = new Map(groupLoggedRows(rows).map((g) => [g.setNumber, g]));
+  for (let n = 1; n <= targetSets; n++)
+    if (!groups.has(n) && !skipped.includes(n))
+      groups.set(n, { setNumber: n, completed: false, rows: [] });
+  return [...groups.values()].sort((a, b) => a.setNumber - b.setNumber);
 }

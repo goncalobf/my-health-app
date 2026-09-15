@@ -21,9 +21,12 @@ test("keeps a drop under the set it belongs to, in the order it was taken", () =
   assert.equal(groups.length, 2);
   assert.deepEqual(
     groups.map((g) => g.setNumber),
-    [1, 2]
+    [1, 2],
   );
-  assert.deepEqual(groups[1].rows.map((r) => r.id), [3, 4, 5]);
+  assert.deepEqual(
+    groups[1].rows.map((r) => r.id),
+    [3, 4, 5],
+  );
 });
 
 test("treats sets logged without drops as one row each", () => {
@@ -31,7 +34,10 @@ test("treats sets logged without drops as one row each", () => {
     { id: 1, setNumber: 1, completedAt: done },
     { id: 2, setNumber: 2, completedAt: null },
   ]);
-  assert.deepEqual(groups.map((g) => g.completed), [true, false]);
+  assert.deepEqual(
+    groups.map((g) => g.completed),
+    [true, false],
+  );
 });
 
 test("marks a set done from its working effort, not its drops", () => {
@@ -49,7 +55,12 @@ test("never reissues a set number after one is removed", () => {
 
 test("advances to the next set, then into the next exercise", () => {
   const blocks = [
-    { sets: [{ key: "a1", completed: true }, { key: "a2", completed: false }] },
+    {
+      sets: [
+        { key: "a1", completed: true },
+        { key: "a2", completed: false },
+      ],
+    },
     { sets: [{ key: "b1", completed: false }] },
   ];
   assert.deepEqual(nextIncompletePosition(blocks, 0, "a1"), {
@@ -64,7 +75,12 @@ test("advances to the next set, then into the next exercise", () => {
 
 test("wraps back to a set skipped earlier", () => {
   const blocks = [
-    { sets: [{ key: "a1", completed: false }, { key: "a2", completed: true }] },
+    {
+      sets: [
+        { key: "a1", completed: false },
+        { key: "a2", completed: true },
+      ],
+    },
     { sets: [{ key: "b1", completed: true }] },
   ];
   assert.deepEqual(nextIncompletePosition(blocks, 1, "b1"), {
@@ -75,7 +91,12 @@ test("wraps back to a set skipped earlier", () => {
 
 test("reports nothing left rather than returning the set just logged", () => {
   const blocks = [
-    { sets: [{ key: "a1", completed: true }, { key: "a2", completed: false }] },
+    {
+      sets: [
+        { key: "a1", completed: true },
+        { key: "a2", completed: false },
+      ],
+    },
   ];
   assert.equal(nextIncompletePosition(blocks, 0, "a2"), null);
 });
@@ -88,7 +109,7 @@ test("starts on the first unlogged set of the workout", () => {
   assert.deepEqual(firstIncompletePosition(blocks), { exIdx: 1, setKey: "b1" });
   assert.equal(
     firstIncompletePosition([{ sets: [{ key: "a1", completed: true }] }]),
-    null
+    null,
   );
 });
 
@@ -96,7 +117,7 @@ test("reorders a plan by a saved exercise order", () => {
   const plan = [{ exerciseId: 1 }, { exerciseId: 2 }, { exerciseId: 3 }];
   assert.deepEqual(
     applySessionExerciseOrder(plan, [3, 1, 2]).map((p) => p.exerciseId),
-    [3, 1, 2]
+    [3, 1, 2],
   );
 });
 
@@ -110,7 +131,7 @@ test("sends exercises missing from a saved order to the end, in original order",
   const plan = [{ exerciseId: 1 }, { exerciseId: 2 }, { exerciseId: 3 }];
   assert.deepEqual(
     applySessionExerciseOrder(plan, [2]).map((p) => p.exerciseId),
-    [2, 1, 3]
+    [2, 1, 3],
   );
 });
 
@@ -118,20 +139,37 @@ test("ignores a saved order id no longer in the plan", () => {
   const plan = [{ exerciseId: 1 }, { exerciseId: 2 }];
   assert.deepEqual(
     applySessionExerciseOrder(plan, [99, 2, 1]).map((p) => p.exerciseId),
-    [2, 1]
+    [2, 1],
   );
 });
 
 test("combines a drag of the unlocked tail with the locked exercises kept in place", () => {
   assert.deepEqual(
     reorderExerciseIds([1, 2, 3, 4], new Set([1, 3]), [4, 2]),
-    [1, 3, 4, 2]
+    [1, 3, 4, 2],
   );
 });
 
 test("reorders freely when nothing is locked yet", () => {
   assert.deepEqual(
     reorderExerciseIds([1, 2, 3], new Set(), [3, 1, 2]),
-    [3, 1, 2]
+    [3, 1, 2],
+  );
+});
+
+test("reload overlays a logged set onto the complete prescription", async () => {
+  const { restorePlannedSets } = await import("./workout-flow");
+  const groups = restorePlannedSets(4, [
+    { id: 1, setNumber: 1, completedAt: "2026-01-01" },
+  ]);
+  assert.equal(groups.length, 4);
+  assert.equal(groups.filter((g) => !g.completed).length, 3);
+  assert.deepEqual(groups[1].rows, []);
+});
+test("explicitly skipped sets stay skipped after reload", async () => {
+  const { restorePlannedSets } = await import("./workout-flow");
+  assert.deepEqual(
+    restorePlannedSets(4, [], [2]).map((g) => g.setNumber),
+    [1, 3, 4],
   );
 });

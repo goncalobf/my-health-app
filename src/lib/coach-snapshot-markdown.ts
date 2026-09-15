@@ -5,14 +5,26 @@ import type { CoachSnapshot } from "@/lib/coach-data";
  * arrays (workouts, trends) become tables, which the model reads with far
  * fewer tokens than the equivalent array of near-identical objects.
  */
-const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const WEEKDAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
 
 function cell(value: unknown): string {
   if (value == null || value === "") return "—";
   return String(value).replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
 }
 
-function table(headers: string[], rows: unknown[][], emptyText: string): string {
+function table(
+  headers: string[],
+  rows: unknown[][],
+  emptyText: string,
+): string {
   if (rows.length === 0) return `_${emptyText}_`;
   const head = `| ${headers.join(" | ")} |`;
   const divider = `| ${headers.map(() => "---").join(" | ")} |`;
@@ -29,8 +41,12 @@ function weekday(dayOfWeek: number): string {
   return WEEKDAYS[dayOfWeek - 1] ?? `Day ${dayOfWeek}`;
 }
 
-function formatSets(sets: { weightKg: number; reps: number; rir: number | null }[]): string {
-  return sets.map((s) => `${s.weightKg}×${s.reps}${s.rir != null ? `@${s.rir}` : ""}`).join(", ");
+function formatSets(
+  sets: { weightKg: number; reps: number; rir: number | null }[],
+): string {
+  return sets
+    .map((s) => `${s.weightKg}×${s.reps}${s.rir != null ? `@${s.rir}` : ""}`)
+    .join(", ");
 }
 
 export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
@@ -40,8 +56,12 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
     [
       `# Fitlog data snapshot — generated for ${snapshot.generatedFor}`,
       `Covers the last ${snapshot.periodDays} days.`,
-      snapshot.focusSessionId ? `**This request is specifically about workout #${snapshot.focusSessionId} in the Workouts section below.**` : null,
-    ].filter(Boolean).join("\n")
+      snapshot.focusSessionId
+        ? `**This request is specifically about workout #${snapshot.focusSessionId} in the Workouts section below.**`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
   );
 
   sections.push(
@@ -50,7 +70,7 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
       `- Goal: ${cell(snapshot.goal)} (target weekly weight change: ${snapshot.targetWeeklyChangePct}%)`,
       `- Current weight: ${cell(snapshot.profile.currentWeightKg)} kg → goal weight: ${cell(snapshot.profile.goalWeightKg)} kg`,
       `- Height: ${cell(snapshot.profile.heightCm)} cm, age: ${cell(snapshot.profile.ageYears)}, biological sex: ${cell(snapshot.profile.biologicalSex)}`,
-    ].join("\n")
+    ].join("\n"),
   );
 
   const t = snapshot.targets;
@@ -62,7 +82,7 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
       `- Logged today: ${today.nutrition.calories} kcal · ${today.nutrition.proteinG}P ${today.nutrition.carbsG}C ${today.nutrition.fatG}F`,
       `- Remaining today: ${today.remaining.calories} kcal · ${today.remaining.proteinG}P ${today.remaining.carbsG}C ${today.remaining.fatG}F`,
       `- Garmin total calories today: ${cell(today.garminTotalCalories)}`,
-    ].join("\n")
+    ].join("\n"),
   );
 
   const hydration = snapshot.hydration;
@@ -73,7 +93,7 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
         ? `- Daily water target: ${hydration.targetLiters} L (${hydration.baselineLiters} L baseline at ~37.5 ml/kg${hydration.creatinePhase === "loading" ? ` + ${hydration.creatineBonusLiters} L for an active creatine-loading phase` : ""})`
         : "- No current weight on file, so no water target could be calculated.",
       `- Creatine phase: ${hydration.creatinePhase}${hydration.creatinePhase === "maintenance" ? " (no extra hydration bump — baseline already covers the commonly cited maintenance range)" : ""}`,
-    ].join("\n")
+    ].join("\n"),
   );
 
   const phase = snapshot.nutritionPhase;
@@ -85,18 +105,27 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
       `- Observed weekly change: ${cell(phase.observedWeeklyChangePct != null ? `${phase.observedWeeklyChangePct}%` : null)} vs. target ${phase.targetWeeklyChangePct}%`,
       `- Rate assessment: ${phase.rateAssessment} — ${phase.rateMessage}`,
       phase.guidance ? `- Guidance: ${phase.guidance}` : null,
-    ].filter(Boolean).join("\n")
+    ]
+      .filter(Boolean)
+      .join("\n"),
   );
 
   sections.push(
-    ["## Coach memory (prior sessions — soft context, see instructions)", bullets(snapshot.coachMemory, "Nothing recorded yet.")].join("\n")
+    [
+      "## Coach memory (prior sessions — soft context, see instructions)",
+      bullets(snapshot.coachMemory, "Nothing recorded yet."),
+    ].join("\n"),
   );
 
   sections.push(
     [
       "## Weight trend",
-      table(["Day", "Weight (kg)"], snapshot.weightTrend.map((w) => [w.day, w.weightKg]), "No weigh-ins in this period."),
-    ].join("\n")
+      table(
+        ["Day", "Weight (kg)"],
+        snapshot.weightTrend.map((w) => [w.day, w.weightKg]),
+        "No weigh-ins in this period.",
+      ),
+    ].join("\n"),
   );
 
   sections.push(
@@ -104,38 +133,60 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
       "## Nutrition trend (daily totals)",
       table(
         ["Day", "Calories", "Protein (g)", "Carbs (g)", "Fat (g)"],
-        snapshot.nutritionTrend.map((n) => [n.day, n.calories, n.proteinG, n.carbsG, n.fatG]),
-        "No nutrition logged in this period."
+        snapshot.nutritionTrend.map((n) => [
+          n.day,
+          n.calories,
+          n.proteinG,
+          n.carbsG,
+          n.fatG,
+        ]),
+        "No nutrition logged in this period.",
       ),
-    ].join("\n")
+    ].join("\n"),
   );
 
   sections.push(
     [
       "## Garmin expenditure",
-      table(["Day", "Total calories"], snapshot.expenditureTrend.map((e) => [e.day, e.totalCalories]), "No Garmin expenditure in this period."),
-    ].join("\n")
+      table(
+        ["Day", "Total calories"],
+        snapshot.expenditureTrend.map((e) => [e.day, e.totalCalories]),
+        "No Garmin expenditure in this period.",
+      ),
+    ].join("\n"),
   );
 
   sections.push(
     [
       "## Garmin health trend",
       table(
-        ["Date", "RHR", "HRV", "HRV balance", "Sleep (h)", "Sleep score", "Active cal", "Total cal", "Steps"],
+        [
+          "Date",
+          "RHR",
+          "HRV",
+          "HRV balance",
+          "Sleep (h)",
+          "Sleep score",
+          "Active cal",
+          "Total cal",
+          "Steps",
+        ],
         snapshot.garminHealthTrend.map((g) => [
           g.date,
           g.restingHrBpm,
           g.hrvScore,
           g.hrvBalanceScore,
-          g.sleepDurationSeconds != null ? Math.round((g.sleepDurationSeconds / 3600) * 10) / 10 : null,
+          g.sleepDurationSeconds != null
+            ? Math.round((g.sleepDurationSeconds / 3600) * 10) / 10
+            : null,
           g.sleepScoreValue,
           g.caloriesActive,
           g.caloriesTotal,
           g.steps,
         ]),
-        "No Garmin health data in this period."
+        "No Garmin health data in this period.",
       ),
-    ].join("\n")
+    ].join("\n"),
   );
 
   const workoutSections = snapshot.workouts.map((w) => {
@@ -143,50 +194,90 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
     const body = table(
       ["Exercise", "Muscle group", "Sets (weight×reps@RIR)"],
       w.exercises.map((e) => [e.name, e.muscleGroup, formatSets(e.sets)]),
-      "No sets recorded."
+      "No sets recorded.",
     );
     return `${heading}\n${body}`;
   });
   sections.push(
-    ["## Workouts", workoutSections.length === 0 ? "_No completed workouts in this period._" : workoutSections.join("\n\n")].join("\n")
+    [
+      "## Workouts",
+      workoutSections.length === 0
+        ? "_No completed workouts in this period._"
+        : workoutSections.join("\n\n"),
+    ].join("\n"),
   );
 
   sections.push(
     [
       "## Cardio sessions",
       table(
-        ["Date", "Type", "Duration (min)", "Distance (km)", "Avg HR", "Calories", "Avg speed (km/h)", "Avg power (W)", "Division"],
-        snapshot.cardioSessions.map((c) => [c.date, c.type, c.durationMinutes, c.distanceKm, c.avgHeartRate, c.calories, c.avgSpeedKmh, c.avgPowerW, c.division]),
-        "No cardio sessions in this period."
+        [
+          "Date",
+          "Type",
+          "Duration (min)",
+          "Distance (km)",
+          "Avg HR",
+          "Calories",
+          "Avg speed (km/h)",
+          "Avg power (W)",
+          "Division",
+        ],
+        snapshot.cardioSessions.map((c) => [
+          c.date,
+          c.type,
+          c.durationMinutes,
+          c.distanceKm,
+          c.avgHeartRate,
+          c.calories,
+          c.avgSpeedKmh,
+          c.avgPowerW,
+          c.division,
+        ]),
+        "No cardio sessions in this period.",
       ),
-    ].join("\n")
+    ].join("\n"),
   );
 
   sections.push(
     [
       "## Weekly schedule",
-      table(["Day", "Routine"], snapshot.schedule.map((s) => [weekday(s.dayOfWeek), s.routine]), "No schedule configured."),
-    ].join("\n")
+      table(
+        ["Day", "Routine"],
+        snapshot.schedule.map((s) => [weekday(s.dayOfWeek), s.routine]),
+        "No schedule configured.",
+      ),
+    ].join("\n"),
   );
 
   sections.push(
     [
       "## Routine targets",
       table(
-        ["Exercise", "Target sets", "Rep range", "RIR range", "Increment (kg)", "Anchor", "Avoid failure", "Instruction"],
+        [
+          "Exercise",
+          "Target sets",
+          "Rep range",
+          "RIR range",
+          "Increment (kg)",
+          "Anchor",
+          "Avoid failure",
+          "Instruction",
+        ],
         snapshot.routineTargets.map((r) => [
           r.exercise,
           r.targetSets,
           `${r.minReps}-${r.maxReps}`,
-          r.targetRirMin != null ? `${r.targetRirMin}-${r.targetRirMax ?? r.targetRirMin}` : null,
+          r.targetRirMin != null
+            ? `${r.targetRirMin}-${r.targetRirMax ?? r.targetRirMin}`
+            : null,
           r.incrementKg,
           r.isAnchor ? "yes" : "no",
           r.avoidFailure ? "yes" : "no",
           r.instruction,
         ]),
-        "No routine targets configured."
+        "No routine targets configured.",
       ),
-    ].join("\n")
+    ].join("\n"),
   );
 
   sections.push(
@@ -194,19 +285,50 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
       "## Common foods",
       table(
         ["Food", "Uses", "Avg grams", "Avg kcal", "Avg protein (g)"],
-        snapshot.commonFoods.map((f) => [f.name, f.uses, f.averageGrams, f.averageCalories, f.averageProteinG]),
-        "No repeated foods in this period."
+        snapshot.commonFoods.map((f) => [
+          f.name,
+          f.uses,
+          f.averageGrams,
+          f.averageCalories,
+          f.averageProteinG,
+        ]),
+        "No repeated foods in this period.",
       ),
-    ].join("\n")
+    ].join("\n"),
   );
 
+  sections.push(
+    [
+      "## Deterministic progression decisions",
+      "Explain these decisions; do not replace them with invented loads or infer overload from total tonnage. Different A/B prescriptions and setups are separate tracks.",
+      table(
+        [
+          "Routine",
+          "Exercise",
+          "Action",
+          "Load kg",
+          "Comparable exposures",
+          "Reason",
+        ],
+        (snapshot.progressionDecisions ?? []).map((r) => [
+          r.routineName,
+          r.exerciseName,
+          r.action,
+          r.weightKg,
+          r.comparableSessions,
+          r.reason,
+        ]),
+        "No comparable progression decisions available.",
+      ),
+    ].join("\n"),
+  );
   const coverage = snapshot.dataCoverage;
   sections.push(
     [
       "## Data coverage (use this to judge confidence)",
       `- Weigh-ins: ${coverage.weighIns} · Nutrition days logged: ${coverage.nutritionDays} · Completed workouts: ${coverage.completedWorkouts}`,
       `- Cardio sessions: ${coverage.cardioSessions} · Garmin expenditure days: ${coverage.garminExpendityureDays} · Garmin health days: ${coverage.garminHealthDays}`,
-    ].join("\n")
+    ].join("\n"),
   );
 
   return sections.join("\n\n");

@@ -3,8 +3,19 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Play, Dumbbell, History, ListChecks, Zap, TrendingUp, Footprints, CalendarPlus } from "lucide-react";
+import {
+  Plus,
+  Play,
+  Dumbbell,
+  History,
+  ListChecks,
+  Zap,
+  TrendingUp,
+  Footprints,
+  CalendarPlus,
+} from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
+import { nextRoutineInSequence } from "@/lib/training-volume";
 import PageHeader from "@/components/PageHeader";
 import ActivityTypePicker from "@/components/ActivityTypePicker";
 import LogPastActivityModal from "@/components/LogPastActivityModal";
@@ -19,11 +30,14 @@ interface SessionRow {
   name: string;
   startedAt: string;
   finishedAt: string | null;
+  routineId: number | null;
 }
 
 export default function WorkoutsPage() {
   const router = useRouter();
   const [routines, setRoutines] = useState<RoutineRow[]>([]);
+  const [nextRoutine, setNextRoutine] = useState<RoutineRow | null>(null);
+  const [error, setError] = useState("");
   const [active, setActive] = useState<SessionRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
@@ -36,12 +50,21 @@ export default function WorkoutsPage() {
       apiGet<SessionRow[]>("/api/sessions"),
     ]);
     setRoutines(r);
+    setNextRoutine(
+      nextRoutineInSequence(
+        r.filter((x) => x.exerciseCount > 0),
+        s.find((x) => x.finishedAt)?.routineId ?? null,
+      ),
+    );
     setActive(s.find((x) => !x.finishedAt) ?? null);
     setLoading(false);
   }
 
   useEffect(() => {
-    load();
+    load().catch(() => {
+      setError("Could not load workouts");
+      setLoading(false);
+    });
   }, []);
 
   async function newRoutine() {
@@ -60,6 +83,8 @@ export default function WorkoutsPage() {
         routineId,
       });
       router.push(`/workouts/session/${created.id}?hype=1`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start workout");
     } finally {
       setStarting(false);
     }
@@ -80,6 +105,28 @@ export default function WorkoutsPage() {
         }
       />
 
+      {error && (
+        <p role="alert" className="mb-3 text-sm text-danger">
+          {error}
+        </p>
+      )}
+      {!active && nextRoutine && (
+        <div className="card mb-4 p-4">
+          <p className="text-xs text-muted">Next in your routine sequence</p>
+          <p className="mt-1 font-display text-2xl">{nextRoutine.name}</p>
+          <p className="mt-1 text-xs text-muted">
+            Continues after your last finished routine, even if you missed a
+            day. Follow the routine list order; take rest days when needed.
+          </p>
+          <button
+            onClick={() => startSession(nextRoutine.id)}
+            disabled={starting}
+            className="btn-primary mt-3 w-full"
+          >
+            Start next workout
+          </button>
+        </div>
+      )}
       {active && (
         <Link
           href={`/workouts/session/${active.id}`}
@@ -89,9 +136,13 @@ export default function WorkoutsPage() {
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-accent">
               Live session
             </p>
-            <p className="mt-1 break-words font-display text-2xl tracking-[0.04em]">{active.name}</p>
+            <p className="mt-1 break-words font-display text-2xl tracking-[0.04em]">
+              {active.name}
+            </p>
           </div>
-          <span className="btn-primary shrink-0 px-3 py-2 min-[360px]:px-4">Resume</span>
+          <span className="btn-primary shrink-0 px-3 py-2 min-[360px]:px-4">
+            Resume
+          </span>
         </Link>
       )}
 
@@ -115,17 +166,36 @@ export default function WorkoutsPage() {
         >
           <CalendarPlus size={18} /> Log past activity
         </button>
-        <Link href="/workouts/exercises" className="btn-ghost min-w-0 px-2 min-[360px]:px-4">
+        <Link
+          href="/workouts/exercises"
+          className="btn-ghost min-w-0 px-2 min-[360px]:px-4"
+        >
           <ListChecks size={18} /> Exercises
         </Link>
       </div>
 
-      {showCardio && <ActivityTypePicker onClose={() => setShowCardio(false)} />}
-      {showLogPast && <LogPastActivityModal onClose={() => setShowLogPast(false)} />}
+      {showCardio && (
+        <ActivityTypePicker onClose={() => setShowCardio(false)} />
+      )}
+      {showLogPast && (
+        <LogPastActivityModal onClose={() => setShowLogPast(false)} />
+      )}
 
-      <Link href="/workouts/plan" className="card mb-6 flex items-center gap-3 p-4 active:scale-[0.98] transition">
-        <div className="icon-frame"><TrendingUp size={20} /></div>
-        <div className="min-w-0 flex-1"><p className="font-display text-xl tracking-[0.04em]">Plan & progression</p><p className="text-xs text-muted">RIR / double progression / deloads</p></div>
+      <Link
+        href="/workouts/plan"
+        className="card mb-6 flex items-center gap-3 p-4 active:scale-[0.98] transition"
+      >
+        <div className="icon-frame">
+          <TrendingUp size={20} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-display text-xl tracking-[0.04em]">
+            Plan & progression
+          </p>
+          <p className="text-xs text-muted">
+            RIR / double progression / deloads
+          </p>
+        </div>
       </Link>
 
       <h2 className="section-title">Your routines</h2>
@@ -144,10 +214,20 @@ export default function WorkoutsPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {routines.map((r, index) => (
-            <div key={r.id} className="card flex items-center gap-3 overflow-hidden p-3 min-[360px]:p-4">
-              <span className="data-number w-8 shrink-0 text-2xl text-muted/35">{String(index + 1).padStart(2, "0")}</span>
-              <Link href={`/workouts/routines/${r.id}`} className="min-w-0 flex-1 border-l border-border pl-3">
-                <p className="break-words font-display text-2xl leading-none tracking-[0.04em]">{r.name}</p>
+            <div
+              key={r.id}
+              className="card flex items-center gap-3 overflow-hidden p-3 min-[360px]:p-4"
+            >
+              <span className="data-number w-8 shrink-0 text-2xl text-muted/35">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <Link
+                href={`/workouts/routines/${r.id}`}
+                className="min-w-0 flex-1 border-l border-border pl-3"
+              >
+                <p className="break-words font-display text-2xl leading-none tracking-[0.04em]">
+                  {r.name}
+                </p>
                 <p className="mt-1 text-[10px] uppercase tracking-[0.1em] text-muted">
                   {r.exerciseCount} exercise
                   {r.exerciseCount === 1 ? "" : "s"}

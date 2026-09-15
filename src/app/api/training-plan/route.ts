@@ -1,23 +1,22 @@
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, gte, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  exercises,
-  routineExercises,
-  routines,
-  sessionSets,
-  sessions,
-  trainingCheckins,
-  trainingPlanState,
-} from "@/db/schema";
+import { trainingCheckins, trainingPlanState } from "@/db/schema";
+import { getTrainingInsights } from "@/lib/training-insights-data";
 import { shiftISODate, todayISO } from "@/lib/utils";
-import { buildTrainingPlanStatus, findDecliningAnchors } from "@/lib/training-plan";
+import { buildTrainingPlanStatus } from "@/lib/training-plan";
 import { requireAppUser } from "@/lib/app-user";
+
+import { trainingPlanUpdate } from "@/lib/training-validation";
 
 async function ensureState(userId: number) {
   await db
     .insert(trainingPlanState)
-    .values({ userId, planName: "My training plan", blockStartedOn: todayISO() })
+    .values({
+      userId,
+      planName: "My training plan",
+      blockStartedOn: todayISO(),
+    })
     .onConflictDoNothing({ target: trainingPlanState.userId });
 }
 
@@ -28,141 +27,65 @@ export async function GET() {
     .select()
     .from(trainingPlanState)
     .where(eq(trainingPlanState.userId, user.id));
-  const [latestCheckin] = await db
+  const checkins = await db
     .select()
     .from(trainingCheckins)
-    .where(and(eq(trainingCheckins.userId, user.id), gte(trainingCheckins.day, shiftISODate(todayISO(), -6))))
-    .orderBy(desc(trainingCheckins.day), desc(trainingCheckins.id))
-    .limit(1);
-  const routineRows = await db
-    .select({
-      routineId: routines.id,
-      routineName: routines.name,
-      routinePosition: routines.position,
-      exerciseId: exercises.id,
-      exerciseName: exercises.name,
-      exercisePosition: routineExercises.position,
-      targetSets: routineExercises.targetSets,
-      minReps: routineExercises.minReps,
-      maxReps: routineExercises.maxReps,
-      targetRirMin: routineExercises.targetRirMin,
-      targetRirMax: routineExercises.targetRirMax,
-      avoidFailure: routineExercises.avoidFailure,
-      instruction: routineExercises.instruction,
-      supersetGroup: routineExercises.supersetGroup,
-      isAnchor: routineExercises.isAnchor,
-    })
-    .from(routines)
-    .innerJoin(routineExercises, eq(routineExercises.routineId, routines.id))
-    .innerJoin(exercises, eq(exercises.id, routineExercises.exerciseId))
-    .where(and(eq(routines.userId, user.id), eq(routines.archived, false)))
-    .orderBy(asc(routines.position), asc(routineExercises.position));
-
-  const anchorIds = [
-    ...new Set(
-      routineRows.filter((row) => row.isAnchor).map((row) => row.exerciseId)
-    ),
-  ];
-  const anchorSets = anchorIds.length
-    ? await db
-        .select({
-          exerciseId: sessionSets.exerciseId,
-          exerciseName: exercises.name,
-          sessionId: sessionSets.sessionId,
-          startedAt: sessions.startedAt,
-          weightKg: sessionSets.weightKg,
-          reps: sessionSets.reps,
-        })
-        .from(sessionSets)
-        .innerJoin(sessions, eq(sessions.id, sessionSets.sessionId))
-        .innerJoin(exercises, eq(exercises.id, sessionSets.exerciseId))
-        .where(
-          and(
-            inArray(sessionSets.exerciseId, anchorIds),
-            eq(sessions.userId, user.id),
-            isNotNull(sessionSets.completedAt),
-            isNotNull(sessions.finishedAt),
-            eq(sessionSets.isWarmup, false),
-            eq(sessionSets.isDropSet, false)
-          )
-        )
-        .orderBy(desc(sessions.startedAt), asc(sessionSets.setNumber))
-    : [];
-
-  const groupedSessions = new Map<
-    string,
-    { name: string; startedAt: Date; sets: { weightKg: number; reps: number }[] }
-  >();
-  for (const set of anchorSets) {
-    const key = `${set.exerciseId}:${set.sessionId}`;
-    const group = groupedSessions.get(key) ?? {
-      name: set.exerciseName,
-      startedAt: set.startedAt,
-      sets: [],
-    };
-    group.sets.push({ weightKg: set.weightKg, reps: set.reps });
-    groupedSessions.set(key, group);
-  }
-  const anchorHistories: Record<
-    string,
-    { weightKg: number; totalReps: number; startedAt: Date }[]
-  > = {};
-  for (const group of groupedSessions.values()) {
-    const workingWeight = Math.max(...group.sets.map((set) => set.weightKg));
-    const performance = {
-      weightKg: workingWeight,
-      totalReps: group.sets
-        .filter((set) => Math.abs(set.weightKg - workingWeight) < 0.05)
-        .reduce((total, set) => total + set.reps, 0),
-      startedAt: group.startedAt,
-    };
-    const history = anchorHistories[group.name] ?? [];
-    history.push(performance);
-    anchorHistories[group.name] = history;
-  }
-  for (const history of Object.values(anchorHistories)) {
-    history.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
-  }
-  const decliningAnchors = findDecliningAnchors(anchorHistories);
+    .where(
+      and(
+        eq(trainingCheckins.userId, user.id),
+        gte(trainingCheckins.day, shiftISODate(todayISO(), -6)),
+      ),
+    )
+    .orderBy(desc(trainingCheckins.day))
+    .limit(7);
+  const latestCheckin = checkins[0];
+  const insights = await getTrainingInsights(user.id);
+  const decliningAnchors = insights.decliningAnchors;
   const status = buildTrainingPlanStatus({
     blockStartedOn: state.blockStartedOn,
     today: todayISO(),
     isDeload: state.isDeload,
     checkin: latestCheckin ?? null,
     decliningAnchors,
+    recentCheckins: checkins,
   });
-
-  const routineMap = new Map<
-    number,
-    { id: number; name: string; position: number; exercises: typeof routineRows }
-  >();
-  for (const row of routineRows) {
-    const routine = routineMap.get(row.routineId) ?? {
-      id: row.routineId,
-      name: row.routineName,
-      position: row.routinePosition,
-      exercises: [],
-    };
-    routine.exercises.push(row);
-    routineMap.set(row.routineId, routine);
-  }
 
   return NextResponse.json({
     state,
     status,
     latestCheckin: latestCheckin ?? null,
-    routines: [...routineMap.values()],
+    routines: insights.routines.map((r) => ({
+      id: r.id,
+      name: r.name,
+      position: r.position,
+      exercises: r.plan.map((p) => ({
+        ...p,
+        exerciseName: p.name,
+        exercisePosition: p.position,
+      })),
+    })),
+    volume: insights.volume,
+    recommendations: insights.recommendations,
+    nextRoutine: insights.nextRoutine,
   });
 }
 
 export async function PATCH(req: Request) {
   const user = await requireAppUser();
   await ensureState(user.id);
-  const body = await req.json().catch(() => ({}));
-  const action = String(body.action ?? "");
+  const parsed = trainingPlanUpdate.safeParse(
+    await req.json().catch(() => null),
+  );
+  if (!parsed.success)
+    return NextResponse.json(
+      { error: "Invalid training-plan update" },
+      { status: 400 },
+    );
+  const body = parsed.data;
+  const action = body.action;
   const today = todayISO();
 
-  if (action === "checkin") {
+  if (body.action === "checkin") {
     const [row] = await db
       .insert(trainingCheckins)
       .values({

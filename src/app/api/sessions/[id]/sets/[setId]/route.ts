@@ -6,39 +6,50 @@ import { requireAppUser } from "@/lib/app-user";
 
 async function ownsSet(userId: number, sessionId: number, setId: number) {
   const [row] = await db
-    .select({ id: sessionSets.id })
+    .select({ row: sessionSets })
     .from(sessionSets)
     .innerJoin(sessions, eq(sessions.id, sessionSets.sessionId))
-    .where(and(eq(sessionSets.id, setId), eq(sessionSets.sessionId, sessionId), eq(sessions.userId, userId)));
-  return !!row;
+    .where(
+      and(
+        eq(sessionSets.id, setId),
+        eq(sessionSets.sessionId, sessionId),
+        eq(sessions.userId, userId),
+      ),
+    );
+  return row?.row;
 }
 
-function parseRir(value: unknown) {
-  if (value === "" || value == null) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(0, Math.min(10, Math.round(parsed))) : null;
-}
+import { setPatch } from "@/lib/training-validation";
 
 export async function PATCH(
   req: Request,
-  { params }: { params: Promise<{ id: string; setId: string }> }
+  { params }: { params: Promise<{ id: string; setId: string }> },
 ) {
   const user = await requireAppUser();
   const { id, setId } = await params;
-  if (!(await ownsSet(user.id, Number(id), Number(setId)))) {
+  if(![Number(id),Number(setId)].every(n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647)) return NextResponse.json({error:"Invalid identifier"},{status:400});
+  const existing = await ownsSet(user.id, Number(id), Number(setId));
+  if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const body = await req.json().catch(() => ({}));
-  const set: Record<string, unknown> = {};
-  if (body.weightKg !== undefined) set.weightKg = Number(body.weightKg);
-  if (body.reps !== undefined) set.reps = Number(body.reps);
-  if (body.rir !== undefined) {
-    set.rir = parseRir(body.rir);
-  }
-  if (body.isWarmup !== undefined) set.isWarmup = !!body.isWarmup;
-  if (body.isDropSet !== undefined) set.isDropSet = !!body.isDropSet;
-  if (body.completed === true) set.completedAt = new Date();
-  if (body.completed === false) set.completedAt = null;
+  const parsed = setPatch.safeParse(await req.json().catch(() => null));
+  if (!parsed.success || !Object.keys(parsed.data).length)
+    return NextResponse.json({ error: "Invalid set update" }, { status: 400 });
+  const { completed, ...fields } = parsed.data;
+  if (
+    (fields.isWarmup ?? existing.isWarmup) &&
+    (fields.isDropSet ?? existing.isDropSet)
+  )
+    return NextResponse.json(
+      { error: "Warmups cannot also be drops" },
+      { status: 400 },
+    );
+  const set = {
+    ...fields,
+    ...(completed === undefined
+      ? {}
+      : { completedAt: completed ? new Date() : null }),
+  };
 
   const [row] = await db
     .update(sessionSets)
@@ -50,10 +61,11 @@ export async function PATCH(
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: Promise<{ id: string; setId: string }> }
+  { params }: { params: Promise<{ id: string; setId: string }> },
 ) {
   const user = await requireAppUser();
   const { id, setId } = await params;
+  if(![Number(id),Number(setId)].every(n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647)) return NextResponse.json({error:"Invalid identifier"},{status:400});
   if (!(await ownsSet(user.id, Number(id), Number(setId)))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

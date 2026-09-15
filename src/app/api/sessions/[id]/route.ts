@@ -1,82 +1,53 @@
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, ne, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, lt, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { sessions, sessionSets, exercises } from "@/db/schema";
 import {
-  sessions,
-  sessionSets,
-  routineExercises,
-  exercises,
-  trainingPlanState,
-} from "@/db/schema";
-import { getProgressionRecommendation } from "@/lib/progressive-overload";
+  getProgressionRecommendation,
+  type ProgressionRecommendation,
+} from "@/lib/progressive-overload";
 import { applySessionExerciseOrder } from "@/lib/workout-flow";
 import { requireAppUser } from "@/lib/app-user";
+import { getRoutinePrescription } from "@/lib/workout-plan-data";
+import { effectivePlan } from "@/lib/training-prescription";
+import { comparableHistory } from "@/lib/workout-history";
+import { sessionPatch } from "@/lib/training-validation";
+import {
+  est1RM,
+  dateISOInTimeZone,
+  startOfAppDay,
+  shiftISODate,
+} from "@/lib/utils";
 
 export async function GET(
   _req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireAppUser();
   const { id } = await params;
+  if (
+    ![Number(id)].every(
+      (n) => Number.isSafeInteger(n) && n > 0 && n <= 2147483647,
+    )
+  )
+    return NextResponse.json({ error: "Invalid identifier" }, { status: 400 });
   const sessionId = Number(id);
-
   const [session] = await db
     .select()
     .from(sessions)
     .where(and(eq(sessions.id, sessionId), eq(sessions.userId, user.id)));
-  if (!session) {
+  if (!session)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  // Planned exercises from the routine (if any).
-  const basePlan = session.routineId
-    ? await db
-        .select({
-          exerciseId: routineExercises.exerciseId,
-          name: exercises.name,
-          muscleGroup: exercises.muscleGroup,
-          imageUrl: exercises.imageUrl,
-          targetSets: routineExercises.targetSets,
-          targetReps: routineExercises.targetReps,
-          minReps: routineExercises.minReps,
-          maxReps: routineExercises.maxReps,
-          targetWeightKg: routineExercises.targetWeightKg,
-          weightIncrementKg: routineExercises.weightIncrementKg,
-          restSeconds: routineExercises.restSeconds,
-          targetRirMin: routineExercises.targetRirMin,
-          targetRirMax: routineExercises.targetRirMax,
-          avoidFailure: routineExercises.avoidFailure,
-          instruction: routineExercises.instruction,
-          supersetGroup: routineExercises.supersetGroup,
-          isAnchor: routineExercises.isAnchor,
-          position: routineExercises.position,
-        })
-        .from(routineExercises)
-        .innerJoin(exercises, eq(exercises.id, routineExercises.exerciseId))
-        .where(eq(routineExercises.routineId, session.routineId))
-        .orderBy(asc(routineExercises.position), asc(routineExercises.id))
-    : [];
-  const [planState] = await db
-    .select({ isDeload: trainingPlanState.isDeload })
-    .from(trainingPlanState)
-    .where(eq(trainingPlanState.userId, user.id));
-  const deloadMode = planState?.isDeload ?? false;
-  const orderedBasePlan = applySessionExerciseOrder(
-    basePlan,
-    session.exerciseOrder
+  const snapshot = session.prescriptionSnapshot;
+  const basePlan =
+    snapshot?.plan ??
+    (!session.finishedAt && session.routineId
+      ? await getRoutinePrescription(user.id, session.routineId)
+      : []);
+  const plan = applySessionExerciseOrder(
+    effectivePlan(snapshot ?? { version: 1, isDeload: false, plan: basePlan }),
+    session.exerciseOrder,
   );
-  const plan = deloadMode
-    ? orderedBasePlan.map((item) => ({
-        ...item,
-        targetSets: Math.max(1, Math.ceil(item.targetSets / 2)),
-        targetRirMin: 4,
-        targetRirMax: 6,
-        instruction: `Deload: use about 60% of your normal load and RIR 4+.${item.instruction ? ` ${item.instruction}` : ""}`,
-        deloadMode: true,
-      }))
-    : orderedBasePlan.map((item) => ({ ...item, deloadMode: false }));
-
-  // Sets already logged in this session.
   const loggedSets = await db
     .select({
       id: sessionSets.id,
@@ -96,106 +67,173 @@ export async function GET(
     .from(sessionSets)
     .innerJoin(exercises, eq(exercises.id, sessionSets.exerciseId))
     .where(eq(sessionSets.sessionId, sessionId))
-    .orderBy(
-      asc(sessionSets.exerciseId),
-      asc(sessionSets.setNumber),
-      asc(sessionSets.id)
-    );
-
-  // "Last time" reference: for each planned exercise (or any ad-hoc exercise
-  // already logged), pull the sets from the most recent *other* session.
-  const exerciseIds = new Set<number>([
-    ...plan.map((p) => p.exerciseId),
-    ...loggedSets.map((s) => s.exerciseId),
-  ]);
-  const lastSets: Record<number, { weightKg: number; reps: number; rir: number | null }[]> = {};
-  const recommendations: Record<number, {
-    action: "start" | "increase" | "repeat" | "reduce";
-    weightKg: number | null;
-    message: string;
-    reason: string;
-  }> = {};
-  for (const exId of exerciseIds) {
-    const historyRows = await db
-      .select({
-        sessionId: sessionSets.sessionId,
-        weightKg: sessionSets.weightKg,
-        reps: sessionSets.reps,
-        rir: sessionSets.rir,
-        startedAt: sessions.startedAt,
-      })
-      .from(sessionSets)
-      .innerJoin(sessions, eq(sessions.id, sessionSets.sessionId))
-      .where(
-        and(
-          eq(sessionSets.exerciseId, exId),
-          eq(sessions.userId, user.id),
-          ne(sessionSets.sessionId, sessionId),
-          isNotNull(sessions.finishedAt),
-          isNotNull(sessionSets.completedAt),
-          eq(sessionSets.isWarmup, false),
-          eq(sessionSets.isDropSet, false)
-        )
+    .orderBy(asc(sessionSets.setNumber), asc(sessionSets.id));
+  // Only prior completed sessions. Every personal history read is owner scoped.
+  const historyRows = await db
+    .select({
+      sessionId: sessionSets.sessionId,
+      exerciseId: sessionSets.exerciseId,
+      setNumber: sessionSets.setNumber,
+      weightKg: sessionSets.weightKg,
+      reps: sessionSets.reps,
+      rir: sessionSets.rir,
+      startedAt: sessions.startedAt,
+      prescriptionSnapshot: sessions.prescriptionSnapshot,
+      performanceContext: sessions.performanceContext,
+    })
+    .from(sessionSets)
+    .innerJoin(sessions, eq(sessions.id, sessionSets.sessionId))
+    .where(
+      and(
+        eq(sessions.userId, user.id),
+        lt(sessions.startedAt, session.startedAt),
+        isNotNull(sessions.finishedAt),
+        isNotNull(sessionSets.completedAt),
+        eq(sessionSets.isWarmup, false),
+        eq(sessionSets.isDropSet, false),
+      ),
+    )
+    .orderBy(desc(sessions.startedAt), asc(sessionSets.setNumber));
+  const lastSets: Record<
+    number,
+    {
+      weightKg: number;
+      reps: number;
+      rir?: number | null;
+      setNumber?: number;
+    }[]
+  > = {};
+  const recommendations: Record<
+    number,
+    ProgressionRecommendation & {
+      sources: { sessionId: number; startedAt: Date }[];
+    }
+  > = {};
+  const priorBest: Record<number, number> = {};
+  for (const item of basePlan) {
+    const all = comparableHistory(item, historyRows, Infinity);
+    if (all[0]) lastSets[item.exerciseId] = all[0].sets;
+    if (
+      all.length &&
+      session.performanceContext === "normal" &&
+      snapshot &&
+      !snapshot.isDeload &&
+      !["assistance", "bodyweight"].includes(
+        item.equipmentProfile?.loading ?? "total",
       )
-      .orderBy(desc(sessions.startedAt), asc(sessionSets.setNumber));
-
-    const grouped = new Map<number, { weightKg: number; reps: number; rir: number | null }[]>();
-    for (const row of historyRows) {
-      if (!grouped.has(row.sessionId) && grouped.size >= 2) continue;
-      const group = grouped.get(row.sessionId) ?? [];
-      group.push({ weightKg: row.weightKg, reps: row.reps, rir: row.rir });
-      grouped.set(row.sessionId, group);
-    }
-    const history = [...grouped.values()];
-    if (history[0]?.length) lastSets[exId] = history[0];
-
-    const item = plan.find((p) => p.exerciseId === exId);
-    if (!item) continue;
-    if (deloadMode) {
-      const workingWeight = history[0]?.length
-        ? Math.max(...history[0].map((set) => set.weightKg))
-        : null;
-      const deloadWeight = workingWeight == null
-        ? null
-        : Math.round(workingWeight * 0.6 * 2) / 2;
-      recommendations[exId] = {
-        action: "reduce",
-        weightKg: deloadWeight,
-        message: deloadWeight == null
-          ? "Use about 60% of your normal load"
-          : `Deload at about ${deloadWeight}kg · RIR 4+`,
-        reason: "This is a planned deload: half the normal sets, lower load and stay far from failure for one week.",
+    )
+      priorBest[item.exerciseId] = Math.max(
+        ...all.flatMap((h) => h.sets.map((s) => est1RM(s.weightKg, s.reps))),
+      );
+    const cutoff = startOfAppDay(
+      shiftISODate(dateISOInTimeZone(session.startedAt), -89),
+    );
+    const recent = all.filter((h) => h.startedAt >= cutoff).slice(0, 3);
+    const current = loggedSets.filter(
+      (s) =>
+        s.exerciseId === item.exerciseId &&
+        s.completedAt &&
+        !s.isWarmup &&
+        !s.isDropSet,
+    );
+    // A completed summary offers the NEXT exposure's targets, including this workout.
+    if (
+      session.finishedAt &&
+      snapshot &&
+      !snapshot.isDeload &&
+      session.performanceContext === "normal" &&
+      current.length
+    )
+      recent.unshift({
+        sessionId,
+        startedAt: session.startedAt,
+        sets: current,
+      });
+    let recommendation = getProgressionRecommendation(
+      item,
+      recent.map((h) => h.sets),
+    );
+    if (!snapshot)
+      recommendation = {
+        action: "repeat",
+        weightKg: null,
+        message: "Historical prescription unknown",
+        reason:
+          "This workout predates saved prescriptions. Keep it as history; start a new workout to establish a comparable baseline.",
       };
-      continue;
-    }
-    recommendations[exId] = getProgressionRecommendation(item, history);
+    else if (snapshot.isDeload)
+      recommendation = {
+        action: "repeat",
+        weightKg: null,
+        message: "Deload · choose a comfortable load at 4+ RIR",
+        reason:
+          "Use fewer sets and stop well short of failure. This workout will not reset your normal progression baseline.",
+      };
+    recommendations[item.exerciseId] = {
+      ...recommendation,
+      sources: recent
+        .slice(0, 3)
+        .map((h) => ({ sessionId: h.sessionId, startedAt: h.startedAt })),
+    };
   }
-
-  return NextResponse.json({ session, plan, loggedSets, lastSets, recommendations });
+  return NextResponse.json({
+    session,
+    plan,
+    loggedSets,
+    lastSets,
+    recommendations,
+    priorBest,
+    legacyPrescription: !snapshot,
+  });
 }
 
 export async function PATCH(
   req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireAppUser();
   const { id } = await params;
-  const body = await req.json().catch(() => ({}));
-  const set: Record<string, unknown> = {};
-  if (body.name !== undefined) set.name = String(body.name);
-  if (body.notes !== undefined)
-    set.notes = body.notes ? String(body.notes) : null;
-  if (body.finish === true) set.finishedAt = new Date();
-  if (body.finish === false) set.finishedAt = null;
-  if (body.exerciseOrder === null) set.exerciseOrder = null;
-  else if (Array.isArray(body.exerciseOrder)) {
-    const order = body.exerciseOrder.map(Number);
-    if (!order.every(Number.isInteger)) {
-      return NextResponse.json({ error: "invalid exerciseOrder" }, { status: 400 });
-    }
-    set.exerciseOrder = order;
+  if (
+    ![Number(id)].every(
+      (n) => Number.isSafeInteger(n) && n > 0 && n <= 2147483647,
+    )
+  )
+    return NextResponse.json({ error: "Invalid identifier" }, { status: 400 });
+  const [owned] = await db
+    .select()
+    .from(sessions)
+    .where(and(eq(sessions.id, Number(id)), eq(sessions.userId, user.id)));
+  if (!owned) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const parsed = sessionPatch.safeParse(await req.json().catch(() => null));
+  if (!parsed.success)
+    return NextResponse.json(
+      { error: "Invalid workout update" },
+      { status: 400 },
+    );
+  const { finish, skipSet, ...fields } = parsed.data;
+  const set: Record<string, unknown> = { ...fields };
+  if (finish !== undefined) set.finishedAt = finish ? new Date() : null;
+  if (skipSet) {
+    if (owned.finishedAt)
+      return NextResponse.json(
+        { error: "Cannot skip sets in a finished workout" },
+        { status: 400 },
+      );
+    const [exercise] = await db
+      .select({ id: exercises.id })
+      .from(exercises)
+      .where(
+        and(
+          eq(exercises.id, skipSet.exerciseId),
+          sql`(${exercises.ownerUserId} is null or ${exercises.ownerUserId} = ${user.id})`,
+        ),
+      );
+    if (!exercise)
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    set.skippedSets = sql`${sessions.skippedSets} || ${JSON.stringify([skipSet])}::jsonb`;
   }
-
+  if (!Object.keys(set).length)
+    return NextResponse.json({ error: "No changes" }, { status: 400 });
   const [row] = await db
     .update(sessions)
     .set(set)
@@ -206,10 +244,18 @@ export async function PATCH(
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireAppUser();
   const { id } = await params;
-  await db.delete(sessions).where(and(eq(sessions.id, Number(id)), eq(sessions.userId, user.id)));
+  if (
+    ![Number(id)].every(
+      (n) => Number.isSafeInteger(n) && n > 0 && n <= 2147483647,
+    )
+  )
+    return NextResponse.json({ error: "Invalid identifier" }, { status: 400 });
+  await db
+    .delete(sessions)
+    .where(and(eq(sessions.id, Number(id)), eq(sessions.userId, user.id)));
   return NextResponse.json({ ok: true });
 }

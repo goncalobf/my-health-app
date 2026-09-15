@@ -6,10 +6,11 @@ import { requireAppUser } from "@/lib/app-user";
 
 export async function GET(
   _req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireAppUser();
   const { id } = await params;
+  if(![Number(id)].every(n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647)) return NextResponse.json({error:"Invalid identifier"},{status:400});
   const routineId = Number(id);
   const [routine] = await db
     .select()
@@ -39,6 +40,8 @@ export async function GET(
       instruction: routineExercises.instruction,
       supersetGroup: routineExercises.supersetGroup,
       isAnchor: routineExercises.isAnchor,
+      equipmentProfile: routineExercises.equipmentProfile,
+      muscleProfile: routineExercises.muscleProfile,
     })
     .from(routineExercises)
     .innerJoin(exercises, eq(exercises.id, routineExercises.exerciseId))
@@ -50,10 +53,11 @@ export async function GET(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireAppUser();
   const { id } = await params;
+  if(![Number(id)].every(n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647)) return NextResponse.json({error:"Invalid identifier"},{status:400});
   const body = await req.json().catch(() => ({}));
   const [row] = await db
     .update(routines)
@@ -71,10 +75,13 @@ export async function PATCH(
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireAppUser();
   const { id } = await params;
-  await db.delete(routines).where(and(eq(routines.id, Number(id)), eq(routines.userId, user.id)));
+  if(![Number(id)].every(n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647)) return NextResponse.json({error:"Invalid identifier"},{status:400});
+  await db
+    .delete(routines)
+    .where(and(eq(routines.id, Number(id)), eq(routines.userId, user.id)));
   return NextResponse.json({ ok: true });
 }
