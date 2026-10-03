@@ -116,6 +116,7 @@ export const setFields = z.object({
 export const setPatch = setFields.partial().strict();
 export const createSet = setFields
   .extend({
+    clientRequestId: z.string().uuid().optional(),
     exerciseId: integer(1, 2147483647),
     setNumber: integer(1, 100000),
     rir: nullable(integer(0, 10)).default(null),
