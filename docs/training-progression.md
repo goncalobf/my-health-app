@@ -127,8 +127,9 @@ are separate authorized release steps.
 index on `(session_id, client_request_id)`. Apply it before deploying the retry
 protection code. Existing rows keep null keys and their observations unchanged.
 The migration passed a transactional dry run and apply against the disposable
-local database; it has not been applied to production. It is additive and may
-remain installed if the application code is rolled back.
+local database. It was also dry-run, applied and verified in production on
+3 October 2026: existing workout rows, counts and ownership remained unchanged.
+It is additive and may remain installed if the application code is rolled back.
 
 Checks:
 
