@@ -9,6 +9,7 @@ import {
   pgTable,
   jsonb,
   serial,
+  uuid,
   text,
   integer,
   real,
@@ -155,24 +156,35 @@ export const sessions = pgTable("sessions", {
 });
 
 // A single logged set within a session.
-export const sessionSets = pgTable("session_sets", {
-  id: serial("id").primaryKey(),
-  sessionId: integer("session_id")
-    .notNull()
-    .references(() => sessions.id, { onDelete: "cascade" }),
-  exerciseId: integer("exercise_id")
-    .notNull()
-    .references(() => exercises.id, { onDelete: "cascade" }),
-  setNumber: integer("set_number").notNull(),
-  weightKg: real("weight_kg").notNull().default(0),
-  reps: integer("reps").notNull().default(0),
-  rir: integer("rir"),
-  isWarmup: boolean("is_warmup").notNull().default(false),
-  // A drop shares its parent's set_number and is excluded from progression,
-  // personal records and other working-set analysis.
-  isDropSet: boolean("is_drop_set").notNull().default(false),
-  completedAt: timestamp("completed_at"),
-});
+export const sessionSets = pgTable(
+  "session_sets",
+  {
+    // Optional for legacy clients; one key identifies one attempted row creation.
+    clientRequestId: uuid("client_request_id"),
+    id: serial("id").primaryKey(),
+    sessionId: integer("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    exerciseId: integer("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    setNumber: integer("set_number").notNull(),
+    weightKg: real("weight_kg").notNull().default(0),
+    reps: integer("reps").notNull().default(0),
+    rir: integer("rir"),
+    isWarmup: boolean("is_warmup").notNull().default(false),
+    // A drop shares its parent's set_number and is excluded from progression,
+    // personal records and other working-set analysis.
+    isDropSet: boolean("is_drop_set").notNull().default(false),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    uniqueIndex("session_sets_session_request_unique").on(
+      table.sessionId,
+      table.clientRequestId,
+    ),
+  ],
+);
 
 // A logged food entry.
 export const nutritionLogs = pgTable("nutrition_logs", {

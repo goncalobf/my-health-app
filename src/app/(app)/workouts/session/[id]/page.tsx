@@ -117,6 +117,8 @@ interface SessionData {
 interface SetEntry {
   key: string;
   dbId?: number;
+  clientRequestId: string;
+  dirty?: boolean;
   weight: string;
   reps: string;
   rir: string;
@@ -184,7 +186,6 @@ export default function SessionPage({
   const [skipped, setSkipped] = useState<SkippedSet[]>([]);
   const [warmups, setWarmups] = useState<LoggedSet[]>([]);
   const [context, setContext] = useState<PerformanceContext>("normal");
-  const [dirty, setDirty] = useState(false);
   async function run(action: () => Promise<unknown>) {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -202,6 +203,9 @@ export default function SessionPage({
     }
   }
   const [blocks, setBlocks] = useState<Block[]>([]);
+  const dirty = blocks.some((block) =>
+    block.sets.some((set) => set.entries.some((entry) => entry.dirty)),
+  );
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
   const [picking, setPicking] = useState(false);
@@ -288,6 +292,7 @@ export default function SessionPage({
             ? group.rows.map((row) => ({
                 key: nk(),
                 dbId: row.id,
+                clientRequestId: crypto.randomUUID(),
                 weight: numberText(row.weightKg),
                 reps: String(row.reps),
                 rir: row.rir == null ? "" : String(row.rir),
@@ -296,6 +301,7 @@ export default function SessionPage({
             : [
                 {
                   key: nk(),
+                  clientRequestId: crypto.randomUUID(),
                   weight:
                     filled.weightKg ||
                     recommendation?.weightKg === 0 ||
@@ -416,7 +422,6 @@ export default function SessionPage({
     entryKey: string,
     patch: Partial<SetEntry>,
   ) {
-    setDirty(true);
     setBlocks((bs) =>
       bs.map((b, i) =>
         i !== exIdx
@@ -429,7 +434,9 @@ export default function SessionPage({
                   : {
                       ...s,
                       entries: s.entries.map((e) =>
-                        e.key === entryKey ? { ...e, ...patch } : e,
+                        e.key === entryKey
+                          ? { ...e, dirty: true, ...patch }
+                          : e,
                       ),
                     },
               ),
@@ -456,6 +463,7 @@ export default function SessionPage({
     }
     const created = await apiPost<{ id: number }>(`/api/sessions/${id}/sets`, {
       ...payload,
+      clientRequestId: entry.clientRequestId,
       exerciseId: block.exerciseId,
       setNumber: set.setNumber,
       isDropSet: entry.isDrop,
@@ -467,17 +475,33 @@ export default function SessionPage({
     if (!active) return;
     const { block, exIdx, set, entry } = active;
     const dbId = await persistEntry(block, set, entry, true);
-    patchEntry(exIdx, set.key, entry.key, { dbId });
-    setDirty(false);
+    patchEntry(exIdx, set.key, entry.key, { dbId, dirty: false });
     setBlocks((bs) =>
       bs.map((b, i) =>
         i !== exIdx
           ? b
           : {
               ...b,
-              sets: b.sets.map((s) =>
-                s.key === set.key ? { ...s, completed: true } : s,
-              ),
+              sets: b.sets.map((s) => {
+                if (s.key === set.key) return { ...s, completed: true };
+                // A fresh exercise has no historical load. Carry the working
+                // effort to the next pending set only, preserving manual edits,
+                // historical suggestions and any planned back-off load.
+                const next = b.sets.find(
+                  (candidate) =>
+                    candidate.setNumber > set.setNumber && !candidate.completed,
+                );
+                const working = set.entries.find((e) => !e.isDrop);
+                if (s.key !== next?.key || !working?.weight.trim()) return s;
+                return {
+                  ...s,
+                  entries: s.entries.map((e) =>
+                    !e.isDrop && !e.dbId && !e.dirty && !e.weight.trim()
+                      ? { ...e, weight: working.weight }
+                      : e,
+                  ),
+                };
+              }),
             },
       ),
     );
@@ -503,7 +527,6 @@ export default function SessionPage({
     if (!active) return;
     const { block, exIdx, set, entry } = active;
     const dbId = await persistEntry(block, set, entry, true);
-    setDirty(false);
     const dropWeight = suggestDropWeight(
       parseDecimalInput(entry.weight),
       block.weightIncrementKg,
@@ -522,10 +545,14 @@ export default function SessionPage({
                       ...s,
                       entries: [
                         ...s.entries.map((e) =>
-                          e.key === entry.key ? { ...e, dbId } : e,
+                          e.key === entry.key
+                            ? { ...e, dbId, dirty: false }
+                            : e,
                         ),
                         {
                           key: nk(),
+                          clientRequestId: crypto.randomUUID(),
+                          dirty: true,
                           weight: dropWeight ? numberText(dropWeight) : "",
                           reps: entry.reps,
                           rir: "",
@@ -575,6 +602,8 @@ export default function SessionPage({
       entries: [
         {
           key: nk(),
+          clientRequestId: crypto.randomUUID(),
+          dirty: true,
           weight: previous?.weight ?? "",
           reps: previous?.reps ?? (block.minReps ? String(block.minReps) : ""),
           rir: "",
@@ -612,15 +641,7 @@ export default function SessionPage({
       bs.map((b, i) => (i === exIdx ? { ...b, sets: remaining } : b)),
     );
     if (cursor?.setKey === setKey) {
-      setCursor(
-        remaining.length
-          ? { exIdx, setKey: remaining[remaining.length - 1].key }
-          : firstIncompletePosition(
-              blocks.map((b, i) =>
-                i === exIdx ? { ...b, sets: remaining } : b,
-              ),
-            ),
-      );
+      setCursor(nextIncompletePosition(blocks, exIdx, setKey));
     }
   }
 
@@ -660,7 +681,15 @@ export default function SessionPage({
           setNumber: 1,
           completed: false,
           entries: [
-            { key: nk(), weight: "", reps: "", rir: "", isDrop: false },
+            {
+              key: nk(),
+              clientRequestId: crypto.randomUUID(),
+              dirty: true,
+              weight: "",
+              reps: "",
+              rir: "",
+              isDrop: false,
+            },
           ],
         },
       ],
@@ -689,6 +718,8 @@ export default function SessionPage({
     );
     const byExerciseId = new Map(blocks.map((b) => [b.exerciseId, b]));
     const reordered = newOrder.map((exId) => byExerciseId.get(exId)!);
+    // Commit the order first so a failed save leaves the visible order intact.
+    await apiPatch(`/api/sessions/${id}`, { exerciseOrder: newOrder });
     setBlocks(reordered);
     setCursor((prev) => {
       if (!prev) return prev;
@@ -697,7 +728,22 @@ export default function SessionPage({
       );
       return newExIdx === -1 ? prev : { exIdx: newExIdx, setKey: prev.setKey };
     });
-    await apiPatch(`/api/sessions/${id}`, { exerciseOrder: newOrder });
+    setRest((previous) => {
+      if (!previous || !cursor) return previous;
+      const newExIdx = reordered.findIndex(
+        (b) => b.exerciseId === activeExerciseId,
+      );
+      const upcoming = nextIncompletePosition(
+        reordered,
+        newExIdx,
+        cursor.setKey,
+      );
+      return {
+        ...previous,
+        upcoming,
+        label: upcoming ? describe(reordered, upcoming) : "",
+      };
+    });
   }
 
   async function finish() {
@@ -768,6 +814,7 @@ export default function SessionPage({
                 router.push("/workouts");
             }}
             className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-muted transition active:scale-95 [border-radius:2px_10px_2px_2px]"
+            disabled={busy}
             aria-label="Exit workout"
           >
             <X size={22} />
@@ -850,8 +897,9 @@ export default function SessionPage({
           logged={warmups.filter(
             (s) => s.exerciseId === active.block.exerciseId,
           )}
-          onLog={async (weight, reps) => {
+          onLog={async (weight, reps, clientRequestId) => {
             const row = await apiPost<LoggedSet>(`/api/sessions/${id}/sets`, {
+              clientRequestId,
               exerciseId: active.block.exerciseId,
               setNumber: 1000 + warmups.length + 1,
               weightKg: weight,
@@ -936,6 +984,7 @@ export default function SessionPage({
       </fieldset>
       {blocks.length > 0 && (
         <button
+          disabled={busy}
           onClick={() => setOverview(true)}
           className="btn-ghost mt-4 w-full"
         >

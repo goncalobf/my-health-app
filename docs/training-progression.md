@@ -51,6 +51,20 @@ Actual RIR starts unanswered, independently of the displayed target. Completed
 set edits require the visible save action. Failed saves display an error and
 remain in the current flow; duplicate actions are disabled while saving.
 
+New set submissions carry a stable UUID for that attempted row. Retrying after a
+lost response returns the saved row; concurrent retries cannot insert it twice.
+Keys are scoped to the owned session, and each drop or warm-up has its own key.
+A reused key with changed observations returns a conflict and asks the user to
+reload before editing the saved row. Legacy clients without keys remain accepted;
+existing duplicates are not modified by this change.
+
+Unsaved changes are tracked per entry, so saving one set cannot clear another
+set's warning. Removing a set selects the next unfinished set. Reordering during
+rest updates the next-set destination without restarting the timer; a failed
+reorder leaves the displayed order intact. Logging a working set supplies its
+weight to the next blank, untouched set of that exercise, preserving manual
+entries and historical suggestions and never using a drop's lighter weight.
+
 Warm-ups have a separate logger. Machine identity, seat/pads/grip, loading
 convention, available weights, effort bounds, technique, failure constraints,
 superset group, anchor selection and direct/indirect muscles are editable in each
@@ -109,6 +123,13 @@ migration was dry-run with BEGIN/ROLLBACK and then applied and verified against
 the disposable local PostgreSQL instance. Production migration and deployment
 are separate authorized release steps.
 
+`drizzle/0026_mute_wolfsbane.sql` adds nullable `client_request_id` and a unique
+index on `(session_id, client_request_id)`. Apply it before deploying the retry
+protection code. Existing rows keep null keys and their observations unchanged.
+The migration passed a transactional dry run and apply against the disposable
+local database; it has not been applied to production. It is additive and may
+remain installed if the application code is rolled back.
+
 Checks:
 
 ```sh
@@ -117,9 +138,16 @@ npm run lint
 npm run build
 # Requires the disposable local DB and npm run dev:local on port 3210:
 node scripts/test-training-local.mjs
+node scripts/test-workout-flow-local.mjs
+# Optional: CHROME_PATH selects an installed Chrome instead of Playwright Chromium.
 ```
 
 The integration script uses only fixed localhost endpoints, creates synthetic
 fixtures, verifies cross-account denial, and removes its fixtures afterward.
 Mobile browser coverage checks 320, 375 and 390 px. Real iPhone keyboards and
 installed-PWA behavior still require device testing.
+
+The workout-flow regression script also injects a lost save response, tests
+concurrent retries and changed-payload rejection, and exercises draft warnings,
+set removal, rest-time reordering, weight carry-forward and manual/drop/zero-load
+boundaries. It uses only synthetic local fixtures and removes them afterward.

@@ -4,6 +4,7 @@ import { exercises, sessions, sessionSets } from "@/db/schema";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { requireAppUser } from "@/lib/app-user";
 
+import { sameSetSubmission } from "@/lib/set-submission";
 import { createSet } from "@/lib/training-validation";
 
 export async function POST(
@@ -12,7 +13,12 @@ export async function POST(
 ) {
   const user = await requireAppUser();
   const { id } = await params;
-  if(![Number(id)].every(n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647)) return NextResponse.json({error:"Invalid identifier"},{status:400});
+  if (
+    ![Number(id)].every(
+      (n) => Number.isSafeInteger(n) && n > 0 && n <= 2147483647,
+    )
+  )
+    return NextResponse.json({ error: "Invalid identifier" }, { status: 400 });
   const sessionId = Number(id);
   const [ownedSession] = await db
     .select({ id: sessions.id })
@@ -42,6 +48,7 @@ export async function POST(
   const [row] = await db
     .insert(sessionSets)
     .values({
+      clientRequestId: body.clientRequestId,
       sessionId,
       exerciseId,
       setNumber: body.setNumber,
@@ -52,6 +59,29 @@ export async function POST(
       isDropSet: body.isDropSet,
       completedAt: body.completed ? new Date() : null,
     })
+    .onConflictDoNothing({
+      target: [sessionSets.sessionId, sessionSets.clientRequestId],
+    })
     .returning();
-  return NextResponse.json(row, { status: 201 });
+  if (row) return NextResponse.json(row, { status: 201 });
+  // The session ownership check above also scopes retries; concurrent requests
+  // are deduplicated by the database, not a racy read-before-insert check.
+  const [saved] = await db
+    .select()
+    .from(sessionSets)
+    .where(
+      and(
+        eq(sessionSets.sessionId, sessionId),
+        eq(sessionSets.clientRequestId, body.clientRequestId!),
+      ),
+    );
+  if (!saved || !sameSetSubmission(saved, body))
+    return NextResponse.json(
+      {
+        error:
+          "This save was already received with different values. Reload the workout to review the saved set before editing it.",
+      },
+      { status: 409 },
+    );
+  return NextResponse.json(saved);
 }

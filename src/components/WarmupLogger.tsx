@@ -1,26 +1,37 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { normalizeDecimalInput } from "@/lib/decimal-input";
 export default function WarmupLogger({
   onLog,
   logged,
 }: {
-  onLog: (weight: string, reps: string) => Promise<void>;
+  onLog: (
+    weight: string,
+    reps: string,
+    clientRequestId: string,
+  ) => Promise<void>;
   logged: { weightKg: number; reps: number }[];
 }) {
   const [weight, setWeight] = useState("");
   const [reps, setReps] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const requestId = useRef<string | null>(null);
+  const saving = useRef(false);
   async function save() {
+    if (saving.current) return;
+    saving.current = true;
+    requestId.current ??= crypto.randomUUID();
     setBusy(true);
     setError("");
     try {
-      await onLog(weight, reps);
+      await onLog(weight, reps, requestId.current);
+      requestId.current = null;
       setReps("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not log warm-up");
     } finally {
+      saving.current = false;
       setBusy(false);
     }
   }

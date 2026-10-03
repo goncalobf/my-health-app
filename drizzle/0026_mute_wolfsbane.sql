@@ -1,0 +1,2 @@
+ALTER TABLE "session_sets" ADD COLUMN "client_request_id" uuid;--> statement-breakpoint
+CREATE UNIQUE INDEX "session_sets_session_request_unique" ON "session_sets" USING btree ("session_id","client_request_id");

@@ -64,3 +64,18 @@ test("session API cannot accept client-supplied history snapshots or ownership",
     false,
   );
 });
+
+test("set creation accepts only valid retry keys; set edits cannot change them", () => {
+  const clientRequestId = "2dcd4ca8-0770-4b16-8cb1-89f35dd4b985";
+  assert.equal(
+    createSet.parse({ ...valid, clientRequestId }).clientRequestId,
+    clientRequestId,
+  );
+  for (const value of ["", "invalid", 1, null])
+    assert.equal(
+      createSet.safeParse({ ...valid, clientRequestId: value }).success,
+      false,
+    );
+  assert.equal(setPatch.safeParse({ clientRequestId }).success, false);
+  assert.equal(createSet.safeParse(valid).success, true); // Existing clients still work.
+});
