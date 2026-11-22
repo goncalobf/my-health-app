@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { and, desc, eq, ilike, gte, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { Dumbbell, Apple, Settings, ChevronRight, Scale, Users } from "lucide-react";
 import { db } from "@/db";
-import { nutritionLogs, sessions, bodyweightLogs, workoutSchedule, routines, expenditureLogs, friendships } from "@/db/schema";
+import { nutritionLogs, sessions, bodyweightLogs, expenditureLogs, friendships } from "@/db/schema";
 import { getTargets } from "@/lib/server-data";
 import {
-  dayOfWeekISO,
+  dateISOInTimeZone,
   formatDate,
   hourInAppTimeZone,
   shiftISODate,
@@ -27,7 +27,6 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const user = await requireAppUser();
   const today = todayISO();
-  const dayOfWeek = dayOfWeekISO(today);
   const weekStartDay = shiftISODate(today, -6);
   const weekStart = startOfAppDay(weekStartDay);
   const [
@@ -35,7 +34,6 @@ export default async function DashboardPage() {
     todayLogs,
     lastSessions,
     latestWeights,
-    scheduledRoutines,
     todayBurns,
     trainingRows,
     nutritionDayRows,
@@ -49,11 +47,10 @@ export default async function DashboardPage() {
       .where(
         and(eq(nutritionLogs.userId, user.id), eq(nutritionLogs.day, today))
       ),
-    db
-      .select()
+    db.select({ id: sessions.id, name: sessions.name, startedAt: sessions.startedAt, finishedAt: sessions.finishedAt })
       .from(sessions)
       .where(eq(sessions.userId, user.id))
-      .orderBy(desc(sessions.startedAt))
+      .orderBy(desc(sessions.startedAt), desc(sessions.id))
       .limit(1),
     db
       .select()
@@ -61,16 +58,6 @@ export default async function DashboardPage() {
       .where(eq(bodyweightLogs.userId, user.id))
       .orderBy(desc(bodyweightLogs.day))
       .limit(1),
-    db
-      .select({ id: routines.id, name: routines.name })
-      .from(workoutSchedule)
-      .innerJoin(routines, eq(routines.id, workoutSchedule.routineId))
-      .where(
-        and(
-          eq(workoutSchedule.userId, user.id),
-          eq(workoutSchedule.dayOfWeek, dayOfWeek)
-        )
-      ),
     db
       .select()
       .from(expenditureLogs)
@@ -101,7 +88,6 @@ export default async function DashboardPage() {
   const hasPendingFriendRequests = (pendingFriendRequests[0]?.count ?? 0) > 0;
   const lastSession = lastSessions[0];
   const latestWeight = latestWeights[0];
-  let scheduled = scheduledRoutines[0];
   const todayBurn = todayBurns[0];
   const training = trainingRows[0];
   const nutritionDays = nutritionDayRows[0];
@@ -114,29 +100,6 @@ export default async function DashboardPage() {
     }),
     { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 }
   );
-
-  if (!scheduled && dayOfWeek <= 6) {
-    const term = dayOfWeek % 3 === 1 ? "push" : dayOfWeek % 3 === 2 ? "pull" : "leg";
-    [scheduled] = await db.select({ id: routines.id, name: routines.name })
-      .from(routines).where(and(eq(routines.userId, user.id), ilike(routines.name, `%${term}%`))).limit(1);
-  }
-
-  let completedToday = false;
-  if (scheduled) {
-    const [doneToday] = await db
-      .select({ id: sessions.id })
-      .from(sessions)
-      .where(
-        and(
-          eq(sessions.userId, user.id),
-          eq(sessions.routineId, scheduled.id),
-          gte(sessions.startedAt, startOfAppDay(today)),
-          isNotNull(sessions.finishedAt)
-        )
-      )
-      .limit(1);
-    completedToday = !!doneToday;
-  }
 
   const slipping = isSlipping(motivation);
   const motivationFact = topMotivationFact(motivation);
@@ -184,13 +147,7 @@ export default async function DashboardPage() {
         priority
       />
 
-      <DailyPlan
-        day={today}
-        routine={scheduled ?? null}
-        activeSessionId={lastSession && !lastSession.finishedAt ? lastSession.id : null}
-        completedToday={completedToday}
-        garminCalories={todayBurn?.totalCalories ?? null}
-      />
+      <DailyPlan day={today} garminCalories={todayBurn?.totalCalories ?? null} />
 
       <NutritionPhaseCard />
 
@@ -223,7 +180,7 @@ export default async function DashboardPage() {
       <section>
         <h2 className="section-title">Last 7 days</h2>
         <div className="card grid grid-cols-2 gap-0 overflow-hidden p-0 text-center">
-          <div className="border-r border-border p-5"><p className="data-number text-4xl text-accent">{training?.count ?? 0}<span className="ml-1 text-base text-muted">/ 6</span></p><p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted">Workouts</p></div>
+          <div className="border-r border-border p-5"><p className="data-number text-4xl text-accent">{training?.count ?? 0}</p><p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted">Workouts</p></div>
           <div className="p-5"><p className="data-number text-4xl text-warn">{nutritionDays?.count ?? 0}<span className="ml-1 text-base text-muted">/ 7</span></p><p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted">Nutrition days</p></div>
         </div>
       </section>
@@ -243,7 +200,7 @@ export default async function DashboardPage() {
               <p className="break-words font-display text-xl tracking-[0.04em]">{lastSession.name}</p>
               <p className="text-xs text-muted">
                 {formatDate(
-                  new Date(lastSession.startedAt).toISOString().slice(0, 10)
+                  dateISOInTimeZone(lastSession.startedAt)
                 )}
                 {!lastSession.finishedAt && (
                   <span className="text-accent"> · in progress</span>

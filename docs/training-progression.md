@@ -71,13 +71,15 @@ superset group, anchor selection and direct/indirect muscles are editable in eac
 routine slot. Unknown machine details should be entered from the actual gym,
 not inferred from a brand name.
 
-The workout list offers the next routine in list order after the last finished
-routine, independent of missed calendar days. It is an alternative to the
-weekday schedule, not an automatic six-days-per-week requirement.
+Home and Workouts let you choose any saved routine with exercises, or rest, for
+today. The choice applies to the current Fitlog calendar day. A weekly default
+from Settings can preselect a routine. After saving your choice, you can ask the
+Coach for the next one to three days based on your recent training and recovery.
+Suggestions are advisory and leave your routine prescriptions intact.
 
 ## Volume and coach
 
-The plan page compares the current weekly schedule (or one pass through routines
+The plan page compares your recurring weekly defaults (or one pass through routines
 when no schedule exists) with the last 7 days of completed working sets, and
 shows 28-day totals. Scheduled volume is the normal prescription before deload
 reductions. Direct and indirect contributions remain separate. Fractional volume
@@ -152,3 +154,16 @@ The workout-flow regression script also injects a lost save response, tests
 concurrent retries and changed-payload rejection, and exercises draft warnings,
 set removal, rest-time reordering, weight carry-forward and manual/drop/zero-load
 boundaries. It uses only synthetic local fixtures and removes them afterward.
+
+### Daily workout choices
+
+Apply `0027_eminent_bill_hollister.sql` before deploying. The new
+`workout_day_choices` table holds one optional routine per user and date.
+Existing schedules and workouts need no backfill.
+
+### Jiu-jitsu
+
+Apply `0028_flowery_war_machine.sql` after migration 0027. It adds a
+jiu-jitsu flag to daily choices and optional effort to activity logs.
+Removing a routine clears the gym slot while preserving the day's
+jiu-jitsu flag.

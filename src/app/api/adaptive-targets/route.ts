@@ -3,6 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bodyweightLogs, expenditureLogs, nutritionLogs, settings } from "@/db/schema";
 import { shiftISODate, todayISO } from "@/lib/utils";
+import { roundAdaptiveCalorieTarget } from "@/lib/calorie-targets";
 import { calculateMacroTargets } from "@/lib/macro-targets";
 import { requireAppUser } from "@/lib/app-user";
 
@@ -54,7 +55,7 @@ export async function GET() {
   const recentBurn = average(recentBurns.map((x) => x.totalCalories));
   const byGarmin = recentBurn + (desiredWeeklyKg * 7700) / 7;
   const trendCorrection = Math.max(-150, Math.min(150, -(observedWeeklyKg - desiredWeeklyKg) * 1100));
-  const proposedCalories = Math.round(Math.max(1200, (byGarmin + trendCorrection) / 10) * 10);
+  const proposedCalories = roundAdaptiveCalorieTarget(byGarmin + trendCorrection);
   const macros = calculateMacroTargets({
     targetCalories: proposedCalories,
     currentWeightKg: laterAvg,

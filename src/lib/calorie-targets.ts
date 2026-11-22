@@ -91,7 +91,10 @@ export function estimateCalorieTarget(
     ABSOLUTE_FLOOR_KCAL,
     Math.round(maintenanceCalories * (1 - MAX_DEFICIT_FRACTION))
   );
-  const upperBound = Math.round(maintenanceCalories * (1 + MAX_SURPLUS_FRACTION));
+  const upperBound = Math.max(
+    lowerBound,
+    Math.round(maintenanceCalories * (1 + MAX_SURPLUS_FRACTION))
+  );
   const targetCalories = Math.round(
     Math.min(upperBound, Math.max(lowerBound, rawTarget))
   );
@@ -103,4 +106,8 @@ export function estimateCalorieTarget(
     targetWeeklyChangePct,
     floored: targetCalories > rawTarget,
   };
+}
+
+export function roundAdaptiveCalorieTarget(calories: number): number {
+  return Math.max(ABSOLUTE_FLOOR_KCAL, Math.round(calories / 10) * 10);
 }

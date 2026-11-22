@@ -89,6 +89,10 @@ account creation and even when authentication is temporarily misconfigured.
 Private route handlers must still call `requireAppUser()` close to the database
 operation; proxy checks are not the ownership boundary.
 
+The Garmin worker sends `POST /api/garmin/auth-callback` without a browser
+session. That exact method and path reach the callback handler, which verifies
+and consumes the initiating account's expiring one-time secret.
+
 ## Support email and DNS
 
 Vercel can host the domain's DNS records but does not provide a mailbox. Treat

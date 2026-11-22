@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  outputFileTracingIncludes: {
+    "/api/coach/*": ["./docs/coach-playbook.md"],
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.openfoodfacts.org" },

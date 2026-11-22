@@ -36,17 +36,12 @@ export async function POST() {
     const proposal = await structuredCoachResponse<CoachCaloriePayload>({
       name: "fitlog_target_recommendation",
       schema: calorieTargetSchema,
-      task: `Recommend one conservative daily calorie target for this adult user's stated goal.
-Use their current weight, goal weight, height, age, biological sex, target weekly change, workout schedule, completed training, Garmin total expenditure, actual intake, and weight trend when available.
-Prefer observed Garmin and weight-trend evidence over a generic activity multiplier. When evidence is missing, clearly lower dataQuality and explain the uncertainty.
-For body recomposition, prioritize a modest sustainable deficit. Do not recommend crash dieting or compensatory restriction.
-Do not calculate or discuss the macro split; Fitlog calculates protein, fat, and carbohydrate deterministically after you establish calories. Return a whole-number daily calorie target and concise rationale bullets.`,
       data: formatCoachSnapshotAsMarkdown(snapshot),
       maxOutputTokens: 2400,
     });
 
-    if (proposal.targetCalories < 1200 || proposal.targetCalories > 6000) {
-      throw new Error("The Coach returned an unsafe calorie target. Please try again.");
+    if (!Number.isInteger(proposal.targetCalories) || proposal.targetCalories < 1200 || proposal.targetCalories > 6000) {
+      return NextResponse.json({ error: "The Coach returned an unsafe calorie target. Please try again." }, { status: 502 });
     }
 
     const macros = calculateMacroTargets({
@@ -86,19 +81,11 @@ Do not calculate or discuss the macro split; Fitlog calculates protein, fat, and
       !Number.isFinite(macroCalories) ||
       Math.abs(macroCalories - payload.targetCalories) > 4
     ) {
-      throw new Error("The Coach returned inconsistent calorie and macro targets. Please try again.");
+      return NextResponse.json({ error: "The Coach returned inconsistent calorie and macro targets. Please try again." }, { status: 502 });
     }
 
     return NextResponse.json(payload);
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Target recommendation failed.",
-      },
-      { status: 502 }
-    );
+  } catch {
+    return NextResponse.json({ error: "Target recommendation failed. Try again." }, { status: 502 });
   }
 }

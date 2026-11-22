@@ -355,14 +355,14 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <h2 className="text-sm font-semibold text-muted mb-2 mt-6">Weekly schedule</h2>
+      <h2 className="text-sm font-semibold text-muted mb-2 mt-6">Optional weekly defaults</h2>
       <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
         {schedule.map((row) => (
           <label key={row.dayOfWeek} className="flex min-w-0 items-center gap-2 min-[360px]:gap-3">
             <span className="w-20 shrink-0 font-medium min-[400px]:w-24">{row.day}</span>
             <select className="input min-w-0 flex-1 py-2" value={row.routineId ?? ""}
               onChange={(e) => setSchedule((days) => days.map((d) => d.dayOfWeek === row.dayOfWeek ? { ...d, routineId: e.target.value ? Number(e.target.value) : null } : d))}>
-              <option value="">Rest</option>
+              <option value="">No default</option>
               {routines.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           </label>

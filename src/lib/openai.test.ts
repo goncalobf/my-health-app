@@ -10,7 +10,6 @@ const args = {
     required: ["ok"],
     additionalProperties: false,
   },
-  task: "Return the test response.",
   data: "## Data\n| value |\n| --- |\n| 1 |",
   maxOutputTokens: 1400,
 };
@@ -29,7 +28,16 @@ test("structured coach retries token-limited responses with a larger allowance",
   let calls = 0;
   process.env.OPENAI_API_KEY = "test-key";
   globalThis.fetch = (async (_input, init) => {
-    const request = JSON.parse(String(init?.body)) as { max_output_tokens: number };
+    const request = JSON.parse(String(init?.body)) as {
+      max_output_tokens: number;
+      instructions: string;
+      input: string;
+      store: boolean;
+    };
+    assert.match(request.instructions, /# Fitlog Coach/);
+    assert.match(request.instructions, /## Active task\ntest_response$/);
+    assert.equal(request.input, args.data);
+    assert.equal(request.store, false);
     tokenLimits.push(request.max_output_tokens);
     calls++;
     if (calls === 1) {

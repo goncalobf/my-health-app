@@ -15,7 +15,7 @@ import {
   CalendarPlus,
 } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
-import { nextRoutineInSequence } from "@/lib/training-volume";
+import WorkoutDayCard from "@/components/WorkoutDayCard";
 import PageHeader from "@/components/PageHeader";
 import ActivityTypePicker from "@/components/ActivityTypePicker";
 import LogPastActivityModal from "@/components/LogPastActivityModal";
@@ -25,38 +25,17 @@ interface RoutineRow {
   name: string;
   exerciseCount: number;
 }
-interface SessionRow {
-  id: number;
-  name: string;
-  startedAt: string;
-  finishedAt: string | null;
-  routineId: number | null;
-}
-
 export default function WorkoutsPage() {
   const router = useRouter();
   const [routines, setRoutines] = useState<RoutineRow[]>([]);
-  const [nextRoutine, setNextRoutine] = useState<RoutineRow | null>(null);
   const [error, setError] = useState("");
-  const [active, setActive] = useState<SessionRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [showCardio, setShowCardio] = useState(false);
   const [showLogPast, setShowLogPast] = useState(false);
 
   async function load() {
-    const [r, s] = await Promise.all([
-      apiGet<RoutineRow[]>("/api/routines"),
-      apiGet<SessionRow[]>("/api/sessions"),
-    ]);
-    setRoutines(r);
-    setNextRoutine(
-      nextRoutineInSequence(
-        r.filter((x) => x.exerciseCount > 0),
-        s.find((x) => x.finishedAt)?.routineId ?? null,
-      ),
-    );
-    setActive(s.find((x) => !x.finishedAt) ?? null);
+    setRoutines(await apiGet<RoutineRow[]>("/api/routines"));
     setLoading(false);
   }
 
@@ -110,41 +89,7 @@ export default function WorkoutsPage() {
           {error}
         </p>
       )}
-      {!active && nextRoutine && (
-        <div className="card mb-4 p-4">
-          <p className="text-xs text-muted">Next in your routine sequence</p>
-          <p className="mt-1 font-display text-2xl">{nextRoutine.name}</p>
-          <p className="mt-1 text-xs text-muted">
-            Continues after your last finished routine, even if you missed a
-            day. Follow the routine list order; take rest days when needed.
-          </p>
-          <button
-            onClick={() => startSession(nextRoutine.id)}
-            disabled={starting}
-            className="btn-primary mt-3 w-full"
-          >
-            Start next workout
-          </button>
-        </div>
-      )}
-      {active && (
-        <Link
-          href={`/workouts/session/${active.id}`}
-          className="card mb-5 flex items-center justify-between border-accent/40 bg-accent/10 p-4"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-accent">
-              Live session
-            </p>
-            <p className="mt-1 break-words font-display text-2xl tracking-[0.04em]">
-              {active.name}
-            </p>
-          </div>
-          <span className="btn-primary shrink-0 px-3 py-2 min-[360px]:px-4">
-            Resume
-          </span>
-        </Link>
-      )}
+      <div className="mb-5"><WorkoutDayCard /></div>
 
       <div className="mb-5 grid grid-cols-2 gap-2 min-[360px]:gap-3">
         <button
