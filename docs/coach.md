@@ -1,25 +1,26 @@
 # AI Coach architecture
 
-Last verified: 2026-08-31.
-
-Fitlog Coach is not a fine-tuned or persistently-running model — every request
-is a fresh, stateless call to the OpenAI Responses API (`gpt-5-mini` by
-default, `OPENAI_MODEL` overrides), steered by a fixed system prompt, a
-per-request data snapshot, a per-endpoint task instruction, and a strict JSON
-Schema for the reply. The only thing that persists between requests is the
-visible chat/insight history already shown in the UI, and the small coach
-memory described below.
+Each request calls the OpenAI Responses API (`gpt-5-mini` by default,
+`OPENAI_MODEL` overrides). [The coach playbook](coach-playbook.md) supplies
+the model’s instructions and room for judgment. The call also includes the
+active task, a scoped Markdown data snapshot, and a strict response schema.
+Editing the playbook changes future responses after deployment. This is
+prompt configuration, with no model fine-tuning step.
 
 ## Endpoints
 
-All four route through `structuredCoachResponse()` in `src/lib/openai.ts`
-with different tasks and schemas (`src/lib/coach.ts`):
+These endpoints use `structuredCoachResponse()` in `src/lib/openai.ts`:
 
 - `POST /api/coach/chat` — freeform Q&A. Includes the last 10 stored messages
   as conversation history.
 - `POST /api/coach/insights` — `daily` / `weekly` / `post_workout`. Cached per
   `sourceKey` (e.g. `daily:2026-08-31`) unless `refresh: true` is sent, so a
   page load never forces a new model call.
+- `POST /api/coach/training` — suggests the next one to three days after
+  the current saved daily choice. It receives available routine names and
+  muscle groups, recent strength, cardio and jiu-jitsu summaries, today’s
+  planned mat time, and recovery flags.
+  The server verifies routine IDs and returns suggestions for display.
 - `POST /api/coach/meals` — meal ideas from today's remaining macros.
 - `POST /api/coach/targets` — proposes a calorie number only; macros are
   computed deterministically afterward by `calculateMacroTargets()` and
@@ -31,8 +32,8 @@ with different tasks and schemas (`src/lib/coach.ts`):
 
 `getCoachSnapshot()` (`src/lib/coach-data.ts`) aggregates ~28 days (14 for
 daily/meals) of workouts (warmups/drops already excluded), nutrition, body
-weight, Garmin health/expenditure, cardio sessions, schedule, routine
-targets, training-plan/deload state, a deterministically-computed
+weight, Garmin health/expenditure, cardio and jiu-jitsu sessions, schedule, routine
+targets, today’s explicit training choice, training-plan/deload state, a deterministically-computed
 `nutritionPhase`, and `coachMemory`. It never selects progress photos or
 private measurement notes — there is no field to leak.
 
@@ -50,6 +51,15 @@ shape changes; do not fall back to ad hoc `JSON.stringify` for part of it.
 The **output** stays strict JSON Schema (`text.format.type: "json_schema"`,
 `strict: true`) regardless of the input format — that's what lets the UI
 render structured insight cards instead of parsing prose.
+
+## Jiu-jitsu and gym on the same day
+
+Today’s training can include a gym routine, jiu-jitsu, or both. A completed
+class can be logged from Today’s training or Log past activity. Date is
+required. Duration and self-reported effort are optional. Both coach
+snapshots distinguish planned mat time from logged classes and identify
+classes on the same day as logged strength training. Private class notes
+and calorie estimates stay out of the jiu-jitsu data sent to Coach.
 
 ## Coach memory
 
@@ -85,18 +95,18 @@ soft context, not a source of truth.
   apply; nothing here changes that.
 - `store: false` on every OpenAI call. Errors are logged with model name and
   response status/output-types only — never health data or model text.
-- `isRateLimited()` (`src/lib/rate-limit.ts`) throttles chat/insights/meals/
-  targets per user (in-memory, best-effort — see that file's own caveat about
+- `isRateLimited()` (`src/lib/rate-limit.ts`) throttles chat, insights, meals, training suggestions, and
+  target proposals per user (in-memory, best-effort — see that file's own caveat about
   serverless instance boundaries).
 
 ## Main implementation files
 
-- `src/lib/openai.ts`: `structuredCoachResponse()`, the safety system prompt.
+- `src/lib/openai.ts`: `structuredCoachResponse()` and loading the playbook.
 - `src/lib/coach.ts`: payload types and JSON Schemas per endpoint.
 - `src/lib/coach-data.ts`: `getCoachSnapshot()`, `saveCoachMemoryNote()`.
 - `src/lib/coach-snapshot-markdown.ts`: snapshot → Markdown formatter.
 - `src/lib/coach-memory.ts`: pure, tested memory append/trim logic.
-- `src/app/api/coach/`: chat, insights, meals, targets, memory routes.
+- `src/app/api/coach/`: chat, insights, meals, targets, training suggestions, and memory routes.
 - `src/app/(app)/coach/page.tsx`, `src/components/CoachDashboardCard.tsx`,
   `src/components/WorkoutCoach.tsx`, `src/components/CoachInsightCard.tsx`:
   UI surfaces.

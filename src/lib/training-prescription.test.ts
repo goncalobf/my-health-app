@@ -6,7 +6,7 @@ import {
   type Prescription,
 } from "./training-prescription";
 import { defaultPrescription } from "./training-validation";
-import { muscleVolume, nextRoutineInSequence } from "./training-volume";
+import { muscleVolume } from "./training-volume";
 const p: Prescription = {
   ...defaultPrescription,
   slotId: 1,
@@ -62,11 +62,4 @@ test("muscle volume separates planned, performed, direct and indirect", () => {
     result.find((r) => r.muscle === "Triceps")?.completedEstimate,
     1,
   );
-});
-test("rolling sequence survives missed days and wraps", () => {
-  const routines = [{ id: 1 }, { id: 2 }, { id: 3 }];
-  assert.equal(nextRoutineInSequence(routines, 1)?.id, 2);
-  assert.equal(nextRoutineInSequence(routines, 3)?.id, 1);
-  assert.equal(nextRoutineInSequence(routines, 99)?.id, 1);
-  assert.equal(nextRoutineInSequence([], null), null);
 });

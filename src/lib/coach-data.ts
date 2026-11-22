@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   activitySessions,
@@ -26,11 +26,9 @@ import {
 import { buildNutritionPhase } from "@/lib/nutrition-phase";
 import { appendMemoryNote } from "@/lib/coach-memory";
 import { getTrainingInsights } from "@/lib/training-insights-data";
+import { JIU_JITSU } from "@/lib/jiu-jitsu";
+import { getWorkoutDayChoice } from "@/lib/workout-day-data";
 import { calculateHydrationTarget, type CreatinePhase } from "@/lib/hydration";
-
-function isoDaysAgo(days: number) {
-  return shiftISODate(todayISO(), -days);
-}
 
 export async function getCoachSnapshot({
   userId,
@@ -42,7 +40,8 @@ export async function getCoachSnapshot({
   sessionId?: number;
 }) {
   const trainingInsights = await getTrainingInsights(userId);
-  const fromDay = isoDaysAgo(days - 1);
+  const today = todayISO();
+  const fromDay = shiftISODate(today, 1 - days);
   const fromTime = startOfAppDay(fromDay);
 
   const [setting] = await db
@@ -64,7 +63,8 @@ export async function getCoachSnapshot({
     planStates,
     checkins,
     garminHealth,
-    cardioRows,
+    activityRows,
+    todayChoice,
   ] = await Promise.all([
     db
       .select({ day: bodyweightLogs.day, weightKg: bodyweightLogs.weightKg })
@@ -117,7 +117,7 @@ export async function getCoachSnapshot({
       .where(
         and(
           eq(sessions.userId, userId),
-          gte(sessions.startedAt, fromTime),
+          or(gte(sessions.startedAt, fromTime), sessionId === undefined ? undefined : eq(sessions.id, sessionId)),
           isNotNull(sessions.finishedAt),
         ),
       )
@@ -138,7 +138,7 @@ export async function getCoachSnapshot({
       .where(
         and(
           eq(sessions.userId, userId),
-          gte(sessions.startedAt, fromTime),
+          or(gte(sessions.startedAt, fromTime), sessionId === undefined ? undefined : eq(sessions.id, sessionId)),
           isNotNull(sessions.finishedAt),
           isNotNull(sessionSets.completedAt),
           eq(sessionSets.isWarmup, false),
@@ -148,7 +148,7 @@ export async function getCoachSnapshot({
     db
       .select({ dayOfWeek: workoutSchedule.dayOfWeek, routine: routines.name })
       .from(workoutSchedule)
-      .leftJoin(routines, eq(routines.id, workoutSchedule.routineId))
+      .leftJoin(routines, and(eq(routines.id, workoutSchedule.routineId), eq(routines.userId, userId), eq(routines.archived, false)))
       .where(eq(workoutSchedule.userId, userId))
       .orderBy(asc(workoutSchedule.dayOfWeek)),
     db
@@ -168,14 +168,19 @@ export async function getCoachSnapshot({
       .from(routineExercises)
       .innerJoin(routines, eq(routines.id, routineExercises.routineId))
       .innerJoin(exercises, eq(exercises.id, routineExercises.exerciseId))
-      .where(eq(routines.userId, userId)),
+      .where(and(eq(routines.userId, userId), eq(routines.archived, false))),
     db
       .select()
       .from(trainingPlanState)
       .where(eq(trainingPlanState.userId, userId))
       .limit(1),
     db
-      .select()
+      .select({
+        day: trainingCheckins.day,
+        sleepPoor: trainingCheckins.sleepPoor,
+        appetiteLow: trainingCheckins.appetiteLow,
+        jointPain: trainingCheckins.jointPain,
+      })
       .from(trainingCheckins)
       .where(eq(trainingCheckins.userId, userId))
       .orderBy(desc(trainingCheckins.day))
@@ -206,6 +211,7 @@ export async function getCoachSnapshot({
         type: activitySessions.type,
         startedAt: activitySessions.startedAt,
         durationSeconds: activitySessions.durationSeconds,
+        effort: activitySessions.effort,
         distanceM: activitySessions.distanceM,
         elevationM: activitySessions.elevationM,
         avgHeartRate: activitySessions.avgHeartRate,
@@ -223,6 +229,7 @@ export async function getCoachSnapshot({
         ),
       )
       .orderBy(desc(activitySessions.startedAt)),
+    getWorkoutDayChoice(userId, today),
   ]);
 
   const nutritionByDay = new Map<
@@ -299,7 +306,6 @@ export async function getCoachSnapshot({
     };
   });
 
-  const today = todayISO();
   const todayNutrition = nutritionByDay.get(today) ?? {
     calories: 0,
     proteinG: 0,
@@ -330,6 +336,13 @@ export async function getCoachSnapshot({
     : setting?.creatineMaintenance
       ? "maintenance"
       : "none";
+
+  const cardioRows = activityRows.filter((row) => row.type !== JIU_JITSU);
+  const jiuJitsuSessions = activityRows.filter((row) => row.type === JIU_JITSU).map((row) => ({
+    day: dateISOInTimeZone(row.startedAt),
+    durationSeconds: row.durationSeconds,
+    effort: row.effort,
+  }));
 
   return {
     generatedFor: today,
@@ -369,7 +382,7 @@ export async function getCoachSnapshot({
     garminHealthTrend: garminHealth,
     cardioSessions: cardioRows.map((s) => ({
       type: s.type,
-      date: s.startedAt.toISOString().slice(0, 10),
+      date: dateISOInTimeZone(s.startedAt),
       durationMinutes: s.durationSeconds
         ? Math.round(s.durationSeconds / 60)
         : null,
@@ -381,6 +394,7 @@ export async function getCoachSnapshot({
       avgPowerW: s.avgPowerW,
       division: s.division,
     })),
+    jiuJitsuSessions,
     weightTrend: weights,
     expenditureTrend: expenditures,
     nutritionTrend: [...nutritionByDay].map(([day, totals]) => ({
@@ -389,6 +403,10 @@ export async function getCoachSnapshot({
     })),
     workouts,
     schedule,
+    todayTraining: todayChoice
+      ? todayChoice.routineName ?? (todayChoice.jiuJitsu ? "No gym workout" : "Rest & recovery")
+      : null,
+    todayJiuJitsuPlanned: todayChoice?.jiuJitsu ?? false,
     routineTargets,
     progressionDecisions: trainingInsights.recommendations,
     trainingPlan: {
@@ -409,7 +427,7 @@ export async function getCoachSnapshot({
       garminExpendityureDays: expenditures.length,
       garminHealthDays: garminHealth.length,
       nutritionDays: nutritionByDay.size,
-      completedWorkouts: sessionRows.length,
+      completedWorkouts: sessionRows.filter((session) => session.startedAt >= fromTime).length,
       cardioSessions: cardioRows.length,
     },
   };

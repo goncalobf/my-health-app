@@ -16,7 +16,7 @@ import {
   plannedSets,
 } from "./progressive-overload";
 import { findDecliningAnchors } from "./training-plan";
-import { muscleVolume, nextRoutineInSequence } from "./training-volume";
+import { muscleVolume } from "./training-volume";
 import { shiftISODate, todayISO, startOfAppDay } from "./utils";
 export async function getTrainingInsights(userId: number) {
   const routineRows = await db
@@ -107,7 +107,7 @@ export async function getTrainingInsights(userId: number) {
       .fill(r.plan)
       .flat(),
   );
-  const weeklyPlans = schedule.length
+  const weeklyPlans = scheduled.length
     ? scheduled
     : plans.flatMap((r) => r.plan);
   const planned = weeklyPlans.map((p) => ({
@@ -128,26 +128,16 @@ export async function getTrainingInsights(userId: number) {
             (p) => p.exerciseId === r.exerciseId,
           )?.muscleProfile ?? null,
       }));
-  const [latest] = await db
-    .select({ routineId: sessions.routineId })
-    .from(sessions)
-    .where(and(eq(sessions.userId, userId), isNotNull(sessions.finishedAt)))
-    .orderBy(desc(sessions.startedAt))
-    .limit(1);
   return {
     routines: plans,
     decliningAnchors: findDecliningAnchors(anchors),
     recommendations,
     volume: {
-      basis: schedule.length
+      basis: scheduled.length
         ? "Current weekly schedule"
         : "One pass through your routines",
       last7Days: muscleVolume(planned, completed(7)),
       last28Days: muscleVolume([], completed(28)),
     },
-    nextRoutine: nextRoutineInSequence(
-      routineRows.filter((r) => plans.find((p) => p.id === r.id)?.plan.length),
-      latest?.routineId ?? null,
-    ),
   };
 }

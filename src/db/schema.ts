@@ -1,3 +1,4 @@
+import type { JiuJitsuEffort } from "@/lib/jiu-jitsu";
 import type {
   EquipmentProfile,
   MuscleProfile,
@@ -253,7 +254,7 @@ export const bodyweightLogs = pgTable("bodyweight_logs", {
   weightKg: real("weight_kg").notNull(),
 });
 
-// Fixed Monday-Sunday training plan. Sunday can intentionally have no routine.
+// Optional recurring defaults for days without an explicit choice.
 export const workoutSchedule = pgTable(
   "workout_schedule",
   {
@@ -266,6 +267,22 @@ export const workoutSchedule = pgTable(
     }),
   },
   (table) => [primaryKey({ columns: [table.userId, table.dayOfWeek] })],
+);
+
+export const workoutDayChoices = pgTable(
+  "workout_day_choices",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    jiuJitsu: boolean("jiu_jitsu").notNull().default(false),
+    // A null routine means no gym workout for the day.
+    routineId: integer("routine_id").references(() => routines.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.day] })],
 );
 
 // State for the current training block and its autoregulated deload week.
@@ -470,9 +487,8 @@ export const coachMemory = pgTable("coach_memory", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Cardio activity sessions (runs, cycling, Hyrox). Resistance sessions use
-// the existing `sessions` + `session_sets` tables.
-// type: run_easy | run_interval | indoor_cycling | outdoor_cycling | hyrox
+// Activity sessions for running, cycling, Hyrox, and jiu-jitsu. Gym workouts
+// use the existing `sessions` and `session_sets` tables.
 export const activitySessions = pgTable("activity_sessions", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
@@ -481,6 +497,7 @@ export const activitySessions = pgTable("activity_sessions", {
   type: text("type").notNull(),
   startedAt: timestamp("started_at").notNull().defaultNow(),
   finishedAt: timestamp("finished_at"),
+  effort: text("effort").$type<JiuJitsuEffort>(),
   durationSeconds: integer("duration_seconds"),
   avgHeartRate: integer("avg_heart_rate"),
   maxHeartRate: integer("max_heart_rate"),

@@ -48,11 +48,3 @@ export function muscleVolume(planned: Exposure[], completed: Exposure[]) {
       completedEstimate: v.completedDirect + v.completedIndirect * 0.5,
     }));
 }
-export function nextRoutineInSequence<T extends { id: number }>(
-  routines: T[],
-  latestRoutineId: number | null,
-): T | null {
-  if (!routines.length) return null;
-  const previous = routines.findIndex((r) => r.id === latestRoutineId);
-  return routines[(previous + 1) % routines.length];
-}

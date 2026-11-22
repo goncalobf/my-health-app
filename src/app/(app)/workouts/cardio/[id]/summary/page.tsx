@@ -3,6 +3,8 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle, Home } from "lucide-react";
+import { JIU_JITSU } from "@/lib/jiu-jitsu";
+import { dateISOInTimeZone, formatDate } from "@/lib/utils";
 import { apiGet } from "@/lib/api";
 import { formatTime } from "@/lib/use-live-timer";
 import type { ActivitySession, ActivityInterval, HyroxSegment } from "@/db/schema";
@@ -29,6 +31,7 @@ const TYPE_LABELS: Record<string, string> = {
   indoor_cycling: "Indoor cycling",
   outdoor_cycling: "Outdoor cycling",
   hyrox: "Hyrox",
+  [JIU_JITSU]: "Jiu-jitsu",
 };
 
 export default function CardioSummaryPage({
@@ -51,6 +54,7 @@ export default function CardioSummaryPage({
     );
   }
 
+  const isJiuJitsu = session.type === JIU_JITSU;
   const distKm = session.distanceM ? session.distanceM / 1000 : null;
   const paceSecPerKm =
     distKm && session.durationSeconds ? session.durationSeconds / distKm : null;
@@ -68,18 +72,23 @@ export default function CardioSummaryPage({
         <h1 className="font-display text-4xl tracking-[0.04em]">
           {TYPE_LABELS[session.type] ?? session.type}
         </h1>
-        <p className="mt-1 text-sm text-muted">Complete</p>
+        <p className="mt-1 text-sm text-muted">{isJiuJitsu ? formatDate(dateISOInTimeZone(new Date(session.startedAt))) : "Complete"}</p>
       </div>
 
       {/* Key stats */}
-      <div className="card grid grid-cols-2 divide-x divide-border p-0 overflow-hidden">
+      <div className={`card grid divide-x divide-border overflow-hidden p-0 ${isJiuJitsu && !session.effort ? "grid-cols-1" : "grid-cols-2"}`}>
         <div className="p-4 text-center">
           <p className="label mb-1">Duration</p>
           <p className="font-display text-3xl tabular-nums">
             {session.durationSeconds ? formatTime(session.durationSeconds) : "—"}
           </p>
         </div>
-        {distKm ? (
+        {session.effort ? (
+          <div className="p-4 text-center">
+            <p className="label mb-1">Reported effort</p>
+            <p className="font-display text-3xl capitalize">{session.effort}</p>
+          </div>
+        ) : isJiuJitsu ? null : distKm ? (
           <div className="p-4 text-center">
             <p className="label mb-1">Distance</p>
             <p className="font-display text-3xl tabular-nums">{distKm.toFixed(2)} km</p>

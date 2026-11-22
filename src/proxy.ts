@@ -10,6 +10,11 @@ export default function proxy(request: NextRequest) {
   // deployment whose authentication configuration is temporarily unavailable.
   if (PUBLIC_PATHS.has(request.nextUrl.pathname)) return NextResponse.next();
 
+  // The Garmin worker presents an expiring one-time secret to this handler.
+  if (request.method === "POST" && request.nextUrl.pathname === "/api/garmin/auth-callback") {
+    return NextResponse.next();
+  }
+
   // Local mode runs without Neon Auth, so there is no session to check and no
   // login page to redirect to.
   if (isLocalMode()) return NextResponse.next();

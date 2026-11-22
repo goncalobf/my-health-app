@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   basalMetabolicRate,
   estimateCalorieTarget,
+  roundAdaptiveCalorieTarget,
   WEEKLY_CHANGE_PCT,
 } from "./calorie-targets";
 
@@ -85,4 +86,21 @@ test("returns whole numbers fit for storing as targets", () => {
   for (const value of [estimate.bmr, estimate.maintenanceCalories, estimate.targetCalories]) {
     assert.equal(Number.isInteger(value), true);
   }
+});
+
+test("the surplus cap cannot lower an estimate below the absolute floor", () => {
+  const estimate = estimateCalorieTarget({
+    currentWeightKg: 30,
+    heightCm: 120,
+    ageYears: 78,
+    biologicalSex: "female",
+    goal: "maintenance",
+  });
+  assert.equal(estimate.targetCalories, 1200);
+  assert.equal(estimate.floored, true);
+});
+
+test("adaptive calorie proposals round to tens before applying the calorie floor", () => {
+  assert.equal(roundAdaptiveCalorieTarget(2358), 2360);
+  assert.equal(roundAdaptiveCalorieTarget(1124), 1200);
 });

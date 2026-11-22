@@ -34,11 +34,14 @@ function baseSnapshot(overrides: Partial<CoachSnapshot> = {}): CoachSnapshot {
     },
     garminHealthTrend: [],
     cardioSessions: [],
+    jiuJitsuSessions: [],
     weightTrend: [],
     expenditureTrend: [],
     nutritionTrend: [],
     workouts: [],
     schedule: [],
+    todayTraining: null,
+    todayJiuJitsuPlanned: false,
     routineTargets: [],
     trainingPlan: { state: null, latestRecoveryCheckin: null },
     commonFoods: [],
@@ -152,4 +155,23 @@ test("a focus session id surfaces a note pointing at the workouts section", () =
     baseSnapshot({ focusSessionId: 11 }),
   );
   assert.match(markdown, /specifically about workout #11/);
+});
+
+test("jiu-jitsu appears with effort and same-day strength but no calories", () => {
+  const markdown = formatCoachSnapshotAsMarkdown(baseSnapshot({
+    todayTraining: "Upper body",
+    todayJiuJitsuPlanned: true,
+    jiuJitsuSessions: [
+      { day: "2026-08-31", durationSeconds: 3900, effort: "hard" },
+      { day: "2026-08-29", durationSeconds: null, effort: null },
+    ],
+    workouts: [{
+      id: 3, date: "2026-08-31", name: "Upper body", durationMinutes: 40, volumeKg: 400, exercises: [],
+    }],
+  }));
+  const section = markdown.split("## Completed jiu-jitsu sessions\n")[1].split("\n\n")[0];
+  assert.match(section, /\| 2026-08-31 \| 65 \| hard \| yes \|/);
+  assert.match(section, /\| 2026-08-29 \| — \| — \| none logged \|/);
+  assert.doesNotMatch(section, /calories/i);
+  assert.match(markdown, /Today’s gym choice: Upper body\n- Jiu-jitsu planned for today: yes/);
 });

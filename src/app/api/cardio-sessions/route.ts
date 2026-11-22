@@ -3,6 +3,8 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activitySessions } from "@/db/schema";
 import { requireAppUser } from "@/lib/app-user";
+import { dateJiuJitsuLog, JIU_JITSU, jiuJitsuLog } from "@/lib/jiu-jitsu";
+import { dateISOInTimeZone } from "@/lib/utils";
 
 const VALID_TYPES = new Set([
   "run_easy",
@@ -21,6 +23,7 @@ export async function GET() {
       startedAt: activitySessions.startedAt,
       finishedAt: activitySessions.finishedAt,
       durationSeconds: activitySessions.durationSeconds,
+      effort: activitySessions.effort,
       distanceM: activitySessions.distanceM,
       avgHeartRate: activitySessions.avgHeartRate,
       calories: activitySessions.calories,
@@ -38,7 +41,25 @@ export async function POST(req: Request) {
   const user = await requireAppUser();
   const body = await req.json().catch(() => ({}));
 
-  if (!VALID_TYPES.has(body.type)) {
+  if (body?.type === JIU_JITSU) {
+    const parsed = jiuJitsuLog.safeParse(body);
+    const now = new Date();
+    if (!parsed.success || parsed.data.day > dateISOInTimeZone(now)) {
+      return NextResponse.json({ error: "Choose a valid date and enter up to 720 minutes." }, { status: 400 });
+    }
+    const { day, durationSeconds = null, effort = null, notes } = parsed.data;
+    const [session] = await db.insert(activitySessions).values({
+      userId: user.id,
+      type: JIU_JITSU,
+      durationSeconds,
+      effort,
+      notes: notes || null,
+      ...dateJiuJitsuLog(day, durationSeconds, now),
+    }).returning();
+    return NextResponse.json(session, { status: 201 });
+  }
+
+  if (!VALID_TYPES.has(body?.type)) {
     return NextResponse.json({ error: "Invalid activity type" }, { status: 400 });
   }
 

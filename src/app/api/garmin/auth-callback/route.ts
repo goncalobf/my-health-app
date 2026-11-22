@@ -1,67 +1,66 @@
-import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "@/db";
 import { garminAuthSessions, garminConnections } from "@/db/schema";
 import { encrypt } from "@/lib/garmin-crypto";
-import type { GarminToken } from "@/lib/garmin-client";
 
-// POST — called by the Cloudflare Worker (not the browser). No session cookie required.
-// Secured by the one-time secret generated when the session was created.
+const handshake = z.object({
+  sessionId: z.string().uuid(),
+  secret: z.string().regex(/^[a-f0-9]{64}$/),
+});
+const callback = z.union([
+  handshake.extend({ error: z.string().min(1).max(500) }),
+  handshake.extend({
+    token: z.object({
+      oauth1: z.record(z.unknown()),
+      oauth2: z.record(z.unknown()),
+    }),
+  }),
+]);
+
+// Only the worker's one-time secret authorizes this browser-session-free route.
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({})) as {
-    sessionId?: string;
-    secret?: string;
-    token?: GarminToken;
-    error?: string; // set by Worker on Garmin auth failure
-  };
+  const parsed = callback.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return Response.json({ error: "Invalid Garmin callback." }, { status: 400 });
+  const body = parsed.data;
+  const pending = and(
+    eq(garminAuthSessions.id, body.sessionId),
+    eq(garminAuthSessions.secret, body.secret),
+    eq(garminAuthSessions.status, "pending"),
+    gt(garminAuthSessions.expiresAt, new Date()),
+  );
 
-  if (!body.sessionId || !body.secret) {
-    return NextResponse.json({ error: "sessionId and secret are required" }, { status: 400 });
+  try {
+    if ("error" in body) {
+      const [updated] = await db.update(garminAuthSessions)
+        .set({ status: "error", errorMessage: "Garmin sign-in failed. Start over in Fitlog." })
+        .where(pending)
+        .returning({ id: garminAuthSessions.id });
+      if (updated) return Response.json({ ok: true });
+    } else {
+      const encryptedData = encrypt(JSON.stringify(body.token));
+      // Consume the handshake and store the token in one statement. A failed
+      // connection write rolls back consumption, and a replay updates no rows.
+      const consumed = db.$with("consumed").as(
+        db.update(garminAuthSessions).set({ status: "done" }).where(pending)
+          .returning({ userId: garminAuthSessions.userId }),
+      );
+      const [saved] = await db.with(consumed).insert(garminConnections)
+        .select(db.select({
+          userId: consumed.userId,
+          encryptedData: sql<string>`${encryptedData}`.as("encrypted_data"),
+          lastSyncedAt: sql<Date | null>`null`.as("last_synced_at"),
+          connectedAt: sql<Date>`now()`.as("connected_at"),
+        }).from(consumed))
+        .onConflictDoUpdate({
+          target: garminConnections.userId,
+          set: { encryptedData, connectedAt: new Date() },
+        })
+        .returning({ userId: garminConnections.userId });
+      if (saved) return Response.json({ ok: true });
+    }
+    return Response.json({ error: "Session not found, already used, or expired." }, { status: 404 });
+  } catch {
+    return Response.json({ error: "Could not save the Garmin connection." }, { status: 502 });
   }
-
-  const [session] = await db
-    .select()
-    .from(garminAuthSessions)
-    .where(and(
-      eq(garminAuthSessions.id, body.sessionId),
-      eq(garminAuthSessions.secret, body.secret),
-      eq(garminAuthSessions.status, "pending"),
-    ));
-
-  if (!session) {
-    return NextResponse.json({ error: "Session not found, already used, or expired" }, { status: 404 });
-  }
-  if (session.expiresAt < new Date()) {
-    return NextResponse.json({ error: "Session expired — start over in the app" }, { status: 410 });
-  }
-
-  // Worker reported a Garmin auth failure
-  if (body.error) {
-    await db
-      .update(garminAuthSessions)
-      .set({ status: "error", errorMessage: body.error })
-      .where(eq(garminAuthSessions.id, body.sessionId));
-    return NextResponse.json({ ok: true });
-  }
-
-  if (!body.token?.oauth1 || !body.token?.oauth2) {
-    return NextResponse.json({ error: "token is required" }, { status: 400 });
-  }
-
-  const encryptedData = encrypt(JSON.stringify(body.token));
-
-  await db
-    .insert(garminConnections)
-    .values({ userId: session.userId, encryptedData })
-    .onConflictDoUpdate({
-      target: garminConnections.userId,
-      set: { encryptedData, connectedAt: new Date() },
-    });
-
-  await db
-    .update(garminAuthSessions)
-    .set({ status: "done" })
-    .where(eq(garminAuthSessions.id, body.sessionId));
-
-  return NextResponse.json({ ok: true });
 }

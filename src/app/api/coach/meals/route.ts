@@ -16,13 +16,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Too many requests. Try again shortly." }, { status: 429 });
   }
   const body = await req.json().catch(() => ({}));
-  const meal = String(body.meal || "next meal").slice(0, 40);
+  const meal = typeof body?.meal === "string" ? body.meal.trim().slice(0, 40) || "next meal" : "next meal";
   const snapshot = await getCoachSnapshot({ userId: user.id, days: 14 });
   try {
     const payload = await structuredCoachResponse<CoachMealPayload>({
       name: "fitlog_meal_ideas", schema: mealSchema,
-      task: `Suggest 2-4 realistic ideas for the user's ${meal}. Use today's remaining macros as a direction, prefer familiar foods when helpful, keep grams as the primary quantity, and label all macros as estimates. Never suggest compensatory restriction when targets were exceeded.`,
-      data: formatCoachSnapshotAsMarkdown(snapshot),
+      data: `## Requested meal\n${meal}\n\n${formatCoachSnapshotAsMarkdown(snapshot)}`,
     });
     await db.insert(coachInsights).values({
       userId: user.id,
@@ -30,7 +29,7 @@ export async function POST(req: Request) {
       payloadJson: JSON.stringify(payload), model: COACH_MODEL,
     });
     return NextResponse.json(payload, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Coach request failed." }, { status: 502 });
+  } catch {
+    return NextResponse.json({ error: "Coach request failed. Try again." }, { status: 502 });
   }
 }

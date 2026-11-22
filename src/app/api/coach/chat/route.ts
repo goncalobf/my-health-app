@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Too many requests. Try again shortly." }, { status: 429 });
   }
   const body = await req.json().catch(() => ({}));
-  const message = String(body.message ?? "").trim();
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
   if (!message || message.length > 1200) return NextResponse.json({ error: "Enter a question up to 1200 characters." }, { status: 400 });
   const history = await db.select().from(coachMessages).where(eq(coachMessages.userId, user.id)).orderBy(desc(coachMessages.createdAt)).limit(10);
   const snapshot = await getCoachSnapshot({ userId: user.id, days: 28 });
@@ -32,7 +32,6 @@ export async function POST(req: Request) {
   try {
     const payload = await structuredCoachResponse<CoachChatPayload>({
       name: "fitlog_coach_chat", schema: chatSchema,
-      task: "Answer the user's fitness question using their Fitlog data. Be direct, cite concrete values or dates from the data when relevant, and distinguish evidence from uncertainty.",
       data: [
         `## User question\n${message}`,
         `## Recent conversation\n${historyText}`,
@@ -45,8 +44,8 @@ export async function POST(req: Request) {
     ]);
     await saveCoachMemoryNote(user.id, payload.memoryNote);
     return NextResponse.json(payload, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Coach request failed." }, { status: 502 });
+  } catch {
+    return NextResponse.json({ error: "Coach request failed. Try again." }, { status: 502 });
   }
 }
 

@@ -120,6 +120,9 @@ async function getRoutineDetail(userId: number, routineId: number) {
       targetRirMax: routineExercises.targetRirMax,
       avoidFailure: routineExercises.avoidFailure,
       instruction: routineExercises.instruction,
+      supersetGroup: routineExercises.supersetGroup,
+      equipmentProfile: routineExercises.equipmentProfile,
+      muscleProfile: routineExercises.muscleProfile,
       isAnchor: routineExercises.isAnchor,
     })
     .from(routineExercises)
@@ -184,6 +187,9 @@ export async function cloneRoutineForUser(
       targetRirMax: item.targetRirMax,
       avoidFailure: item.avoidFailure,
       instruction: item.instruction,
+      supersetGroup: item.supersetGroup,
+      equipmentProfile: item.equipmentProfile,
+      muscleProfile: item.muscleProfile,
       isAnchor: item.isAnchor,
     });
   }

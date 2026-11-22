@@ -66,7 +66,6 @@ export async function GET() {
     })),
     volume: insights.volume,
     recommendations: insights.recommendations,
-    nextRoutine: insights.nextRoutine,
   });
 }
 

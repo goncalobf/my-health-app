@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ChevronRight, History, Download, RefreshCw } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
-import { formatDate } from "@/lib/utils";
+import { JIU_JITSU } from "@/lib/jiu-jitsu";
+import { dateISOInTimeZone, formatDate } from "@/lib/utils";
 import GarminImportModal from "@/components/GarminImportModal";
 
 interface SessionRow {
@@ -42,6 +43,7 @@ const TYPE_LABELS: Record<string, string> = {
   indoor_cycling: "Indoor cycling",
   outdoor_cycling: "Outdoor cycling",
   hyrox: "Hyrox",
+  [JIU_JITSU]: "Jiu-jitsu",
 };
 
 const TYPE_BADGE: Record<string, string> = {
@@ -50,6 +52,7 @@ const TYPE_BADGE: Record<string, string> = {
   indoor_cycling: "Cycling",
   outdoor_cycling: "Cycling",
   hyrox: "Hyrox",
+  [JIU_JITSU]: "Grappling",
 };
 
 function formatDuration(seconds: number): string {
@@ -184,7 +187,7 @@ export default function HistoryPage() {
                     </div>
                     <p className="break-words font-semibold">{row.name}</p>
                     <p className="text-xs text-muted">
-                      {formatDate(new Date(row.startedAt).toISOString().slice(0, 10))}
+                      {formatDate(dateISOInTimeZone(new Date(row.startedAt)))}
                       {!row.finishedAt && (
                         <span className="text-accent"> · in progress</span>
                       )}
@@ -213,7 +216,7 @@ export default function HistoryPage() {
                     {TYPE_LABELS[cardio.type] ?? cardio.type}
                   </p>
                   <p className="text-xs text-muted">
-                    {formatDate(new Date(cardio.startedAt).toISOString().slice(0, 10))}
+                    {formatDate(dateISOInTimeZone(new Date(cardio.startedAt)))}
                     {cardio.durationSeconds && ` · ${formatDuration(cardio.durationSeconds)}`}
                     {distKm && ` · ${distKm} km`}
                   </p>

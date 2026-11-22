@@ -1,4 +1,7 @@
 import type { CoachSnapshot } from "@/lib/coach-data";
+import { JIU_JITSU, type JiuJitsuEffort } from "./jiu-jitsu";
+import type { WorkoutDay } from "./workout-day";
+import type { getTrainingSuggestionContext } from "./workout-day-data";
 
 /**
  * Renders a coach data snapshot as Markdown instead of JSON. Repeated-key
@@ -30,6 +33,22 @@ function table(
   const divider = `| ${headers.map(() => "---").join(" | ")} |`;
   const body = rows.map((row) => `| ${row.map(cell).join(" | ")} |`).join("\n");
   return `${head}\n${divider}\n${body}`;
+}
+
+function jiuJitsuTable(
+  sessions: { day: string; durationSeconds: number | null; effort: JiuJitsuEffort | null }[],
+  strengthDays: Set<string>,
+) {
+  return table(
+    ["Date", "Duration (min)", "Reported effort", "Strength logged on same day"],
+    sessions.map(({ day, durationSeconds, effort }) => [
+      day,
+      durationSeconds == null ? null : Math.round(durationSeconds / 60),
+      effort,
+      strengthDays.has(day) ? "yes" : "none logged",
+    ]),
+    "No completed jiu-jitsu sessions logged in this period.",
+  );
 }
 
 function bullets(items: string[], emptyText: string): string {
@@ -240,7 +259,18 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
 
   sections.push(
     [
-      "## Weekly schedule",
+      "## Completed jiu-jitsu sessions",
+      jiuJitsuTable(snapshot.jiuJitsuSessions, new Set(snapshot.workouts.map((workout) => workout.date))),
+    ].join("\n"),
+  );
+
+  sections.push(
+    [
+      "## Training choices",
+      `- Today’s gym choice: ${cell(snapshot.todayTraining ?? "None saved")}`,
+      `- Jiu-jitsu planned for today: ${snapshot.todayJiuJitsuPlanned ? "yes" : "none marked"}`,
+      "",
+      "### Weekly defaults",
       table(
         ["Day", "Routine"],
         snapshot.schedule.map((s) => [weekday(s.dayOfWeek), s.routine]),
@@ -300,7 +330,6 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
   sections.push(
     [
       "## Deterministic progression decisions",
-      "Explain these decisions; do not replace them with invented loads or infer overload from total tonnage. Different A/B prescriptions and setups are separate tracks.",
       table(
         [
           "Routine",
@@ -332,4 +361,43 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
   );
 
   return sections.join("\n\n");
+}
+
+export function formatTrainingSuggestionContext(
+  plan: WorkoutDay,
+  context: Awaited<ReturnType<typeof getTrainingSuggestionContext>>,
+): string {
+  const selected = context.routines.find((routine) => routine.id === plan.choice?.routineId);
+  const checkin = context.checkin;
+  return [
+    "## Today's choice",
+    `- Date: ${plan.day}`,
+    `- Gym: ${selected ? cell(selected.name) + " (#" + selected.id + ")" : plan.choice?.jiuJitsu ? "No gym workout" : "Rest"}`,
+    `- Jiu-jitsu planned for today: ${plan.choice?.jiuJitsu ? "yes" : "none marked"}`,
+    `- Deload active: ${context.isDeload ? "yes" : "no"}`,
+    checkin
+      ? `- Recovery check-in (${checkin.day}): poor sleep ${checkin.sleepPoor}, low appetite ${checkin.appetiteLow}, joint pain ${checkin.jointPain}`
+      : "- No recent recovery check-in.",
+    "",
+    "## Available routines",
+    table(["ID", "Name", "Primary muscles"], context.routines.map((r) => [
+      r.id, r.name, r.muscles.join(", "),
+    ]), "No saved routines with exercises."),
+    "",
+    "## Recent completed strength sessions",
+    table(["Date", "Session", "Muscle group", "Working sets"], context.work.map((r) => [
+      r.day, r.name, r.muscle, r.sets,
+    ]), "No recent working sets logged."),
+    "",
+    "## Recent completed cardio",
+    table(["Date", "Type", "Minutes"], context.activities.filter((r) => r.type !== JIU_JITSU).map((r) => [
+      r.day, r.type, r.durationSeconds == null ? null : Math.round(r.durationSeconds / 60),
+    ]), "No recent cardio logged."),
+    "",
+    "## Completed jiu-jitsu sessions",
+    jiuJitsuTable(
+      context.activities.filter((r) => r.type === JIU_JITSU),
+      new Set(context.work.map((r) => r.day)),
+    ),
+  ].join("\n");
 }
