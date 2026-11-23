@@ -108,7 +108,7 @@ export default function FriendsPage() {
           <button className="btn-primary shrink-0 px-4" disabled={sending || !username.trim()}>Request</button>
 
           {suggestions.length > 0 && (
-            <div className="absolute left-0 right-[4.5rem] top-full z-10 mt-1 flex flex-col overflow-hidden border border-border bg-surface-2 [border-radius:2px_9px_2px_2px]">
+            <div className="absolute left-0 right-[4.5rem] top-full z-10 mt-1 flex flex-col overflow-hidden border border-border bg-surface-2 rounded-xl">
               {suggestions.map((s) => (
                 <button
                   key={s.id}

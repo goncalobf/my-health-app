@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
-import { Dumbbell, Apple, Settings, ChevronRight, Scale, Users } from "lucide-react";
+import { Dumbbell, Apple, Settings, ChevronRight, Scale, Users, Move, ChartNoAxesCombined } from "lucide-react";
 import { db } from "@/db";
 import { nutritionLogs, sessions, bodyweightLogs, expenditureLogs, friendships } from "@/db/schema";
 import { getTargets } from "@/lib/server-data";
@@ -16,10 +16,7 @@ import MacroSummary from "@/components/MacroSummary";
 import DailyPlan from "@/components/DailyPlan";
 import CoachDashboardCard from "@/components/CoachDashboardCard";
 import NutritionPhaseCard from "@/components/NutritionPhaseCard";
-import MotivationCard from "@/components/MotivationCard";
-import { pickImage, pickLine } from "@/lib/motivation";
-import { isSlipping, topMotivationFact } from "@/lib/motivation-facts";
-import { getMotivationInput } from "@/lib/motivation-server";
+import BrandMark from "@/components/BrandMark";
 import { requireAppUser } from "@/lib/app-user";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +34,6 @@ export default async function DashboardPage() {
     todayBurns,
     trainingRows,
     nutritionDayRows,
-    motivation,
     pendingFriendRequests,
   ] = await Promise.all([
     getTargets(user.id),
@@ -79,7 +75,6 @@ export default async function DashboardPage() {
           gte(nutritionLogs.day, weekStartDay)
         )
       ),
-    getMotivationInput(user.id),
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(friendships)
@@ -101,140 +96,114 @@ export default async function DashboardPage() {
     { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 }
   );
 
-  const slipping = isSlipping(motivation);
-  const motivationFact = topMotivationFact(motivation);
-  // Seeded per user per day: the poster holds still until tomorrow.
-  const motivationSeed = `${today}:${user.id}`;
-
   const hour = hourInAppTimeZone();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
+  const firstName = user.name?.trim().split(/\s+/)[0];
+  const quickActions = [
+    { href: "/workouts", title: "Train", icon: Dumbbell },
+    { href: "/nutrition", title: "Log food", icon: Apple },
+    { href: "/progress", title: "Progress", icon: ChartNoAxesCombined },
+  ];
+
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex items-end justify-between gap-4 border-b border-border pb-4">
-        <div className="min-w-0 flex-1">
-          <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.24em] text-accent">Fitlog / daily log</p>
-          <h1 className="truncate font-display text-4xl leading-none tracking-[0.035em] min-[360px]:text-5xl">{greeting}</h1>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-muted">{formatDate(today)}</p>
+    <div className="space-y-6 min-[880px]:space-y-8">
+      <header>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <span className="min-[880px]:hidden"><BrandMark /></span>
+          <time dateTime={today} className="hidden text-sm font-bold text-muted min-[880px]:block">{formatDate(today)}</time>
+          <div className="flex items-center gap-2">
+            <Link href="/friends" className="icon-button relative" aria-label={hasPendingFriendRequests ? "Friends (pending request)" : "Friends"}>
+              <Users size={18} aria-hidden="true" />
+              {hasPendingFriendRequests && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger" aria-hidden="true" />}
+            </Link>
+            <Link href="/settings" className="icon-button" aria-label="Settings"><Settings size={18} aria-hidden="true" /></Link>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Link
-            href="/friends"
-            className="relative flex h-11 w-11 shrink-0 items-center justify-center border border-border bg-surface-2 text-muted [border-radius:2px_11px_2px_2px]"
-            aria-label={hasPendingFriendRequests ? "Friends (pending request)" : "Friends"}
-          >
-            <Users size={20} />
-            {hasPendingFriendRequests && (
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger" aria-hidden="true" />
-            )}
-          </Link>
-          <Link
-            href="/settings"
-            className="flex h-11 w-11 shrink-0 items-center justify-center border border-border bg-surface-2 text-muted [border-radius:2px_11px_2px_2px]"
-            aria-label="Settings"
-          >
-            <Settings size={20} />
-          </Link>
-        </div>
+        <time dateTime={today} className="mb-1 block text-sm font-bold text-accent min-[880px]:hidden">{formatDate(today)}</time>
+        <h1 className="break-words font-display text-[clamp(2rem,8.4vw,3rem)] leading-[1.07] min-[880px]:text-[3.5rem]">
+          {greeting}{firstName ? `, ${firstName}` : ""}
+        </h1>
       </header>
 
-      <MotivationCard
-        image={pickImage(motivationSeed)}
-        line={pickLine(slipping ? "slipping" : "dashboard", motivationSeed)}
-        fact={motivationFact?.text ?? null}
-        eyebrow={slipping ? "Get back in" : null}
-        priority
-      />
-
-      <DailyPlan day={today} garminCalories={todayBurn?.totalCalories ?? null} />
-
-      <NutritionPhaseCard />
-
-      <CoachDashboardCard />
-
-      <section className="grid grid-cols-2 gap-2 min-[360px]:gap-3">
-        <Link
-          href="/workouts"
-          className="card min-w-0 overflow-hidden p-4 active:scale-[0.98] transition min-[360px]:p-5"
-        >
-          <div className="mb-7 flex items-center justify-between"><Dumbbell className="text-accent" size={20} /><span className="font-display text-xl text-muted/30">01</span></div>
-          <span className="font-display text-2xl leading-none tracking-[0.04em]">Start workout</span>
-          <span className="mt-2 block text-[10px] uppercase tracking-[0.1em] text-muted">Routines / sessions</span>
-        </Link>
-        <Link
-          href="/nutrition"
-          className="card min-w-0 overflow-hidden p-4 active:scale-[0.98] transition min-[360px]:p-5"
-        >
-          <div className="mb-7 flex items-center justify-between"><Apple className="text-warn" size={20} /><span className="font-display text-xl text-muted/30">02</span></div>
-          <span className="font-display text-2xl leading-none tracking-[0.04em]">Log food</span>
-          <span className="mt-2 block text-[10px] uppercase tracking-[0.1em] text-muted">Search / scan</span>
-        </Link>
+      <section className="grid grid-cols-3 gap-2 min-[520px]:gap-3" aria-label="Quick actions">
+        {quickActions.map(({ href, title, icon: Icon }) => (
+          <Link key={href} href={href} className="card surface-link flex min-w-0 flex-col items-start gap-2 p-3 min-[520px]:flex-row min-[520px]:items-center min-[520px]:gap-3">
+            <span className="icon-frame h-9 w-9">
+              <Icon size={17} aria-hidden="true" />
+            </span>
+            <span className="min-w-0 text-xs font-extrabold min-[375px]:text-sm">{title}</span>
+            <ChevronRight className="ml-auto hidden text-muted min-[520px]:block" size={16} aria-hidden="true" />
+          </Link>
+        ))}
       </section>
 
-      <section>
-        <h2 className="section-title">Today / nutrition</h2>
-        <MacroSummary totals={totals} targets={targets} />
-      </section>
+      <div className="grid items-start gap-5 min-[1040px]:grid-cols-[1.15fr_1fr]">
+        <div className="space-y-3">
+          <DailyPlan day={today} garminCalories={todayBurn?.totalCalories ?? null} />
+          <Link href="/workouts/mobility" className="card surface-link flex items-center gap-3 p-4">
+            <span className="icon-frame"><Move size={18} aria-hidden="true" /></span>
+            <span className="min-w-0 flex-1 text-sm font-extrabold">Mobility &amp; flexibility</span>
+            <ChevronRight className="shrink-0 text-muted" size={18} aria-hidden="true" />
+          </Link>
+        </div>
+        <div className="space-y-4">
+          <section aria-labelledby="today-nutrition">
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="today-nutrition" className="section-title mb-0">Today’s nutrition</h2>
+              <Link href="/nutrition" className="text-xs font-extrabold text-accent hover:underline">Open food log</Link>
+            </div>
+            <MacroSummary totals={totals} targets={targets} />
+          </section>
+          <NutritionPhaseCard />
+          <CoachDashboardCard />
+        </div>
+      </div>
 
-      <section>
-        <h2 className="section-title">Last 7 days</h2>
-        <div className="card grid grid-cols-2 gap-0 overflow-hidden p-0 text-center">
-          <div className="border-r border-border p-5"><p className="data-number text-4xl text-accent">{training?.count ?? 0}</p><p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted">Workouts</p></div>
-          <div className="p-5"><p className="data-number text-4xl text-warn">{nutritionDays?.count ?? 0}<span className="ml-1 text-base text-muted">/ 7</span></p><p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted">Nutrition days</p></div>
+      <section aria-labelledby="activity-heading">
+        <h2 id="activity-heading" className="section-title">Last 7 days</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <Link href="/workouts/history" className="card surface-link p-4">
+            <Dumbbell size={18} className="mb-2 text-accent" aria-hidden="true" />
+            <p className="data-number text-3xl">{training?.count ?? 0}</p>
+            <p className="mt-1 text-xs font-semibold text-muted">Gym workouts</p>
+          </Link>
+          <Link href="/nutrition" className="card surface-link p-4">
+            <Apple size={18} className="mb-2 text-accent" aria-hidden="true" />
+            <p className="data-number text-3xl">{nutritionDays?.count ?? 0}<span className="ml-1 text-sm text-muted">/ 7</span></p>
+            <p className="mt-1 text-xs font-semibold text-muted">Days with food logs</p>
+          </Link>
         </div>
       </section>
 
-      {lastSession && (
-        <section>
-          <h2 className="section-title">Last workout</h2>
+      <div className="grid gap-3 min-[1040px]:grid-cols-2">
+        {lastSession && (
           <Link
-            href={
-              lastSession.finishedAt
-                ? `/workouts/session/${lastSession.id}/summary`
-                : `/workouts/session/${lastSession.id}`
-            }
-            className="card p-4 flex items-center justify-between active:scale-[0.98] transition"
+            href={lastSession.finishedAt ? `/workouts/session/${lastSession.id}/summary` : `/workouts/session/${lastSession.id}`}
+            className="card surface-link flex items-center gap-3 p-4"
           >
+            <span className="icon-frame"><Dumbbell size={18} aria-hidden="true" /></span>
             <div className="min-w-0 flex-1">
-              <p className="break-words font-display text-xl tracking-[0.04em]">{lastSession.name}</p>
-              <p className="text-xs text-muted">
-                {formatDate(
-                  dateISOInTimeZone(lastSession.startedAt)
-                )}
-                {!lastSession.finishedAt && (
-                  <span className="text-accent"> · in progress</span>
-                )}
-              </p>
+              <p className="label">{lastSession.finishedAt ? "Last gym workout" : "Workout in progress"}</p>
+              <p className="mt-1 break-words font-bold">{lastSession.name}</p>
+              <p className="text-xs text-muted">{formatDate(dateISOInTimeZone(lastSession.startedAt))}</p>
             </div>
-            <ChevronRight className="shrink-0 text-muted" size={20} />
+            <ChevronRight className="shrink-0 text-muted" size={18} aria-hidden="true" />
           </Link>
-        </section>
-      )}
-
-      <section>
-        <Link
-          href="/progress"
-          className="card p-4 flex items-center justify-between active:scale-[0.98] transition"
-        >
-          <div className="min-w-0 flex flex-1 items-center gap-3">
-            <div className="w-10 h-10 shrink-0 rounded-xl bg-surface-2 flex items-center justify-center">
-              <Scale className="text-muted" size={20} />
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold">Bodyweight</p>
-              <p className="break-words text-xs text-muted">
-                {latestWeight
-                  ? `${latestWeight.weightKg} kg${targets.goalWeightKg ? ` → ${targets.goalWeightKg} kg goal` : ""} · ${formatDate(latestWeight.day)}`
-                  : targets.currentWeightKg
-                    ? `${targets.currentWeightKg} kg${targets.goalWeightKg ? ` → ${targets.goalWeightKg} kg goal` : ""} · profile`
-                  : "No entries yet"}
-              </p>
-            </div>
+        )}
+        <Link href="/progress?view=body" className="card surface-link flex items-center gap-3 p-4">
+          <span className="icon-frame"><Scale size={18} aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="label">Body weight</p>
+            <p className="mt-1 break-words font-bold">
+              {latestWeight ? `${latestWeight.weightKg} kg` : targets.currentWeightKg ? `${targets.currentWeightKg} kg` : "No entries yet"}
+            </p>
+            {latestWeight && <p className="text-xs text-muted">{formatDate(latestWeight.day)}</p>}
           </div>
-          <ChevronRight className="shrink-0 text-muted" size={20} />
+          <ChevronRight className="shrink-0 text-muted" size={18} aria-hidden="true" />
         </Link>
-      </section>
+      </div>
     </div>
   );
 }

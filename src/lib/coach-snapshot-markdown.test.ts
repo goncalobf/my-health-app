@@ -35,6 +35,7 @@ function baseSnapshot(overrides: Partial<CoachSnapshot> = {}): CoachSnapshot {
     garminHealthTrend: [],
     cardioSessions: [],
     jiuJitsuSessions: [],
+    mobilitySessions: [],
     weightTrend: [],
     expenditureTrend: [],
     nutritionTrend: [],
@@ -174,4 +175,11 @@ test("jiu-jitsu appears with effort and same-day strength but no calories", () =
   assert.match(section, /\| 2026-08-29 \| — \| — \| none logged \|/);
   assert.doesNotMatch(section, /calories/i);
   assert.match(markdown, /Today’s gym choice: Upper body\n- Jiu-jitsu planned for today: yes/);
+});
+
+test("mobility is presented with session name and elapsed time", () => {
+  const markdown = formatCoachSnapshotAsMarkdown(baseSnapshot({
+    mobilitySessions: [{ day: "2026-08-31", routine: "Hip mobility", durationSeconds: 150 }],
+  }));
+  assert.match(markdown, /## Completed mobility sessions\n[\s\S]*\| 2026-08-31 \| Hip mobility \| 2\.5 \|/);
 });

@@ -1,4 +1,5 @@
 import type { CoachSnapshot } from "@/lib/coach-data";
+import { loggedMobilityRoutine } from "./mobility";
 import { JIU_JITSU, type JiuJitsuEffort } from "./jiu-jitsu";
 import type { WorkoutDay } from "./workout-day";
 import type { getTrainingSuggestionContext } from "./workout-day-data";
@@ -33,6 +34,16 @@ function table(
   const divider = `| ${headers.map(() => "---").join(" | ")} |`;
   const body = rows.map((row) => `| ${row.map(cell).join(" | ")} |`).join("\n");
   return `${head}\n${divider}\n${body}`;
+}
+
+function mobilityHistory(sessions: { day: string; routine: string; durationSeconds: number | null }[]) {
+  return table(
+    ["Date", "Routine", "Elapsed minutes"],
+    sessions.map(({ day, routine, durationSeconds }) => [
+      day, routine, durationSeconds === null ? null : Math.round(durationSeconds / 6) / 10,
+    ]),
+    "No mobility sessions logged in this period.",
+  );
 }
 
 function jiuJitsuTable(
@@ -264,6 +275,8 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
     ].join("\n"),
   );
 
+  sections.push(["## Completed mobility sessions", mobilityHistory(snapshot.mobilitySessions)].join("\n"));
+
   sections.push(
     [
       "## Training choices",
@@ -390,9 +403,15 @@ export function formatTrainingSuggestionContext(
     ]), "No recent working sets logged."),
     "",
     "## Recent completed cardio",
-    table(["Date", "Type", "Minutes"], context.activities.filter((r) => r.type !== JIU_JITSU).map((r) => [
+    table(["Date", "Type", "Minutes"], context.activities.filter((r) => r.type !== JIU_JITSU && !loggedMobilityRoutine(r.type)).map((r) => [
       r.day, r.type, r.durationSeconds == null ? null : Math.round(r.durationSeconds / 60),
     ]), "No recent cardio logged."),
+    "",
+    "## Completed mobility sessions",
+    mobilityHistory(context.activities.flatMap((row) => {
+      const routine = loggedMobilityRoutine(row.type);
+      return routine ? [{ day: row.day, routine: routine.name, durationSeconds: row.durationSeconds }] : [];
+    })),
     "",
     "## Completed jiu-jitsu sessions",
     jiuJitsuTable(

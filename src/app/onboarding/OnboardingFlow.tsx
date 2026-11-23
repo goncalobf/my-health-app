@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
+import BrandMark from "@/components/BrandMark";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { apiPost } from "@/lib/api";
@@ -9,14 +9,14 @@ import { normalizeDecimalInput } from "@/lib/decimal-input";
 import type { BiologicalSex, Goal } from "@/lib/calorie-targets";
 
 const GOALS: { value: Goal; label: string; detail: string }[] = [
-  { value: "fat_loss", label: "Lose fat", detail: "Hold strength, drop weight" },
+  { value: "fat_loss", label: "Lose fat", detail: "Reduce body fat while maintaining strength" },
   {
     value: "recomposition",
-    label: "Lose fat + gain muscle",
-    detail: "Slow cut while training hard",
+    label: "Body recomposition",
+    detail: "Build or maintain muscle while reducing body fat",
   },
-  { value: "maintenance", label: "Maintain", detail: "Stay where you are" },
-  { value: "muscle_gain", label: "Gain muscle", detail: "Controlled surplus" },
+  { value: "maintenance", label: "Maintain weight", detail: "Support your current weight and activity" },
+  { value: "muscle_gain", label: "Gain muscle", detail: "Support muscle growth with training and nutrition" },
 ];
 
 const SEXES: { value: BiologicalSex; label: string }[] = [
@@ -71,29 +71,23 @@ export default function OnboardingFlow({ name }: { name: string | null }) {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-lg flex-col px-4 pb-8 pt-6 safe-top safe-bottom">
-      <div className="mb-6 flex items-center gap-2">
-        {[0, 1].map((index) => (
-          <div
-            key={index}
-            className={`h-1 flex-1 transition ${
-              index <= step ? "bg-accent" : "bg-surface-2"
-            }`}
-          />
-        ))}
+      <div className="mb-7">
+        <BrandMark />
+        <p className="mb-2 mt-5 text-xs font-bold text-muted">Setup step {step + 1} of 2</p>
+        <div className="flex gap-2" aria-hidden="true">
+          {[0, 1].map((index) => (
+            <span key={index} className={`h-1.5 flex-1 rounded-full ${index <= step ? "bg-accent" : "bg-border"}`} />
+          ))}
+        </div>
       </div>
 
       {step === 0 && (
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="mb-6 h-16 w-16 overflow-hidden border border-border bg-black [border-radius:2px_14px_2px_2px]">
-            <Image src="/icons/icon-192.png" alt="Fitlog" width={64} height={64} priority />
-          </div>
-          <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Fitlog / initialization</p>
-          <h1 className="font-display text-4xl leading-none tracking-[0.04em] min-[360px]:text-5xl">
+          <h1 className="font-display text-4xl leading-tight min-[360px]:text-5xl">
             {name ? `Welcome, ${name.split(" ")[0]}.` : "Welcome to Fitlog."}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            One question first. What are you training for? This sets your
-            calories and macros, and you can change it any time in settings.
+            Choose the goal you want Fitlog to use for your starting nutrition targets. You can change it in Settings.
           </p>
 
           <div className="mt-6 flex flex-col gap-2">
@@ -123,7 +117,7 @@ export default function OnboardingFlow({ name }: { name: string | null }) {
           <button
             onClick={() => setStep(1)}
             disabled={!goal}
-            className="btn-primary mt-auto w-full py-3.5 text-base"
+            className="btn-primary mt-6 w-full"
           >
             Continue <ArrowRight size={19} />
           </button>
@@ -132,10 +126,9 @@ export default function OnboardingFlow({ name }: { name: string | null }) {
 
       {step === 1 && (
         <div className="flex min-w-0 flex-1 flex-col">
-          <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">Fitlog / body profile</p>
-          <h1 className="font-display text-4xl leading-none tracking-[0.04em] min-[360px]:text-5xl">About you</h1>
+          <h1 className="font-display text-4xl leading-tight min-[360px]:text-5xl">About you</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            Used to estimate your energy needs. Nothing here leaves your account.
+            Fitlog uses these details to estimate your energy needs. You can update them later in Settings.
           </p>
 
           <div className="mt-6 flex flex-col gap-3">
@@ -168,7 +161,8 @@ export default function OnboardingFlow({ name }: { name: string | null }) {
             )}
 
             <div>
-              <span className="label">Biological sex</span>
+              <span className="label">Sex for the energy estimate</span>
+              <p className="mt-1 text-xs text-muted">Choose the option you want Fitlog to use, or select Prefer not to say.</p>
               <div className="mt-1.5 flex gap-1.5">
                 {SEXES.map((option) => {
                   const selected = biologicalSex === option.value;
@@ -177,7 +171,7 @@ export default function OnboardingFlow({ name }: { name: string | null }) {
                       key={option.value}
                       onClick={() => setBiologicalSex(option.value)}
                       aria-pressed={selected}
-                      className={`min-w-0 flex-1 rounded-xl px-2 py-2.5 text-xs font-medium transition active:scale-95 ${
+                      className={`min-h-11 min-w-0 flex-1 rounded-xl px-2 py-2.5 text-xs font-medium transition active:scale-95 ${
                         selected
                           ? "bg-accent text-bg"
                           : "border border-border bg-surface-2 text-muted"
@@ -193,7 +187,7 @@ export default function OnboardingFlow({ name }: { name: string | null }) {
 
           {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
-          <div className="mt-auto flex gap-2 pt-6">
+          <div className="mt-6 flex gap-2">
             <button
               onClick={() => setStep(0)}
               className="btn-ghost h-12 w-12 shrink-0 px-0 py-0"

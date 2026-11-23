@@ -92,8 +92,8 @@ export default function WorkoutDayCard() {
   const savedChoice = !!plan?.choice && selection === selectionValue(plan) && jiuJitsu === plan.choice.jiuJitsu;
 
   return (
-    <section className="card space-y-3 p-4 min-[360px]:p-5" aria-labelledby={`${fieldId}-title`}>
-      <h2 id={`${fieldId}-title`} className="font-display text-2xl tracking-wide">Today’s training</h2>
+    <section className="card space-y-3 border-t-accent/65 p-4 min-[360px]:p-5" aria-labelledby={`${fieldId}-title`}>
+      <h2 id={`${fieldId}-title`} className="font-display text-2xl">Today’s training</h2>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       {!plan ? (
         error
@@ -131,7 +131,7 @@ export default function WorkoutDayCard() {
           {!plan.choice && plan.defaultRoutineId !== null && (
             <p className="text-xs text-muted">Your weekly default is selected. You can change it for today.</p>
           )}
-          <label className="flex min-h-11 items-center gap-3 rounded-sm border border-border px-3 py-2 text-sm">
+          <label className="flex min-h-11 items-center gap-3 rounded-xl border border-border px-3 py-2 text-sm">
             <input
               type="checkbox"
               checked={jiuJitsu}

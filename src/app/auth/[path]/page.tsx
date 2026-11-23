@@ -2,7 +2,7 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import BrandMark from "@/components/BrandMark";
 import { useRouter } from "next/navigation";
 import { LogIn, UserPlus } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
@@ -67,29 +67,23 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center px-5 safe-bottom safe-top">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-4 text-center">
-          <div className="h-20 w-20 overflow-hidden border border-border bg-black [border-radius:2px_16px_2px_2px]">
-            <Image src="/icons/icon-192.png" alt="Fitlog" width={80} height={80} priority />
-          </div>
-          <div>
-            <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.24em] text-accent">Your training archive</p>
-            <p className="font-display text-6xl leading-none tracking-[0.05em]">Fitlog</p>
-            <h1 className="mt-3 font-display text-2xl tracking-[0.04em]">{signingUp ? "Create your account" : "Welcome back"}</h1>
-            <p className="mx-auto mt-1 max-w-xs text-sm leading-relaxed text-muted">
-              {signingUp
-                ? "Start a private training, nutrition and progress log."
-                : "Sign in to your health and training data."}
-            </p>
-          </div>
+    <main className="grid min-h-dvh items-center px-5 pb-[max(2.25rem,env(safe-area-inset-bottom))] pt-[max(2.25rem,env(safe-area-inset-top))]">
+      <div className="mx-auto w-full max-w-md">
+        <div className="mb-6">
+          <BrandMark />
+          <h1 className="mt-5 font-display text-4xl leading-tight min-[375px]:text-5xl">
+            {signingUp ? "Create your account" : "Welcome back"}
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            {signingUp ? "Set up your personal training and nutrition log." : "Sign in to your training, food and progress."}
+          </p>
         </div>
 
         <div className="card flex flex-col gap-4 p-5">
           <button
             type="button"
             onClick={continueWithGoogle}
-            className="btn-ghost w-full bg-text text-bg"
+            className="btn-ghost w-full"
             disabled={busy !== null}
           >
             <GoogleMark />
@@ -98,7 +92,7 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
 
           <div className="flex items-center gap-3" aria-hidden="true">
             <span className="h-px flex-1 bg-border" />
-            <span className="font-display text-xs uppercase tracking-[0.16em] text-muted">or use email</span>
+            <span className="text-xs font-semibold text-muted">or use email</span>
             <span className="h-px flex-1 bg-border" />
           </div>
 
@@ -117,7 +111,7 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
             <span className="label">Password</span>
             <input className="input mt-1" type="password" autoComplete={signingUp ? "new-password" : "current-password"} minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} required />
           </label>
-          {error && <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
+          {error && <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
           <button className="btn-primary mt-1" disabled={busy !== null}>
             {signingUp ? <UserPlus size={18} /> : <LogIn size={18} />}
             {busy === "email" ? "Please wait…" : signingUp ? "Create account" : "Sign in"}

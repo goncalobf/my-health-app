@@ -79,3 +79,12 @@ test("set creation accepts only valid retry keys; set edits cannot change them",
   assert.equal(setPatch.safeParse({ clientRequestId }).success, false);
   assert.equal(createSet.safeParse(valid).success, true); // Existing clients still work.
 });
+
+test("session API accepts a bounded batch of sets to skip", () => {
+  const skipSets = { exerciseId: 3, setNumbers: [2, 3] };
+  assert.ok(sessionPatch.safeParse({ skipSets }).success);
+  assert.equal(sessionPatch.safeParse({ skipSets, finish: true }).success, false);
+  for (const setNumbers of [[], [0], Array.from({ length: 101 }, (_, i) => i + 1)]) {
+    assert.equal(sessionPatch.safeParse({ skipSets: { ...skipSets, setNumbers } }).success, false);
+  }
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Pencil, BookmarkPlus } from "lucide-react";
 import { apiGet, apiDelete, apiPatch, apiPost } from "@/lib/api";
 import { todayISO, formatDate, round, shiftISODate } from "@/lib/utils";
@@ -101,75 +101,57 @@ export default function NutritionPage() {
   }
 
   const isToday = day === todayISO();
-  const dateInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div>
-      <PageHeader title="Nutrition" />
-      <div className="mb-5 flex items-center justify-between border-b border-border pb-4">
-        <button
-          onClick={() => setDay((d) => shiftISODate(d, -1))}
-          className="flex h-10 w-10 items-center justify-center border border-border bg-surface-2 text-muted [border-radius:2px_10px_2px_2px]"
-          aria-label="Previous day"
-        >
-          <ChevronLeft size={20} />
+      <PageHeader title="Nutrition" description="Log meals, see your daily totals, and track hydration." />
+      <div className="card mb-5 flex min-w-0 items-center gap-2 p-2 min-[520px]:gap-3 min-[520px]:p-3">
+        <button type="button" onClick={() => setDay((d) => shiftISODate(d, -1))} className="icon-button" aria-label="Previous day">
+          <ChevronLeft size={19} />
         </button>
-        <div className="relative min-w-0 flex-1 px-2 text-center">
-          <p className="label mb-1">Food log / date</p>
-          <button
-            onClick={() => dateInputRef.current?.showPicker()}
-            className="truncate font-display text-2xl leading-none tracking-[0.04em] underline-offset-4 hover:underline"
-          >
-            {isToday ? "Today" : formatDate(day)}
-          </button>
+        <label className="min-w-0 flex-1 text-center">
+          <span className="sr-only">Food log date</span>
           <input
-            ref={dateInputRef}
             type="date"
             value={day}
             max={todayISO()}
-            onChange={(e) => { if (e.target.value) setDay(e.target.value); }}
-            className="pointer-events-none absolute inset-0 h-0 w-0 opacity-0"
-            aria-hidden
+            onChange={(e) => { if (e.target.value && e.target.value <= todayISO()) setDay(e.target.value); }}
+            className="input"
           />
-          {!isToday && (
-            <div>
-              <button
-                onClick={() => setDay(todayISO())}
-                className="text-xs text-accent"
-              >
-                Back to today
-              </button>
-            </div>
-          )}
-        </div>
-        <button
-          onClick={() => setDay((d) => shiftISODate(d, 1))}
-          disabled={isToday}
-          className="flex h-10 w-10 items-center justify-center border border-border bg-surface-2 text-muted disabled:opacity-30 [border-radius:2px_10px_2px_2px]"
-          aria-label="Next day"
-        >
-          <ChevronRight size={20} />
+        </label>
+        <button type="button" onClick={() => setDay((d) => shiftISODate(d, 1))} disabled={isToday} className="icon-button disabled:opacity-45" aria-label="Next day">
+          <ChevronRight size={19} />
         </button>
+        {!isToday && (
+          <button type="button" onClick={() => setDay(todayISO())} className="hidden min-h-11 shrink-0 px-2 text-xs font-bold text-accent min-[520px]:block">
+            Back to today
+          </button>
+        )}
       </div>
 
-      <MacroSummary totals={totals} targets={targets} />
-
-      <div className="mt-4">
-        <HydrationCard
-          weightKg={targets.currentWeightKg}
-          creatinePhase={targets.creatineLoading ? "loading" : targets.creatineMaintenance ? "maintenance" : "none"}
-          onChangePhase={changeCreatinePhase}
-        />
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="section-title mb-0">{isToday ? "Today’s food log" : `Food log · ${formatDate(day)}`}</h2>
+        {!isToday && <button type="button" onClick={() => setDay(todayISO())} className="min-h-11 px-2 text-xs font-bold text-accent min-[520px]:hidden">Back to today</button>}
       </div>
-
-      <div className="flex flex-col gap-4 mt-5">
-        {MEALS.map((meal, mealIndex) => {
+      <div className="grid items-start gap-5 min-[1050px]:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+        <div>
+          <MacroSummary totals={totals} targets={targets} />
+          <div className="mt-4">
+            <HydrationCard
+              weightKg={targets.currentWeightKg}
+              creatinePhase={targets.creatineLoading ? "loading" : targets.creatineMaintenance ? "maintenance" : "none"}
+              onChangePhase={changeCreatinePhase}
+            />
+          </div>
+        </div>
+      <div className="flex min-w-0 flex-col gap-3">
+        {MEALS.map((meal) => {
           const items = logs.filter((l) => l.meal === meal);
           const kcal = items.reduce((a, l) => a + l.calories, 0);
           return (
-            <div key={meal}>
+            <section key={meal} className="card min-w-0 p-3 min-[375px]:p-4">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <h2 className="min-w-0 flex-1 font-display text-2xl tracking-[0.05em]"><span className="mr-2 text-base text-muted/40">{String(mealIndex + 1).padStart(2, "0")}</span>{meal}</h2>
+                <h3 className="min-w-0 flex-1 text-base font-extrabold capitalize">{meal}</h3>
                 <div className="flex shrink-0 items-center gap-2 min-[360px]:gap-3">
                   {kcal > 0 && (
                     <span className="text-sm text-muted tabular-nums">
@@ -177,11 +159,11 @@ export default function NutritionPage() {
                     </span>
                   )}
                   {items.length > 0 && (
-                    <button onClick={() => saveMeal(meal, items)} className="text-muted" aria-label={`Save ${meal} as meal`}><BookmarkPlus size={17} /></button>
+                    <button onClick={() => saveMeal(meal, items)} className="icon-button" aria-label={`Save ${meal} as meal`}><BookmarkPlus size={17} /></button>
                   )}
                   <button
                     onClick={() => setLogging(meal)}
-                    className="flex h-8 w-8 items-center justify-center border border-accent/40 bg-accent/10 text-accent [border-radius:2px_8px_2px_2px]"
+                    className="icon-button bg-accent-soft"
                     aria-label={`Add to ${meal}`}
                   >
                     <Plus size={18} />
@@ -189,16 +171,16 @@ export default function NutritionPage() {
                 </div>
               </div>
               {items.length === 0 ? (
-                <p className="border-l border-border py-2 pl-3 text-[10px] uppercase tracking-[0.12em] text-muted">Nothing logged</p>
+                <p className="py-2 text-xs text-muted">No foods logged</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   {items.map((l) => (
                     <div
                       key={l.id}
-                      className="card px-3 py-2.5 flex items-center gap-3"
+                      className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{l.name}</p>
+                        <p className="break-words text-sm font-bold">{l.name}</p>
                         <p className="text-xs text-muted">
                           {round(l.quantityG, 0)}g · {round(l.calories, 0)} kcal
                           · {round(l.proteinG, 0)}P {round(l.carbsG, 0)}C{" "}
@@ -207,14 +189,14 @@ export default function NutritionPage() {
                       </div>
                       <button
                         onClick={() => editQuantity(l)}
-                        className="shrink-0 text-muted p-1.5"
+                        className="flex h-10 w-9 shrink-0 items-center justify-center rounded-lg text-accent hover:bg-surface"
                         aria-label="Edit grams"
                       >
                         <Pencil size={16} />
                       </button>
                       <button
                         onClick={() => remove(l.id)}
-                        className="shrink-0 text-muted p-1.5"
+                        className="flex h-10 w-9 shrink-0 items-center justify-center rounded-lg text-accent hover:bg-surface"
                         aria-label="Delete"
                       >
                         <Trash2 size={16} />
@@ -223,9 +205,10 @@ export default function NutritionPage() {
                   ))}
                 </div>
               )}
-            </div>
+            </section>
           );
         })}
+      </div>
       </div>
 
       {logging && (

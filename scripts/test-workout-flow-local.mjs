@@ -170,11 +170,11 @@ try {
     savedWorkingRows: saved.length,
   });
   await page.unroute(`**/api/sessions/${sid}/sets`);
-  // Removing the first unlogged set selects the next pending one.
+  // Skipping the first unlogged set selects the next pending one.
   sid = await session(r);
   await visit(page, sid);
   await page
-    .getByRole("button", { name: "Remove this set", exact: true })
+    .getByRole("button", { name: "Skip set", exact: true })
     .click();
   await page.waitForFunction(() =>
     document.body.textContent.includes("sets skipped/removed"),
@@ -183,7 +183,42 @@ try {
     .locator('[aria-label^="Go to set"][aria-current="true"]')
     .getAttribute("aria-label");
   assert.equal(current, "Go to set 2");
-  findings.push({ fixed: "remove-set-selects-next-pending", current });
+  findings.push({ fixed: "skip-set-selects-next-pending", current });
+  // Cutting the workout short after one working set keeps that set in history.
+  sid = await session(r);
+  await visit(page, sid);
+  await enter(page);
+  await log(page);
+  const skipRemaining = page.getByRole("button", { name: "Skip remaining sets", exact: true });
+  await skipRemaining.waitFor();
+  await page.locator("fieldset").screenshot({
+    path: ".context/skip-remaining-sets.png",
+    style: "nextjs-portal { display: none }",
+  });
+  await skipRemaining.click();
+  await page.getByText("No sets left to log", { exact: true }).waitFor();
+  const request = { skipSets: { exerciseId: exerciseIds[0], setNumbers: [2, 3] } };
+  const retried = await api(`/api/sessions/${sid}`, "PATCH", request);
+  assert.deepEqual(retried.skippedSets.map((s) => s.setNumber).sort(), [2, 3]);
+
+  const refused = await fetch(`${base}/api/sessions/${sid}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ skipSets: { exerciseId: exerciseIds[0], setNumbers: [1, 4] } }),
+  });
+  assert.equal(refused.status, 409);
+  await visit(page, sid);
+  await page.getByText("No sets left to log", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Finish workout", exact: true }).click();
+  await page.waitForURL(`**/workouts/session/${sid}/summary`);
+  const shortened = await api(`/api/sessions/${sid}`);
+  assert.ok(shortened.session.finishedAt);
+  assert.equal(shortened.plan[0].targetSets, 3);
+  assert.deepEqual(shortened.loggedSets.map((set) => set.setNumber), [1]);
+  assert.deepEqual(shortened.session.skippedSets.map((set) => set.setNumber).sort(), [2, 3]);
+  findings.push({ fixed: "shortened-workout-keeps-logged-sets", completedRows: 1, skippedSets: 2 });
+  // Later checks need a fresh exercise history to test their prefill cases.
+  await api(`/api/sessions/${sid}`, "DELETE");
   // Rest resumes in the new exercise order, with a valid cursor.
   const reorderRoutine = await fixture(1, 3);
   sid = await session(reorderRoutine);

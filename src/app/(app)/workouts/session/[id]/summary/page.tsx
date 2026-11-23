@@ -15,8 +15,6 @@ import { est1RM, formatDuration, round } from "@/lib/utils";
 import PageHeader from "@/components/PageHeader";
 import WorkoutCoach from "@/components/WorkoutCoach";
 import ExerciseImage from "@/components/ExerciseImage";
-import MotivationCard from "@/components/MotivationCard";
-import { pickImage, pickLine } from "@/lib/motivation";
 import { getProgressionRecommendation } from "@/lib/progressive-overload";
 
 interface SetRow {
@@ -153,19 +151,12 @@ export default function WorkoutSummaryPage({
           unavailable.
         </p>
       )}
-      <div className="card mb-5 overflow-hidden border-accent/30 bg-gradient-to-br from-accent/10 to-transparent p-6 text-center">
-        <div className="icon-frame mx-auto mb-3 h-14 w-14">
-          <Award size={28} />
+      <div className="mb-5 flex min-w-0 items-start gap-4 rounded-[1.25rem] bg-success-soft p-5">
+        <div className="icon-frame bg-surface text-success"><Award size={22} aria-hidden="true" /></div>
+        <div className="min-w-0">
+          <p className="text-xs font-extrabold text-success">Saved to workout history</p>
+          <h2 className="mt-1 break-words font-display text-3xl leading-tight">{data.session.name}</h2>
         </div>
-        <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">
-          Protocol complete
-        </p>
-        <h1 className="break-words font-display text-4xl leading-none tracking-[0.04em]">
-          {data.session.name}
-        </h1>
-        <p className="mt-2 text-sm text-muted">
-          Strong work. Your next targets are ready.
-        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 mb-5 min-[400px]:grid-cols-4 min-[360px]:gap-2">
@@ -226,7 +217,7 @@ export default function WorkoutSummaryPage({
         </div>
       )}
 
-      <h2 className="section-title">Exercise recap / next target</h2>
+      <h2 className="section-title">Exercises and next targets</h2>
       <div className="flex flex-col gap-3">
         {(data.plan.length
           ? data.plan
@@ -325,22 +316,8 @@ export default function WorkoutSummaryPage({
 
       <WorkoutCoach sessionId={Number(id)} />
 
-      <MotivationCard
-        variant="panel"
-        className="mt-5"
-        image={pickImage(`summary-${id}`)}
-        line={pickLine("summary", `summary-${id}`)}
-        fact={
-          summary.prs.length > 0
-            ? `${summary.prs.length} personal record${summary.prs.length === 1 ? "" : "s"} today.`
-            : summary.volumeChangePct != null && summary.volumeChangePct > 0
-              ? `${summary.volumeChangePct}% more volume than last time.`
-              : `${summary.sets.length} working sets logged.`
-        }
-      />
-
       <Link href="/" className="btn-primary w-full mt-3">
-        <Home size={18} /> Back to dashboard
+        <Home size={18} /> Back to Home
       </Link>
     </div>
   );

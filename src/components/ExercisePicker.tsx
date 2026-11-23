@@ -56,11 +56,11 @@ export default function ExercisePicker({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60">
+    <div role="dialog" aria-modal="true" aria-label="Add exercise" className="fixed inset-0 z-50 flex flex-col justify-end bg-black/65">
       <div className="mx-auto flex max-h-[85dvh] w-full max-w-lg flex-col rounded-t-2xl border-t border-border bg-surface safe-bottom">
         <div className="flex items-center gap-2 p-4 border-b border-border">
           <h3 className="min-w-0 flex-1 font-semibold">Add exercise</h3>
-          <button onClick={onClose} className="text-muted p-1">
+          <button onClick={onClose} className="icon-button" aria-label="Close exercise picker">
             <X size={22} />
           </button>
         </div>

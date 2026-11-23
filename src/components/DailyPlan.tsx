@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Flame } from "lucide-react";
+import { Check, ChevronDown, Watch } from "lucide-react";
 import { apiPost } from "@/lib/api";
 import WorkoutDayCard from "./WorkoutDayCard";
 
@@ -34,17 +34,32 @@ export default function DailyPlan({ day, garminCalories }: {
     <div className="flex flex-col gap-3">
       <WorkoutDayCard />
 
-      <div className="card p-4">
-        <div className="mb-3 flex items-center gap-2"><Flame size={17} className="text-warn" /><p className="font-display text-lg tracking-[0.06em]">Garmin energy</p><span className="ml-auto text-[10px] uppercase tracking-widest text-muted">Daily total</span></div>
-        <div className="flex gap-2">
-          <input aria-label="Today’s Garmin calories" disabled={saving} type="number" inputMode="numeric" className="input min-w-0 flex-1" placeholder="Today’s total" value={burn}
-            onChange={(e) => { setBurn(e.target.value); setBurnSaved(false); }} />
-          <button onClick={saveBurn} disabled={!burn || burnSaved || saving} className="btn-ghost px-3">{burnSaved ? <Check size={18} /> : "Save"}</button>
+      <details className="card">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+          <span className="icon-frame h-8 w-8"><Watch size={16} aria-hidden="true" /></span>
+          <span className="min-w-0 flex-1 text-sm font-extrabold">Garmin daily energy</span>
+          {garminCalories != null && <span className="text-xs font-semibold text-muted">{garminCalories} kcal</span>}
+          <ChevronDown size={16} className="shrink-0 text-muted" aria-hidden="true" />
+        </summary>
+        <div className="px-4 pb-4">
+          <label className="label" htmlFor="garmin-daily-calories">Total calories in Garmin Connect</label>
+          <div className="mt-1.5 flex gap-2">
+            <input
+              id="garmin-daily-calories"
+              disabled={saving}
+              type="number"
+              inputMode="numeric"
+              className="input min-w-0 flex-1"
+              value={burn}
+              onChange={(e) => { setBurn(e.target.value); setBurnSaved(false); }}
+            />
+            <button onClick={saveBurn} disabled={!burn || burnSaved || saving} className="btn-ghost">
+              {burnSaved ? <><Check size={17} /> Saved</> : saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+          {burnError && <p role="alert" className="mt-2 text-sm text-danger">{burnError}</p>}
         </div>
-        {burnError && <p role="alert" className="mt-2 text-sm text-danger">{burnError}</p>}
-        <p className="mt-2 text-[10px] uppercase leading-relaxed tracking-[0.08em] text-muted">Forerunner 165 / Garmin Connect total calories</p>
-      </div>
-
+      </details>
     </div>
   );
 }

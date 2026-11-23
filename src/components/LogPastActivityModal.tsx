@@ -93,7 +93,7 @@ export default function LogPastActivityModal({ onClose, initialType }: {
                     onClick={() => setType(t)}
                     aria-pressed={type === t}
                     disabled={saving}
-                    className={`flex items-center gap-2 p-3 text-left transition active:scale-95 [border-radius:2px_9px_2px_2px] ${
+                    className={`flex items-center gap-2 p-3 text-left transition active:scale-95 rounded-xl ${
                       type === t ? "bg-accent text-bg" : "border border-border bg-surface-2 text-text"
                     }`}
                   >

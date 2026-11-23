@@ -173,3 +173,13 @@ test("explicitly skipped sets stay skipped after reload", async () => {
     [1, 3, 4],
   );
 });
+
+test("skipping the rest of an exercise advances without revisiting skipped slots", () => {
+  const blocks = [
+    { sets: [{ key: "a1", completed: true }, { key: "a2", completed: false }, { key: "a3", completed: false }] },
+    { sets: [{ key: "b1", completed: false }] },
+  ];
+  const skipped = new Set(["a2", "a3"]);
+  assert.deepEqual(nextIncompletePosition(blocks, 0, "a1", skipped), { exIdx: 1, setKey: "b1" });
+  assert.equal(nextIncompletePosition(blocks.slice(0, 1), 0, "a1", skipped), null);
+});

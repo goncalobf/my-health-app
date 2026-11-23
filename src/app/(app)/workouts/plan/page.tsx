@@ -334,7 +334,7 @@ export default function TrainingPlanPage() {
               ],
             ].map(([number, title, detail]) => (
               <li key={number} className="flex gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center border border-accent/30 bg-accent/10 font-display text-base text-accent [border-radius:2px_7px_2px_2px]">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center border border-accent/30 bg-accent/10 font-display text-base text-accent rounded-xl">
                   {number}
                 </span>
                 <div className="min-w-0">

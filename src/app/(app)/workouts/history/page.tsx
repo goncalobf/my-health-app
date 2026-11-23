@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronRight, History, Download, RefreshCw } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import { loggedMobilityRoutine } from "@/lib/mobility";
 import { JIU_JITSU } from "@/lib/jiu-jitsu";
 import { dateISOInTimeZone, formatDate } from "@/lib/utils";
 import GarminImportModal from "@/components/GarminImportModal";
@@ -199,6 +200,7 @@ export default function HistoryPage() {
             }
 
             const cardio = row as CardioRow;
+            const mobility = loggedMobilityRoutine(cardio.type);
             const distKm = cardio.distanceM ? (cardio.distanceM / 1000).toFixed(2) : null;
             return (
               <Link
@@ -209,11 +211,11 @@ export default function HistoryPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent border border-accent/30 rounded px-1.5 py-0.5">
-                      {TYPE_BADGE[cardio.type] ?? cardio.type}
+                      {mobility?.mode ?? TYPE_BADGE[cardio.type] ?? cardio.type}
                     </span>
                   </div>
                   <p className="break-words font-semibold">
-                    {TYPE_LABELS[cardio.type] ?? cardio.type}
+                    {mobility?.name ?? TYPE_LABELS[cardio.type] ?? cardio.type}
                   </p>
                   <p className="text-xs text-muted">
                     {formatDate(dateISOInTimeZone(new Date(cardio.startedAt)))}

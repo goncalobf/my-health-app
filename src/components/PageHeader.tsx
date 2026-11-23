@@ -1,31 +1,22 @@
-"use client";
-
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
-export default function PageHeader({
-  title,
-  back,
-  action,
-}: {
+export default function PageHeader({ title, back, action, description }: {
   title: string;
   back?: string;
   action?: React.ReactNode;
+  description?: string;
 }) {
   return (
-    <header className="mb-6 flex min-h-14 min-w-0 items-center gap-3 border-b border-border pb-4">
+    <header className="mb-6 flex min-w-0 items-start gap-3">
       {back && (
-        <Link
-          href={back}
-          className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-muted [border-radius:2px_10px_2px_2px]"
-          aria-label="Go back"
-        >
-          <ChevronLeft size={24} />
+        <Link href={back} className="icon-button mt-0.5" aria-label="Go back">
+          <ArrowLeft size={19} />
         </Link>
       )}
       <div className="min-w-0 flex-1">
-        <p className="mb-0.5 text-[9px] font-bold uppercase tracking-[0.24em] text-accent">Fitlog / archive</p>
-        <h1 className="truncate font-display text-3xl leading-none tracking-[0.04em] min-[360px]:text-4xl">{title}</h1>
+        <h1 className="break-words font-display text-[2rem] leading-[1.08] min-[375px]:text-4xl min-[880px]:text-5xl">{title}</h1>
+        {description && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">{description}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </header>

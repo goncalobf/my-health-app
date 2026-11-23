@@ -72,6 +72,7 @@ export function nextIncompletePosition(
   blocks: FlowBlock[],
   exIdx: number,
   setKey: string,
+  excludedKeys?: ReadonlySet<string>,
 ): FlowPosition | null {
   const order: FlowPosition[] = [];
   blocks.forEach((block, i) =>
@@ -83,7 +84,7 @@ export function nextIncompletePosition(
   return (
     rotated.find((p) => {
       const set = blocks[p.exIdx].sets.find((s) => s.key === p.setKey);
-      return set && !set.completed;
+      return set && !set.completed && !excludedKeys?.has(p.setKey);
     }) ?? null
   );
 }

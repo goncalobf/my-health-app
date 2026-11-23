@@ -173,6 +173,11 @@ function numberText(value: number) {
     : String(Math.round(value * 1000) / 1000);
 }
 
+function canSkipSet(set: LocalSet) {
+  // A drop can already have a saved working effort before the chain finishes.
+  return !set.completed && set.entries.every((entry) => !entry.dbId);
+}
+
 export default function SessionPage({
   params,
 }: {
@@ -619,6 +624,29 @@ export default function SessionPage({
     setCursor({ exIdx, setKey: created.key });
   }
 
+  async function skipSets(remainingExercise: boolean) {
+    if (!active) return;
+    const { block, exIdx, set } = active;
+    const pending = (remainingExercise ? block.sets : [set]).filter(canSkipSet);
+    if (!pending.length) return;
+    if (
+      pending.some((slot) => slot.entries.some((entry) => entry.dirty)) &&
+      !window.confirm("Skip these sets and discard their unsaved edits?")
+    ) return;
+
+    const result = await apiPatch<{ skippedSets: SkippedSet[] }>(`/api/sessions/${id}`, {
+      skipSets: { exerciseId: block.exerciseId, setNumbers: pending.map((slot) => slot.setNumber) },
+    });
+    const excluded = new Set(pending.map((slot) => slot.key));
+    setSkipped(result.skippedSets);
+    setBlocks((bs) => bs.map((item, index) =>
+      index === exIdx ? { ...item, sets: item.sets.filter((slot) => !excluded.has(slot.key)) } : item,
+    ));
+    setCursor(nextIncompletePosition(blocks, exIdx, set.key, excluded));
+    setRest(null);
+    setShowWhy(false);
+  }
+
   async function removeSet(exIdx: number, setKey: string) {
     const set = blocks[exIdx].sets.find((s) => s.key === setKey);
     if (!set) return;
@@ -747,13 +775,13 @@ export default function SessionPage({
   }
 
   async function finish() {
-    if (
-      (dirty || completedCount < totalSets) &&
-      !window.confirm(
-        "Finish with unfinished sets or unsaved edits? Only logged sets will count.",
-      )
-    )
-      return;
+    const remaining = totalSets - completedCount;
+    if (remaining || dirty) {
+      const question = remaining
+        ? `Finish with ${remaining} set${remaining === 1 ? "" : "s"} left unlogged?`
+        : "Finish this workout?";
+      if (!window.confirm(`${question} Logged sets will be kept.${dirty ? " Unsaved edits will be lost." : ""}`)) return;
+    }
     await apiPatch(`/api/sessions/${id}`, { finish: true });
     router.replace(`/workouts/session/${id}/summary`);
   }
@@ -786,7 +814,6 @@ export default function SessionPage({
   if (hype) {
     return (
       <HypeScreen
-        seed={`session-${id}`}
         workoutName={name}
         totalSets={totalSets}
         exerciseCount={blocks.length}
@@ -800,10 +827,7 @@ export default function SessionPage({
 
   return (
     <div className="min-w-0 pb-8">
-      <header className="sticky top-[env(safe-area-inset-top)] z-30 -mx-3 mb-5 border-b border-border bg-bg/95 px-3 py-3 backdrop-blur min-[360px]:-mx-4 min-[360px]:px-4">
-        <p className="mb-2 pl-12 text-[9px] font-bold uppercase tracking-[0.22em] text-accent">
-          Fitlog / live protocol
-        </p>
+      <header className="sticky top-[env(safe-area-inset-top)] z-30 -mx-4 mb-5 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur min-[520px]:-mx-6 min-[520px]:px-6">
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
@@ -813,7 +837,7 @@ export default function SessionPage({
               )
                 router.push("/workouts");
             }}
-            className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-muted transition active:scale-95 [border-radius:2px_10px_2px_2px]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-muted transition active:scale-95 rounded-xl"
             disabled={busy}
             aria-label="Exit workout"
           >
@@ -824,7 +848,7 @@ export default function SessionPage({
             onChange={(e) => setName(e.target.value)}
             onBlur={() => run(() => apiPatch(`/api/sessions/${id}`, { name }))}
             aria-label="Workout name"
-            className="min-w-0 flex-1 truncate bg-transparent font-display text-2xl tracking-[0.04em] outline-none focus:text-accent"
+            className="min-w-0 flex-1 truncate bg-transparent text-lg font-extrabold outline-none focus:text-accent"
           />
           <OpenSpotifyButton />
           <button
@@ -927,21 +951,28 @@ export default function SessionPage({
             </button>
           </div>
         ) : rest ? (
-          <RestTimer
-            key={rest.seq}
-            targetSeconds={rest.target}
-            label={rest.label}
-            note={pickLine("workout", `${id}-${rest.seq}`)}
-            hasNext={!!rest.upcoming}
-            onNext={continueAfterRest}
-          />
+          <>
+            <RestTimer
+              key={rest.seq}
+              targetSeconds={rest.target}
+              label={rest.label}
+              note={pickLine("workout", `${id}-${rest.seq}`)}
+              hasNext={!!rest.upcoming}
+              onNext={continueAfterRest}
+            />
+            {active?.block.sets.some(canSkipSet) && (
+              <button className="btn-ghost mt-2 w-full" onClick={() => run(() => skipSets(true))}>
+                Skip remaining sets
+              </button>
+            )}
+          </>
         ) : !active ? (
           <div className="card flex flex-col items-center gap-3 p-6 text-center">
             <div className="icon-frame h-14 w-14">
               <Check size={28} strokeWidth={3} />
             </div>
             <p className="font-display text-2xl tracking-[0.04em]">
-              Every set is logged
+              {skipped.length ? "No sets left to log" : "Every set is logged"}
             </p>
             <p className="text-sm text-muted">
               {completedCount} sets done. Finish up to see your summary and next
@@ -976,6 +1007,8 @@ export default function SessionPage({
               setShowWhy(false);
             }}
             onAddSet={() => addSet(active.exIdx)}
+            onSkipSet={() => run(() => skipSets(false))}
+            onSkipRemaining={() => run(() => skipSets(true))}
             onRemoveSet={() =>
               run(() => removeSet(active.exIdx, active.set.key))
             }
@@ -1051,6 +1084,8 @@ function ActiveSet({
   onDiscardDrop,
   onJump,
   onAddSet,
+  onSkipSet,
+  onSkipRemaining,
   onRemoveSet,
 }: {
   block: Block;
@@ -1066,6 +1101,8 @@ function ActiveSet({
   onDiscardDrop: () => void;
   onJump: (setKey: string) => void;
   onAddSet: () => void;
+  onSkipSet: () => void;
+  onSkipRemaining: () => void;
   onRemoveSet: () => void;
 }) {
   const previousEntries = set.entries.slice(0, -1);
@@ -1073,18 +1110,12 @@ function ActiveSet({
   const reference =
     block.lastSets[setIdx] ?? block.lastSets[block.lastSets.length - 1];
   const canLog = entry.weight.trim() !== "" && (Number(entry.reps) || 0) > 0;
+  const canSkipCurrent = canSkipSet(set);
+  const canSkipRemaining = block.sets.some((slot) => slot.key !== set.key && canSkipSet(slot));
 
   return (
     <div className="min-w-0">
       <div className="card min-w-0 overflow-hidden p-4 min-[360px]:p-5">
-        <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
-          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent">
-            Active movement
-          </p>
-          <span className="font-display text-lg text-muted/35">
-            {String(setIdx + 1).padStart(2, "0")}
-          </span>
-        </div>
         <div className="flex items-start gap-3">
           <ExerciseImage
             name={block.name}
@@ -1245,7 +1276,7 @@ function ActiveSet({
                     onChange({ rir: selected ? "" : value });
                     onCommit();
                   }}
-                  className={`min-w-0 flex-1 py-2.5 font-display text-base tabular-nums transition active:scale-95 [border-radius:2px_7px_2px_2px] ${
+                  className={`min-w-0 flex-1 py-2.5 font-display text-base tabular-nums transition active:scale-95 rounded-xl ${
                     selected
                       ? "bg-accent text-bg"
                       : "border border-border bg-surface-2 text-muted"
@@ -1272,6 +1303,21 @@ function ActiveSet({
               : "Log set"
             : "Enter weight and reps"}
         </button>
+
+        {(canSkipCurrent || canSkipRemaining) && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {canSkipCurrent && (
+              <button onClick={onSkipSet} className="btn-ghost min-w-0 flex-1 px-3 text-sm">
+                Skip set
+              </button>
+            )}
+            {canSkipRemaining && (
+              <button onClick={onSkipRemaining} className="btn-ghost min-w-0 flex-1 px-3 text-sm">
+                Skip remaining sets
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="mt-2 flex gap-2">
           <button
@@ -1345,7 +1391,7 @@ function ActiveSet({
         >
           <Plus size={16} />
         </button>
-        {block.sets.length > 1 && (
+        {block.sets.length > 1 && !canSkipCurrent && (
           <button
             onClick={onRemoveSet}
             className="btn-ghost h-9 w-10 shrink-0 px-0 py-0"
@@ -1385,14 +1431,14 @@ function Stepper({
   }
 
   return (
-    <div className="border border-border bg-surface-2 p-2.5 [border-radius:2px_12px_2px_2px]">
+    <div className="border border-border bg-surface-2 p-2.5 rounded-xl">
       <p className="mb-1 text-center font-display text-sm uppercase tracking-[0.12em] text-muted">
         {label}
       </p>
       <div className="flex items-center gap-2">
         <button
           onClick={() => nudge(-step)}
-          className="flex h-12 w-12 shrink-0 items-center justify-center border border-border bg-surface text-text transition active:scale-95 [border-radius:2px_9px_2px_2px]"
+          className="flex h-12 w-12 shrink-0 items-center justify-center border border-border bg-surface text-text transition active:scale-95 rounded-xl"
           aria-label={`Decrease ${label}`}
         >
           <Minus size={20} />
@@ -1417,7 +1463,7 @@ function Stepper({
         </div>
         <button
           onClick={() => nudge(step)}
-          className="flex h-12 w-12 shrink-0 items-center justify-center border border-border bg-surface text-text transition active:scale-95 [border-radius:2px_9px_2px_2px]"
+          className="flex h-12 w-12 shrink-0 items-center justify-center border border-border bg-surface text-text transition active:scale-95 rounded-xl"
           aria-label={`Increase ${label}`}
         >
           <Plus size={20} />
@@ -1575,16 +1621,13 @@ function Overview({
       <div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-3 min-[360px]:px-4">
         <div className="flex shrink-0 items-center gap-2 py-3 safe-top">
           <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent">
-              Fitlog / session map
-            </p>
             <h2 className="font-display text-3xl tracking-[0.04em]">
               Workout overview
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-muted transition active:scale-95 [border-radius:2px_9px_2px_2px]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-muted transition active:scale-95 rounded-xl"
             aria-label="Close overview"
           >
             <X size={22} />

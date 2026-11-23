@@ -26,6 +26,7 @@ import {
 import { buildNutritionPhase } from "@/lib/nutrition-phase";
 import { appendMemoryNote } from "@/lib/coach-memory";
 import { getTrainingInsights } from "@/lib/training-insights-data";
+import { loggedMobilityRoutine } from "@/lib/mobility";
 import { JIU_JITSU } from "@/lib/jiu-jitsu";
 import { getWorkoutDayChoice } from "@/lib/workout-day-data";
 import { calculateHydrationTarget, type CreatinePhase } from "@/lib/hydration";
@@ -337,7 +338,13 @@ export async function getCoachSnapshot({
       ? "maintenance"
       : "none";
 
-  const cardioRows = activityRows.filter((row) => row.type !== JIU_JITSU);
+  const cardioRows = activityRows.filter((row) => row.type !== JIU_JITSU && !loggedMobilityRoutine(row.type));
+  const mobilitySessions = activityRows.flatMap((row) => {
+    const routine = loggedMobilityRoutine(row.type);
+    return routine ? [{
+      day: dateISOInTimeZone(row.startedAt), routine: routine.name, durationSeconds: row.durationSeconds,
+    }] : [];
+  });
   const jiuJitsuSessions = activityRows.filter((row) => row.type === JIU_JITSU).map((row) => ({
     day: dateISOInTimeZone(row.startedAt),
     durationSeconds: row.durationSeconds,
@@ -395,6 +402,7 @@ export async function getCoachSnapshot({
       division: s.division,
     })),
     jiuJitsuSessions,
+    mobilitySessions,
     weightTrend: weights,
     expenditureTrend: expenditures,
     nutritionTrend: [...nutritionByDay].map(([day, totals]) => ({

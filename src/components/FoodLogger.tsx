@@ -214,14 +214,15 @@ export default function FoodLogger({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60">
+    <div role="dialog" aria-modal="true" aria-label="Add food" className="fixed inset-0 z-50 flex flex-col justify-end bg-black/65">
       <div className="mx-auto flex max-h-[calc(100dvh_-_env(safe-area-inset-top))] w-full max-w-lg flex-col rounded-t-2xl border-t border-border bg-surface safe-bottom">
         {/* Header */}
         <div className="shrink-0 flex items-center gap-2 p-4 border-b border-border">
           {selected ? (
             <button
               onClick={() => setSelected(null)}
-              className="text-muted p-1 -ml-1"
+              aria-label="Back to food search"
+              className="icon-button"
             >
               <ChevronLeft size={22} />
             </button>
@@ -229,7 +230,7 @@ export default function FoodLogger({
           <h3 className="min-w-0 flex-1 truncate font-semibold">
             {selected ? selected.name : "Add food"}
           </h3>
-          <button onClick={onClose} className="text-muted p-1">
+          <button onClick={onClose} className="icon-button" aria-label="Close food logger">
             <X size={22} />
           </button>
         </div>
