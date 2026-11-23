@@ -1482,7 +1482,6 @@ function ExerciseRowContent({ block }: { block: Block }) {
         name={block.name}
         imageUrl={block.imageUrl}
         className="h-11 w-11"
-        expandable
       />
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">{block.name}</p>

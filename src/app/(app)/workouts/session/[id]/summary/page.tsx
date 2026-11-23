@@ -270,6 +270,7 @@ export default function WorkoutSummaryPage({
                   name={p.name}
                   imageUrl={p.imageUrl}
                   className="h-14 w-14"
+                  expandable
                 />
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">{p.name}</p>
