@@ -23,6 +23,7 @@ type Source = keyof typeof mobilitySources;
 type Move = {
   name: string;
   cue: string;
+  frames: readonly [string, string];
   dose: { reps: number } | { seconds: number };
   eachSide?: boolean;
   secondsPerRep?: number;
@@ -35,6 +36,7 @@ const moves = {
     dose: { reps: 4 },
     eachSide: true,
     source: "nhs",
+    frames: ["Look straight ahead", "Turn toward one shoulder"],
     cue: "Sit tall and turn your head slowly toward one shoulder. Return to center before each repetition.",
   },
   neckTilt: {
@@ -42,6 +44,7 @@ const moves = {
     dose: { seconds: 10 },
     eachSide: true,
     source: "nhs",
+    frames: ["Sit with shoulders relaxed", "Tip one ear toward your shoulder"],
     cue: "Let both shoulders hang comfortably. Tip one ear toward the same-side shoulder without pulling on your head.",
   },
   chairTurn: {
@@ -49,6 +52,7 @@ const moves = {
     dose: { reps: 5 },
     eachSide: true,
     source: "sitting",
+    frames: ["Cross arms over chest", "Turn ribs, keep hips still"],
     cue: "Sit on a sturdy chair with feet flat and arms folded loosely across your chest. Turn your ribs to one side while your hips stay facing ahead.",
   },
   sideBend: {
@@ -56,6 +60,7 @@ const moves = {
     dose: { reps: 5 },
     eachSide: true,
     source: "nhs",
+    frames: ["Stand tall", "Slide a hand down your thigh"],
     cue: "Slide one hand down the same-side thigh and return upright. Keep your chest facing ahead.",
   },
   pendulum: {
@@ -63,12 +68,14 @@ const moves = {
     dose: { reps: 8 },
     eachSide: true,
     source: "shoulder",
+    frames: ["Support your weight, let arm hang", "Swing the relaxed arm gently"],
     cue: "Support yourself on a sturdy table and let the other arm hang loosely. Use a small weight shift to let it swing gently forward and back.",
   },
   armLift: {
     name: "Supported overhead reach",
     dose: { reps: 6 },
     source: "shoulderReach",
+    frames: ["Clasp hands above chest", "Guide hands overhead"],
     cue: "Lie with knees bent. Clasp your hands and slowly guide them toward overhead. Stop before your lower back starts to arch.",
   },
   crossBody: {
@@ -76,6 +83,7 @@ const moves = {
     dose: { seconds: 20 },
     eachSide: true,
     source: "shoulder",
+    frames: ["Raise your arm", "Draw upper arm across chest"],
     cue: "Bring an arm across your chest. Use your other hand on the upper arm to gently draw it closer while keeping the shoulder low.",
   },
   chest: {
@@ -83,12 +91,14 @@ const moves = {
     dose: { seconds: 20 },
     eachSide: true,
     source: "warmup",
+    frames: ["Set forearm against the frame", "Gently step forward"],
     cue: "Rest your forearm on a doorframe with your elbow comfortably below shoulder height. Step forward just enough to feel tension across the chest.",
   },
   lat: {
     name: "Bench-supported lat stretch",
     dose: { seconds: 20 },
     source: "lat",
+    frames: ["Set hands on the bench", "Send hips back, lower chest"],
     cue: "Rest your hands on a sturdy bench. Send your hips back and let your chest sink slightly between your arms. Keep your ribs from flaring.",
   },
   triceps: {
@@ -96,6 +106,7 @@ const moves = {
     dose: { seconds: 20 },
     eachSide: true,
     source: "triceps",
+    frames: ["Lift your elbow", "Reach toward your upper back"],
     cue: "Reach a hand toward your upper back. If comfortable, steady that elbow with your free hand. Keep your neck relaxed.",
   },
   openBook: {
@@ -103,6 +114,7 @@ const moves = {
     dose: { reps: 5 },
     eachSide: true,
     source: "thoracic",
+    frames: ["Stack knees and reach forward", "Sweep top arm open"],
     cue: "Lie on your side with knees bent and stacked. Sweep the top arm open while your chest follows. Let your hand stop wherever your upper back can turn smoothly.",
   },
   reachThrough: {
@@ -110,6 +122,7 @@ const moves = {
     dose: { reps: 5 },
     eachSide: true,
     source: "thoracic",
+    frames: ["Reach under your chest", "Turn back and reach up"],
     cue: "On hands and knees, reach one arm under your chest. Return and turn toward that side, keeping the hips steady.",
   },
   kneeToChest: {
@@ -117,6 +130,7 @@ const moves = {
     dose: { seconds: 20 },
     eachSide: true,
     source: "back",
+    frames: ["Lie back with knees bent", "Guide one thigh toward you"],
     cue: "Lie face up. Support one thigh and guide it toward your torso. Leave the other foot on the floor if that feels easier.",
   },
   figureFour: {
@@ -124,6 +138,7 @@ const moves = {
     dose: { seconds: 20 },
     eachSide: true,
     source: "cooldown",
+    frames: ["Cross ankle over opposite thigh", "Draw supporting thigh in"],
     cue: "Cross one ankle over the other thigh. Hold the supporting thigh and draw it in gently. Stop if the crossed knee feels strained.",
   },
   hipFlexor: {
@@ -131,6 +146,7 @@ const moves = {
     dose: { seconds: 20 },
     eachSide: true,
     source: "mayo",
+    frames: ["Pad your back knee", "Tuck pelvis and shift forward"],
     cue: "Pad the knee on the floor. Tuck your pelvis slightly and move forward a small distance with your torso upright.",
   },
   kneelingRock: {
@@ -138,6 +154,7 @@ const moves = {
     dose: { reps: 6 },
     eachSide: true,
     source: "mayo",
+    frames: ["Start upright in half-kneel", "Rock forward and back gently"],
     cue: "In a padded half-kneeling stance, keep your ribs over your hips. Rock forward a little until you feel the front of the rear hip, then ease back.",
   },
   seatedRotation: {
@@ -145,12 +162,14 @@ const moves = {
     dose: { reps: 6 },
     eachSide: true,
     source: "hip",
+    frames: ["Sweep your foot inward", "Sweep outward, keep knee still"],
     cue: "Sit on a chair with knees bent and lift one foot just enough to clear the floor. Move your lower leg slowly from side to side without lifting or twisting your thigh.",
   },
   butterfly: {
     name: "Seated butterfly stretch",
     dose: { seconds: 25 },
     source: "cooldown",
+    frames: ["Bring soles together", "Sit tall and let knees settle"],
     cue: "Bring the soles of your feet together and sit tall. Let the knees settle naturally. Move your feet farther away if you need less tension.",
   },
   wideShift: {
@@ -158,6 +177,7 @@ const moves = {
     dose: { reps: 6 },
     eachSide: true,
     source: "warmup",
+    frames: ["Stand wide with support", "Shift over one softly bent knee"],
     cue: "Stand in a comfortable wide stance beside a counter. Shift over a softly bent knee while the other leg lengthens, then come back to center.",
   },
   hamstring: {
@@ -165,6 +185,7 @@ const moves = {
     dose: { seconds: 20 },
     eachSide: true,
     source: "mayo",
+    frames: ["Set your heel on a low step", "Hinge forward at the hips"],
     cue: "Set one heel on a low, stable step with the knee soft. Hinge from the hips until you feel the back of the thigh.",
   },
   hamstringGlide: {
@@ -172,6 +193,7 @@ const moves = {
     dose: { reps: 6 },
     eachSide: true,
     source: "knees",
+    frames: ["Support your bent thigh", "Gently straighten the knee"],
     cue: "Lie on your back and support one thigh behind the knee. Straighten the raised leg only as far as comfortable, then bend it again.",
   },
   quad: {
@@ -179,6 +201,7 @@ const moves = {
     dose: { seconds: 20 },
     eachSide: true,
     source: "cooldown",
+    frames: ["Lie with thighs stacked", "Bend the top knee and hold the foot"],
     cue: "Lie on your side, bend your upper knee, and hold the foot if it is easy to reach. Keep your thighs near each other and your pelvis steady.",
   },
   heelSlide: {
@@ -186,6 +209,7 @@ const moves = {
     dose: { reps: 8 },
     eachSide: true,
     source: "knees",
+    frames: ["Lie with legs extended", "Slide one heel in along the floor"],
     cue: "Lie with legs outstretched. Slide one heel toward your hips to bend the knee, then slowly slide it away again.",
   },
   kneeExtend: {
@@ -193,6 +217,7 @@ const moves = {
     dose: { reps: 8 },
     eachSide: true,
     source: "knees",
+    frames: ["Sit with your knee bent", "Lift your foot until the knee straightens"],
     cue: "Sit in a stable chair. Lift one foot to straighten the knee while the thigh stays supported. Lower slowly.",
   },
   kneeWall: {
@@ -200,6 +225,7 @@ const moves = {
     dose: { reps: 8 },
     eachSide: true,
     source: "ankles",
+    frames: ["Set one foot near the wall", "Bring knee forward, heel down"],
     cue: "Face a wall with one foot close to it. Guide your knee toward the wall over your toes and return while your heel stays down.",
   },
   ankleDraw: {
@@ -208,6 +234,7 @@ const moves = {
     eachSide: true,
     secondsPerRep: 30,
     source: "ankleFoot",
+    frames: ["Lift one foot slightly", "Trace letters with your toes"],
     cue: "Sit and lift one foot just off the floor. Trace a small alphabet in the air with your toes, moving mainly at the ankle.",
   },
   calf: {
@@ -215,6 +242,7 @@ const moves = {
     dose: { seconds: 20 },
     eachSide: true,
     source: "calves",
+    frames: ["Stagger feet at the wall", "Lean in with back knee straight"],
     cue: "With hands on a wall, step one foot back. Keep the rear leg straight and press through the back heel with both feet pointing ahead.",
   },
   bentCalf: {
@@ -222,6 +250,7 @@ const moves = {
     dose: { seconds: 20 },
     eachSide: true,
     source: "calves",
+    frames: ["Start in a short staggered stance", "Bend back knee, heel down"],
     cue: "Take a short staggered stance at a wall. Bend the back knee a little while keeping its heel down.",
   },
   wristBend: {
@@ -229,6 +258,7 @@ const moves = {
     dose: { reps: 8 },
     eachSide: true,
     source: "wrists",
+    frames: ["Lift hand with forearm supported", "Lower hand over the edge"],
     cue: "Support your forearm on a table and let the hand hang off the edge. Lift and lower the hand slowly with relaxed fingers.",
   },
   wristSide: {
@@ -236,6 +266,7 @@ const moves = {
     dose: { reps: 8 },
     eachSide: true,
     source: "wrists",
+    frames: ["Slide toward the thumb", "Slide toward the little finger"],
     cue: "Rest your forearm and palm on a smooth table. Slide your hand toward the thumb side, then toward the little-finger side.",
   },
   forearmTurn: {
@@ -243,12 +274,14 @@ const moves = {
     dose: { reps: 8 },
     eachSide: true,
     source: "wrists",
+    frames: ["Turn palm up", "Turn palm down"],
     cue: "Keep your elbow tucked beside your waist. Turn the palm upward and then downward without moving your upper arm.",
   },
   openHand: {
     name: "Open hand and loose fist",
     dose: { reps: 8 },
     source: "hands",
+    frames: ["Spread fingers", "Curl into a loose fist"],
     cue: "Spread your fingers comfortably, then curl them into a loose fist. Keep both wrists neutral.",
   },
   elbowBend: {
@@ -256,6 +289,7 @@ const moves = {
     dose: { reps: 8 },
     eachSide: true,
     source: "hands",
+    frames: ["Let your arm hang", "Bend elbow and lift hand"],
     cue: "Let your upper arm hang at your side. Bring the hand toward your shoulder and straighten the elbow slowly.",
   },
 } satisfies Record<string, Move>;
@@ -451,10 +485,14 @@ export function loggedMobilityRoutine(type: string) {
   return type.startsWith(prefix) ? getMobilityRoutine(type.slice(prefix.length)) : undefined;
 }
 
+export function mobilityIllustrationPath(id: keyof typeof moves) {
+  return `/mobility-illustrations/${id}.webp`;
+}
+
 export function mobilitySteps(routine: MobilityRoutine) {
   return routine.moves.flatMap((id) => {
     const move: Move = moves[id];
-    return (move.eachSide ? ["Left", "Right"] : [null]).map((side) => ({ ...move, side }));
+    return (move.eachSide ? ["Left", "Right"] : [null]).map((side) => ({ ...move, id, side }));
   });
 }
 

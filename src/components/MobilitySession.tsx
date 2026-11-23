@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Play, Timer } from "lucide-react";
+import { Check, ChevronDown, Images, Play, Timer } from "lucide-react";
 import { apiPost } from "@/lib/api";
-import { mobilityMinutes, mobilitySources, mobilitySteps, type MobilityRoutine } from "@/lib/mobility";
+import { mobilityIllustrationPath, mobilityMinutes, mobilitySources, mobilitySteps, type MobilityRoutine } from "@/lib/mobility";
 import { formatDuration } from "@/lib/utils";
+import ExerciseImage from "./ExerciseImage";
 
 export default function MobilitySession({ routine }: { routine: MobilityRoutine }) {
   const router = useRouter();
@@ -84,8 +85,9 @@ export default function MobilitySession({ routine }: { routine: MobilityRoutine 
                 {"seconds" in current.dose ? `${current.dose.seconds} sec hold` : `${current.dose.reps} ${current.dose.reps === 1 ? "rep" : "reps"}`}
                 {current.side && ` · ${current.side} side`}
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-muted">{current.cue}</p>
             </div>
+            <MovementGuide step={current} />
+            <p className="text-sm leading-relaxed text-muted">{current.cue}</p>
             {"seconds" in current.dose && <HoldTimer key={index} seconds={current.dose.seconds} />}
             <div className="grid grid-cols-2 gap-2">
               <button type="button" className="btn-ghost" onClick={() => advance(false)}>Skip</button>
@@ -107,12 +109,24 @@ export default function MobilitySession({ routine }: { routine: MobilityRoutine 
           </div>
           <ol className="space-y-2" aria-label="Exercises in this routine">
             {steps.filter((step) => step.side !== "Right").map((step, i) => (
-              <li key={i} className="card p-3">
-                <p className="font-medium">{step.name}</p>
-                <p className="mt-1 text-xs text-muted">
-                  {"seconds" in step.dose ? `${step.dose.seconds} sec hold` : `${step.dose.reps} ${step.dose.reps === 1 ? "rep" : "reps"}`}
-                  {step.side && " per side"}
-                </p>
+              <li key={step.id} className="card">
+                <details className="group" open={i === 0}>
+                  <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 rounded-xl p-3 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
+                    <Images size={18} className="shrink-0 text-accent" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold">{step.name}</span>
+                      <span className="mt-0.5 block text-xs text-muted">
+                        {"seconds" in step.dose ? `${step.dose.seconds} sec hold` : `${step.dose.reps} ${step.dose.reps === 1 ? "rep" : "reps"}`}
+                        {step.side && " per side"}
+                      </span>
+                    </span>
+                    <ChevronDown size={17} className="shrink-0 text-muted group-open:rotate-180" aria-hidden="true" />
+                  </summary>
+                  <div className="space-y-2 px-3 pb-3">
+                    <MovementGuide step={step} />
+                    <p className="text-sm leading-relaxed text-muted">{step.cue}</p>
+                  </div>
+                </details>
               </li>
             ))}
           </ol>
@@ -131,6 +145,23 @@ export default function MobilitySession({ routine }: { routine: MobilityRoutine 
         </>
       )}
     </div>
+  );
+}
+
+function MovementGuide({ step }: { step: ReturnType<typeof mobilitySteps>[number] }) {
+  return (
+    <figure>
+      <ExerciseImage
+        key={step.id}
+        name={step.name}
+        imageUrl={mobilityIllustrationPath(step.id)}
+        variant="illustration"
+        className="aspect-[16/7] w-full"
+      />
+      <figcaption className="mt-1.5 grid grid-cols-2 gap-2 text-center text-xs font-semibold leading-snug text-muted">
+        {step.frames.map((label) => <span key={label}>{label}</span>)}
+      </figcaption>
+    </figure>
   );
 }
 
