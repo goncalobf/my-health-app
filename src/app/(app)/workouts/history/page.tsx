@@ -190,7 +190,7 @@ export default function HistoryPage() {
                     <p className="text-xs text-muted">
                       {formatDate(dateISOInTimeZone(new Date(row.startedAt)))}
                       {!row.finishedAt && (
-                        <span className="text-accent"> · in progress</span>
+                        <span className="text-accent"> · unfinished</span>
                       )}
                     </p>
                   </div>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
 import { Dumbbell, Apple, Settings, ChevronRight, Scale, Users, Move, ChartNoAxesCombined } from "lucide-react";
 import { db } from "@/db";
 import { nutritionLogs, sessions, bodyweightLogs, expenditureLogs, friendships } from "@/db/schema";
@@ -43,9 +43,9 @@ export default async function DashboardPage() {
       .where(
         and(eq(nutritionLogs.userId, user.id), eq(nutritionLogs.day, today))
       ),
-    db.select({ id: sessions.id, name: sessions.name, startedAt: sessions.startedAt, finishedAt: sessions.finishedAt })
+    db.select({ id: sessions.id, name: sessions.name, startedAt: sessions.startedAt })
       .from(sessions)
-      .where(eq(sessions.userId, user.id))
+      .where(and(eq(sessions.userId, user.id), isNotNull(sessions.finishedAt)))
       .orderBy(desc(sessions.startedAt), desc(sessions.id))
       .limit(1),
     db
@@ -180,12 +180,12 @@ export default async function DashboardPage() {
       <div className="grid gap-3 min-[1040px]:grid-cols-2">
         {lastSession && (
           <Link
-            href={lastSession.finishedAt ? `/workouts/session/${lastSession.id}/summary` : `/workouts/session/${lastSession.id}`}
+            href={`/workouts/session/${lastSession.id}/summary`}
             className="card surface-link flex items-center gap-3 p-4"
           >
             <span className="icon-frame"><Dumbbell size={18} aria-hidden="true" /></span>
             <div className="min-w-0 flex-1">
-              <p className="label">{lastSession.finishedAt ? "Last gym workout" : "Workout in progress"}</p>
+              <p className="label">Last gym workout</p>
               <p className="mt-1 break-words font-bold">{lastSession.name}</p>
               <p className="text-xs text-muted">{formatDate(dateISOInTimeZone(lastSession.startedAt))}</p>
             </div>
