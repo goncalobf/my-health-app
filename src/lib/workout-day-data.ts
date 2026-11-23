@@ -38,20 +38,22 @@ export async function getWorkoutDayChoice(userId: number, day: string) {
 }
 
 export async function getWorkoutDay(userId: number, day: string): Promise<WorkoutDay> {
-  const [available, choice, [scheduled], [active], [completed]] = await Promise.all([
+  const start = startOfAppDay(day);
+  const end = startOfAppDay(shiftISODate(day, 1));
+  const [available, choice, [scheduled], [latest], [completed]] = await Promise.all([
     availableRoutines(userId).orderBy(asc(routines.position), asc(routines.id)),
     getWorkoutDayChoice(userId, day),
     db.select({ routineId: workoutSchedule.routineId }).from(workoutSchedule)
       .where(and(eq(workoutSchedule.userId, userId), eq(workoutSchedule.dayOfWeek, dayOfWeekISO(day)))),
-    db.select({ id: sessions.id }).from(sessions)
-      .where(and(eq(sessions.userId, userId), isNull(sessions.finishedAt)))
+    db.select({ id: sessions.id, finishedAt: sessions.finishedAt }).from(sessions)
+      .where(and(eq(sessions.userId, userId), gte(sessions.startedAt, start), lt(sessions.startedAt, end)))
       .orderBy(desc(sessions.startedAt), desc(sessions.id)).limit(1),
     db.select({ id: sessions.id }).from(sessions)
       .where(and(
         eq(sessions.userId, userId),
         isNotNull(sessions.finishedAt),
-        gte(sessions.finishedAt, startOfAppDay(day)),
-        lt(sessions.finishedAt, startOfAppDay(shiftISODate(day, 1))),
+        gte(sessions.finishedAt, start),
+        lt(sessions.finishedAt, end),
       )).limit(1),
   ]);
   return {
@@ -59,7 +61,7 @@ export async function getWorkoutDay(userId: number, day: string): Promise<Workou
     routines: available.map(({ id, name }) => ({ id, name })),
     choice: choice ? { routineId: choice.routineId, jiuJitsu: choice.jiuJitsu } : null,
     defaultRoutineId: available.find((r) => r.id === scheduled?.routineId)?.id ?? null,
-    activeSessionId: active?.id ?? null,
+    activeSessionId: latest?.finishedAt === null ? latest.id : null,
     completedToday: !!completed,
   };
 }

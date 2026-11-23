@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, use, useCallback, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -105,7 +106,7 @@ interface SessionData {
     performanceContext: PerformanceContext;
   };
   plan: PlanItem[];
-  loggedSets: LoggedSet[];
+  loggedSets: (LoggedSet & { exerciseName: string; exerciseImageUrl: string | null })[];
   lastSets: Record<
     number,
     { weightKg: number; reps: number; rir: number | null }[]
@@ -213,6 +214,7 @@ export default function SessionPage({
   );
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [picking, setPicking] = useState(false);
   const [overview, setOverview] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
@@ -226,13 +228,7 @@ export default function SessionPage({
   } | null>(null);
 
   const load = useCallback(async () => {
-    const [data, exercises] = await Promise.all([
-      apiGet<SessionData>(`/api/sessions/${id}`),
-      apiGet<{ id: number; name: string; imageUrl: string | null }[]>(
-        "/api/exercises",
-      ),
-    ]);
-    const exMap = new Map(exercises.map((exercise) => [exercise.id, exercise]));
+    const data = await apiGet<SessionData>(`/api/sessions/${id}`);
     if (data.session.finishedAt) {
       router.replace(`/workouts/session/${id}/summary`);
       return;
@@ -374,11 +370,10 @@ export default function SessionPage({
     for (const s of data.loggedSets) {
       if (seen.has(s.exerciseId)) continue;
       seen.add(s.exerciseId);
-      const exercise = exMap.get(s.exerciseId);
       built.push(
         makeBlock(s.exerciseId, {
-          name: exercise?.name ?? "Exercise",
-          imageUrl: exercise?.imageUrl ?? null,
+          name: s.exerciseName,
+          imageUrl: s.exerciseImageUrl,
           targetSets: 1,
           targetReps: 0,
           minReps: 0,
@@ -401,12 +396,15 @@ export default function SessionPage({
     setLoading(false);
   }, [id, router]);
 
-  useEffect(() => {
-    load().catch(() => {
-      setError("Could not load workout. Reload to retry.");
+  const reload = useCallback(() => {
+    setLoading(true);
+    setLoadFailed(false);
+    void load().catch(() => {
+      setLoadFailed(true);
       setLoading(false);
     });
   }, [load]);
+  useEffect(reload, [reload]);
 
   useEffect(() => {
     // Only a freshly started workout arrives with ?hype=1.
@@ -811,6 +809,18 @@ export default function SessionPage({
     );
   }
 
+  if (loadFailed) {
+    return (
+      <div className="card space-y-3 p-6 text-center">
+        <p role="alert" className="text-sm text-danger">Could not open this workout.</p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <button className="btn-primary" onClick={reload}>Try again</button>
+          <Link className="btn-ghost" href="/workouts">Back to workouts</Link>
+        </div>
+      </div>
+    );
+  }
+
   if (hype) {
     return (
       <HypeScreen
@@ -948,6 +958,9 @@ export default function SessionPage({
               className="btn-primary w-full"
             >
               <Plus size={18} /> Add exercise
+            </button>
+            <button onClick={() => run(discard)} className="btn-ghost w-full">
+              Discard workout
             </button>
           </div>
         ) : rest ? (

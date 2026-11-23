@@ -132,6 +132,16 @@ try {
     201,
   );
   await request(`/api/sessions/${old.id}`, "PATCH", { finish: true });
+  const stale = await start(a.id);
+  await client.query(
+    "UPDATE sessions SET started_at=now() - interval '2 days' WHERE id=$1 AND user_id=$2",
+    [stale.id, localUserId],
+  );
+  await request(`/api/sessions/${stale.id}`, "PATCH", { name: "Unfinished workout fixture" });
+  const staleSet = await request(`/api/sessions/${stale.id}/sets`, "POST", {
+    exerciseId, setNumber: 1, weightKg: 70, reps: 10, completed: true,
+  }, 201);
+  assert.equal((await request("/api/workout-day")).activeSessionId, null);
   const planState = await client.query(
     "SELECT is_deload FROM training_plan_state WHERE user_id=$1",
     [localUserId],
@@ -172,6 +182,12 @@ try {
   const separate = await start(b.id);
   const separateData = await request(`/api/sessions/${separate.id}`);
   assert.equal(separateData.recommendations[exerciseId].action, "start");
+  assert.equal((await request("/api/workout-day")).activeSessionId, separate.id);
+  await request(`/api/sessions/${separate.id}`, "PATCH", { finish: true });
+  assert.equal((await request("/api/workout-day")).activeSessionId, null);
+  const staleData = await request(`/api/sessions/${stale.id}`);
+  assert.equal(staleData.session.finishedAt, null);
+  assert.deepEqual(staleData.loggedSets.map((set) => set.id), [staleSet.id]);
   await request(`/api/routines/${a.id}/exercises/${slot.id}`, "PATCH", {
     targetSets: 4,
     minReps: 6,
@@ -269,6 +285,20 @@ try {
   });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(`${base}/`);
+  await page.getByLabel("What do you want to train?").waitFor();
+  assert.equal(await page.getByRole("link", { name: "Resume workout" }).count(), 0);
+  await page.goto(`${base}/workouts/history`);
+  const unfinished = page.getByRole("link", { name: /Unfinished workout fixture.*unfinished/ });
+  await unfinished.waitFor();
+  const sessionPath = `**/api/sessions/${stale.id}`;
+  await page.route(sessionPath, (route) => route.fulfill({ status: 503 }));
+  await unfinished.click();
+  await page.getByRole("alert").filter({ hasText: "Could not open this workout." }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "Add exercise" }).count(), 0);
+  await page.unroute(sessionPath);
+  await page.getByRole("button", { name: "Try again" }).click();
+  await page.getByText("1 of 3 sets", { exact: true }).waitFor();
   await page.goto(`${base}/workouts/session/${current.id}`);
   await page.getByRole("button", { name: "Log set", exact: true }).waitFor();
   assert.equal(
@@ -374,10 +404,23 @@ try {
     path: ".context/training-ui/plan.png",
     fullPage: true,
   });
+  const empty = await request("/api/sessions", "POST", {}, 201);
+  sessionIds.push(empty.id);
+  await page.goto(`${base}/workouts`);
+  const resume = page.getByRole("link", { name: "Resume workout" });
+  await resume.waitFor();
+  assert.equal(await resume.getAttribute("href"), `/workouts/session/${empty.id}`);
+  await resume.click();
+  await page.getByText("Empty workout. Add an exercise to get started.").waitFor();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Discard workout" }).click();
+  await page.waitForURL(`${base}/workouts`);
+  await request(`/api/sessions/${empty.id}`, "GET", undefined, 404);
   assert.deepEqual(errors, []);
   console.log(
     "Mobile checks passed: actual RIR unknown, partial resume, skipped-set resume, warmup logging, context exclusion, editor save, 320/375/390 px overflow and no browser exceptions.",
   );
+  console.log("Resume checks passed: stale and superseded workouts stay in history, load errors can be retried, and an empty workout can be discarded.");
 } finally {
   await browser?.close();
   for (const id of sessionIds)
