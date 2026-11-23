@@ -127,6 +127,7 @@ export default function ExercisesPage() {
               name={x.name}
               imageUrl={x.imageUrl}
               className="h-16 w-16"
+              expandable
             />
             <div className="min-w-0 flex-1">
               <p className="break-words font-medium">{x.name}</p>
