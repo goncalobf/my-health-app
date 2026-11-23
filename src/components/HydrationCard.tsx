@@ -54,7 +54,7 @@ export default function HydrationCard({
               key={value}
               type="button"
               onClick={() => onChangePhase(value)}
-              className={`min-w-0 flex-1 py-2 text-xs font-medium transition active:scale-95 [border-radius:2px_7px_2px_2px] ${
+              className={`min-w-0 flex-1 py-2 text-xs font-medium transition active:scale-95 rounded-xl ${
                 creatinePhase === value ? "bg-accent text-bg" : "border border-border bg-surface-2 text-muted"
               }`}
               aria-pressed={creatinePhase === value}

@@ -13,83 +13,50 @@ interface Targets {
   targetFatG: number;
 }
 
-function Bar({
-  label,
-  value,
-  target,
-  color,
-  unit = "g",
-}: {
-  label: string;
-  value: number;
-  target: number;
-  color: string;
-  unit?: string;
-}) {
-  const pct = target > 0 ? Math.min(100, (value / target) * 100) : 0;
+function Meter({ value, target, color }: { value: number; target: number; color: string }) {
+  const width = target > 0 ? Math.max(0, Math.min(100, (value / target) * 100)) : 0;
   return (
-    <div className="min-w-0 border-l border-border pl-3 first:border-l-0 first:pl-0">
-      <div className="mb-2 flex items-baseline justify-between gap-1">
-        <span className="font-display text-base uppercase tracking-[0.08em] text-muted">{label}</span>
-        <span className="text-[10px] tabular-nums text-muted">/{round(target, 0)}{unit}</span>
-      </div>
-      <p className="data-number text-2xl leading-none">{round(value, 0)}<span className="ml-0.5 text-xs text-muted">{unit}</span></p>
-      <div className="mt-2 h-1 overflow-hidden bg-surface-2">
-        <div
-          className="h-full transition-all"
-          style={{ width: `${pct}%`, backgroundColor: color }}
-        />
-      </div>
+    <div className="h-2 overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
+      <div className={`h-full rounded-full transition-[width] ${color}`} style={{ width: `${width}%` }} />
     </div>
   );
 }
 
-export default function MacroSummary({
-  totals,
-  targets,
-}: {
-  totals: Totals;
-  targets: Targets;
-}) {
-  const kcalPct =
-    targets.targetCalories > 0
-      ? Math.min(100, (totals.calories / targets.targetCalories) * 100)
-      : 0;
+export default function MacroSummary({ totals, targets }: { totals: Totals; targets: Targets }) {
+  const balance = round(targets.targetCalories - totals.calories, 0);
+  const macros = [
+    { name: "Protein", value: totals.proteinG, target: targets.targetProteinG, color: "bg-accent" },
+    { name: "Carbs", value: totals.carbsG, target: targets.targetCarbsG, color: "bg-success" },
+    { name: "Fat", value: totals.fatG, target: targets.targetFatG, color: "bg-warn" },
+  ];
   return (
-    <div className="card flex min-w-0 flex-col overflow-hidden p-4 min-[360px]:p-5">
-      <div className="flex min-w-0 items-end justify-between gap-4">
-        <div className="min-w-0">
-          <p className="label">Daily fuel</p>
-          <p className="data-number mt-1 text-5xl leading-none min-[360px]:text-6xl">{round(totals.calories, 0)}</p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-muted">Kcal consumed</p>
+    <div className="card min-w-0 space-y-4 p-4 min-[375px]:p-5">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="label">Calories logged</p>
+          <p className="data-number mt-0.5 text-4xl leading-none">
+            {round(totals.calories, 0)}<span className="ml-1.5 text-sm font-semibold text-muted">kcal</span>
+          </p>
         </div>
-        <div className="shrink-0 pb-1 text-right">
-          <p className="data-number text-3xl leading-none text-accent">{round(targets.targetCalories - totals.calories, 0)}</p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted">Remaining</p>
-        </div>
+        <p className="text-xs font-bold text-accent">
+          {balance >= 0 ? `${balance} kcal remaining` : `${Math.abs(balance)} kcal above target`}
+        </p>
       </div>
-      <div className="mt-5 h-1.5 overflow-hidden bg-surface-2"><div className="h-full bg-accent transition-all" style={{ width: `${kcalPct}%` }} /></div>
-      <div className="mt-2 flex justify-between text-[9px] uppercase tracking-[0.12em] text-muted"><span>0</span><span>Target {round(targets.targetCalories, 0)}</span></div>
-      <div className="mt-5 grid grid-cols-3 gap-3 border-t border-border pt-4">
-        <Bar
-          label="Protein"
-          value={totals.proteinG}
-          target={targets.targetProteinG}
-          color="#d6ff45"
-        />
-        <Bar
-          label="Carbs"
-          value={totals.carbsG}
-          target={targets.targetCarbsG}
-          color="#ffc857"
-        />
-        <Bar
-          label="Fat"
-          value={totals.fatG}
-          target={targets.targetFatG}
-          color="#ff5a4f"
-        />
+      <div>
+        <Meter value={totals.calories} target={targets.targetCalories} color="bg-accent" />
+        <p className="mt-1.5 text-xs text-muted">Daily target {round(targets.targetCalories, 0)} kcal</p>
       </div>
+      <dl className="grid grid-cols-3 gap-2 border-t border-border pt-3">
+        {macros.map((macro) => (
+          <div key={macro.name} className="min-w-0 space-y-1.5">
+            <dt className="label">{macro.name}</dt>
+            <dd className="text-sm font-extrabold tabular-nums">
+              {round(macro.value, 0)}<span className="text-xs font-medium text-muted"> / {round(macro.target, 0)} g</span>
+            </dd>
+            <Meter value={macro.value} target={macro.target} color={macro.color} />
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }

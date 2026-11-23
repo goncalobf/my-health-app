@@ -10,9 +10,12 @@ import {
   History,
   ListChecks,
   Zap,
+  X,
   TrendingUp,
   Footprints,
   CalendarPlus,
+  Move,
+  ChevronRight,
 } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
 import WorkoutDayCard from "@/components/WorkoutDayCard";
@@ -33,6 +36,9 @@ export default function WorkoutsPage() {
   const [starting, setStarting] = useState(false);
   const [showCardio, setShowCardio] = useState(false);
   const [showLogPast, setShowLogPast] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [routineName, setRoutineName] = useState("");
+  const [savingRoutine, setSavingRoutine] = useState(false);
 
   async function load() {
     setRoutines(await apiGet<RoutineRow[]>("/api/routines"));
@@ -46,13 +52,18 @@ export default function WorkoutsPage() {
     });
   }, []);
 
-  async function newRoutine() {
-    const name = window.prompt("Routine name (e.g. Push A)");
-    if (!name?.trim()) return;
-    const created = await apiPost<{ id: number }>("/api/routines", {
-      name: name.trim(),
-    });
-    router.push(`/workouts/routines/${created.id}`);
+  async function newRoutine(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!routineName.trim() || savingRoutine) return;
+    setError("");
+    setSavingRoutine(true);
+    try {
+      const created = await apiPost<{ id: number }>("/api/routines", { name: routineName.trim() });
+      router.push(`/workouts/routines/${created.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create routine.");
+      setSavingRoutine(false);
+    }
   }
 
   async function startSession(routineId?: number) {
@@ -73,130 +84,119 @@ export default function WorkoutsPage() {
     <div>
       <PageHeader
         title="Workouts"
+        description="Plan today, start an activity, or revisit your training."
         action={
           <button
-            onClick={newRoutine}
-            className="flex h-11 w-11 items-center justify-center bg-accent text-bg [border-radius:2px_11px_2px_2px]"
-            aria-label="New routine"
+            onClick={() => { setCreating((value) => !value); setError(""); }}
+            className="icon-button"
+            aria-label={creating ? "Close new routine" : "New routine"}
+            aria-expanded={creating}
           >
-            <Plus size={22} />
+            {creating ? <X size={21} /> : <Plus size={21} />}
           </button>
         }
       />
-
-      {error && (
-        <p role="alert" className="mb-3 text-sm text-danger">
-          {error}
-        </p>
-      )}
-      <div className="mb-5"><WorkoutDayCard /></div>
-
-      <div className="mb-5 grid grid-cols-2 gap-2 min-[360px]:gap-3">
-        <button
-          onClick={() => startSession(undefined)}
-          disabled={starting}
-          className="btn-ghost min-w-0 px-2 min-[360px]:px-4"
-        >
-          <Zap size={18} /> Quick workout
-        </button>
-        <button
-          onClick={() => setShowCardio(true)}
-          className="btn-ghost min-w-0 px-2 min-[360px]:px-4"
-        >
-          <Footprints size={18} /> Cardio
-        </button>
-        <button
-          onClick={() => setShowLogPast(true)}
-          className="btn-ghost min-w-0 px-2 min-[360px]:px-4"
-        >
-          <CalendarPlus size={18} /> Log past activity
-        </button>
-        <Link
-          href="/workouts/exercises"
-          className="btn-ghost min-w-0 px-2 min-[360px]:px-4"
-        >
-          <ListChecks size={18} /> Exercises
-        </Link>
-      </div>
-
-      {showCardio && (
-        <ActivityTypePicker onClose={() => setShowCardio(false)} />
-      )}
-      {showLogPast && (
-        <LogPastActivityModal onClose={() => setShowLogPast(false)} />
+      {error && <p role="alert" className="mb-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p>}
+      {creating && (
+        <form onSubmit={newRoutine} className="card mb-5 p-4">
+          <label htmlFor="routine-name" className="label">Routine name</label>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            <input
+              id="routine-name"
+              className="input min-w-[8rem] flex-1"
+              maxLength={150}
+              value={routineName}
+              onChange={(event) => setRoutineName(event.target.value)}
+              placeholder="e.g. Lower body"
+              autoFocus
+              required
+            />
+            <button className="btn-primary" disabled={savingRoutine || !routineName.trim()}>
+              {savingRoutine ? "Creating…" : "Create routine"}
+            </button>
+          </div>
+        </form>
       )}
 
-      <Link
-        href="/workouts/plan"
-        className="card mb-6 flex items-center gap-3 p-4 active:scale-[0.98] transition"
-      >
-        <div className="icon-frame">
-          <TrendingUp size={20} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-display text-xl tracking-[0.04em]">
-            Plan & progression
-          </p>
-          <p className="text-xs text-muted">
-            RIR / double progression / deloads
-          </p>
-        </div>
-      </Link>
-
-      <h2 className="section-title">Your routines</h2>
-      {loading ? (
-        <p className="text-muted text-sm">Loading…</p>
-      ) : routines.length === 0 ? (
-        <div className="card p-6 flex flex-col items-center text-center gap-3">
-          <Dumbbell className="text-muted" size={32} />
-          <p className="text-muted text-sm">
-            No routines yet. Create one to plan your training.
-          </p>
-          <button onClick={newRoutine} className="btn-primary">
-            <Plus size={18} /> New routine
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {routines.map((r, index) => (
-            <div
-              key={r.id}
-              className="card flex items-center gap-3 overflow-hidden p-3 min-[360px]:p-4"
-            >
-              <span className="data-number w-8 shrink-0 text-2xl text-muted/35">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              <Link
-                href={`/workouts/routines/${r.id}`}
-                className="min-w-0 flex-1 border-l border-border pl-3"
-              >
-                <p className="break-words font-display text-2xl leading-none tracking-[0.04em]">
-                  {r.name}
-                </p>
-                <p className="mt-1 text-[10px] uppercase tracking-[0.1em] text-muted">
-                  {r.exerciseCount} exercise
-                  {r.exerciseCount === 1 ? "" : "s"}
-                </p>
+      <div className="grid items-start gap-5 min-[1060px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="space-y-5">
+          <WorkoutDayCard />
+          <section aria-labelledby="activities-heading">
+            <h2 id="activities-heading" className="section-title">Start or log an activity</h2>
+            <div className="grid grid-cols-2 gap-2 min-[375px]:gap-3">
+              <button onClick={() => startSession()} disabled={starting} className="card surface-link flex min-w-0 flex-col items-start gap-2 p-3 text-left text-sm font-bold disabled:opacity-50">
+                <span className="icon-frame"><Zap size={18} aria-hidden="true" /></span>
+                Quick workout
+              </button>
+              <button onClick={() => setShowCardio(true)} className="card surface-link flex min-w-0 flex-col items-start gap-2 p-3 text-left text-sm font-bold">
+                <span className="icon-frame"><Footprints size={18} aria-hidden="true" /></span>
+                Cardio
+              </button>
+              <Link href="/workouts/mobility" className="card surface-link flex min-w-0 flex-col items-start gap-2 p-3 text-sm font-bold">
+                <span className="icon-frame"><Move size={18} aria-hidden="true" /></span>
+                Mobility &amp; flexibility
               </Link>
-              <button
-                onClick={() => startSession(r.id)}
-                disabled={starting || r.exerciseCount === 0}
-                className="btn-primary min-h-10 shrink-0 px-3 py-2 min-[360px]:px-4"
-              >
-                <Play size={18} /> Start
+              <button onClick={() => setShowLogPast(true)} className="card surface-link flex min-w-0 flex-col items-start gap-2 p-3 text-left text-sm font-bold">
+                <span className="icon-frame"><CalendarPlus size={18} aria-hidden="true" /></span>
+                Log past activity
               </button>
             </div>
-          ))}
+          </section>
         </div>
-      )}
 
-      <Link
-        href="/workouts/history"
-        className="mt-5 card p-4 flex items-center gap-3 active:scale-[0.98] transition"
-      >
-        <History className="text-muted" size={20} />
-        <span className="font-semibold flex-1">Workout history</span>
-      </Link>
+        <div className="space-y-5">
+          <section aria-labelledby="routines-heading">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 id="routines-heading" className="section-title mb-0">Your routines</h2>
+              <Link href="/workouts/exercises" className="inline-flex min-h-10 items-center gap-1.5 text-xs font-extrabold text-accent hover:underline">
+                <ListChecks size={15} aria-hidden="true" /> Exercise library
+              </Link>
+            </div>
+            {loading ? (
+              <p role="status" className="card p-4 text-sm text-muted">Loading routines…</p>
+            ) : routines.length === 0 ? (
+              <div className="card space-y-3 p-5">
+                <p className="text-sm text-muted">Create a routine to save a group of exercises for next time.</p>
+                <button onClick={() => setCreating(true)} className="btn-ghost"><Plus size={17} /> New routine</button>
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {routines.map((routine) => (
+                  <li key={routine.id} className="card flex min-w-0 items-center gap-2.5 p-3 min-[375px]:gap-3">
+                    <span className="icon-frame"><Dumbbell size={17} aria-hidden="true" /></span>
+                    <Link href={`/workouts/routines/${routine.id}`} className="min-w-0 flex-1 py-1 hover:text-accent">
+                      <p className="break-words text-sm font-extrabold">{routine.name}</p>
+                      <p className="mt-0.5 text-xs text-muted">{routine.exerciseCount} {routine.exerciseCount === 1 ? "exercise" : "exercises"}</p>
+                    </Link>
+                    <button onClick={() => startSession(routine.id)} disabled={starting || routine.exerciseCount === 0} className="btn-ghost shrink-0 px-2.5">
+                      <Play size={16} aria-hidden="true" /> Start
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <div className="space-y-2">
+            <Link href="/workouts/plan" className="card surface-link flex items-center gap-3 p-4">
+              <span className="icon-frame"><TrendingUp size={18} aria-hidden="true" /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-extrabold">Plan &amp; progression</p>
+                <p className="mt-0.5 text-xs text-muted">Training volume, targets and recovery</p>
+              </div>
+              <ChevronRight size={17} aria-hidden="true" className="shrink-0 text-muted" />
+            </Link>
+            <Link href="/workouts/history" className="card surface-link flex items-center gap-3 p-4">
+              <span className="icon-frame"><History size={18} aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1 text-sm font-extrabold">Workout history</span>
+              <ChevronRight size={17} aria-hidden="true" className="shrink-0 text-muted" />
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {showCardio && <ActivityTypePicker onClose={() => setShowCardio(false)} />}
+      {showLogPast && <LogPastActivityModal onClose={() => setShowLogPast(false)} />}
     </div>
   );
 }

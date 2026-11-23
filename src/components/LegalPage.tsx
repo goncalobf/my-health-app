@@ -1,4 +1,4 @@
-import Image from "next/image";
+import BrandMark from "./BrandMark";
 import Link from "next/link";
 
 export function LegalPage({
@@ -17,10 +17,7 @@ export function LegalPage({
       <div className="mx-auto w-full max-w-2xl">
         <nav className="mb-10 flex items-center justify-between gap-4" aria-label="Legal pages">
           <Link href="/auth/sign-in" className="flex items-center gap-3" aria-label="Fitlog sign in">
-            <span className="h-10 w-10 overflow-hidden border border-border bg-black [border-radius:2px_10px_2px_2px]">
-              <Image src="/icons/icon-192.png" alt="" width={40} height={40} priority />
-            </span>
-            <span className="font-display text-2xl tracking-[0.08em]">Fitlog</span>
+            <BrandMark />
           </Link>
           <div className="flex items-center gap-4 text-xs text-muted">
             <Link href="/privacy" className="underline-offset-4 hover:underline">Privacy</Link>
@@ -29,8 +26,8 @@ export function LegalPage({
         </nav>
 
         <header className="border-b border-border pb-7">
-          <p className="font-display text-sm uppercase tracking-[0.2em] text-accent">{eyebrow}</p>
-          <h1 className="mt-2 font-display text-5xl leading-none tracking-[0.04em] min-[520px]:text-7xl">{title}</h1>
+          <p className="text-sm font-extrabold text-accent">{eyebrow}</p>
+          <h1 className="mt-2 font-display text-5xl leading-none min-[520px]:text-6xl">{title}</h1>
           <p className="mt-3 text-xs text-muted">Effective and last updated: {updated}</p>
         </header>
 

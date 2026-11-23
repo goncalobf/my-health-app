@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   LineChart,
   Line,
@@ -61,23 +62,23 @@ function Chart({
       <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
         <XAxis
           dataKey="date"
-          tick={{ fill: "#97978e", fontSize: 11 }}
+          tick={{ fill: "rgb(var(--fitlog-muted))", fontSize: 11 }}
           tickFormatter={(d) => formatDate(d).replace(/^\w+, /, "")}
           minTickGap={24}
-          stroke="#34342e"
+          stroke="rgb(var(--fitlog-border))"
         />
         <YAxis
-          tick={{ fill: "#97978e", fontSize: 11 }}
-          stroke="#34342e"
+          tick={{ fill: "rgb(var(--fitlog-muted))", fontSize: 11 }}
+          stroke="rgb(var(--fitlog-border))"
           domain={["dataMin - 2", "dataMax + 2"]}
           width={40}
         />
         <Tooltip
           contentStyle={{
-            background: "#11110f",
-            border: "1px solid #34342e",
-            borderRadius: 2,
-            color: "#f3f1e8",
+            background: "rgb(var(--fitlog-surface))",
+            border: "1px solid rgb(var(--fitlog-border))",
+            borderRadius: 12,
+            color: "rgb(var(--fitlog-text))",
           }}
           labelFormatter={(d) => formatDate(String(d))}
         />
@@ -94,6 +95,8 @@ function Chart({
 }
 
 export default function ProgressPage() {
+  const router = useRouter();
+  const view = useSearchParams().get("view") === "body" ? "body" : "training";
   const [prs, setPrs] = useState<PR[]>([]);
   const [bw, setBw] = useState<BW[]>([]);
   const [weightInput, setWeightInput] = useState("");
@@ -165,109 +168,18 @@ export default function ProgressPage() {
 
   return (
     <div>
-      <PageHeader title="Progress" />
+      <PageHeader title="Progress" description="Look back at your training and any body measurements you choose to track." />
+      <div className="mb-5 inline-flex max-w-full flex-wrap gap-1 rounded-2xl border border-border bg-surface p-1" role="group" aria-label="Progress views">
+        <button type="button" onClick={() => router.replace("/progress", { scroll: false })} aria-pressed={view === "training"} className={view === "training" ? "btn-primary" : "btn"}>Training</button>
+        <button type="button" onClick={() => router.replace("/progress?view=body", { scroll: false })} aria-pressed={view === "body"} className={view === "body" ? "btn-primary" : "btn"}>Body measurements</button>
+      </div>
 
-      <Link href="/workouts/plan" className="card mb-6 flex items-center gap-3 border-accent/30 p-4 active:scale-[0.98] transition">
+      {view === "training" && (<>
+
+      <Link href="/workouts/plan" className="card surface-link mb-5 flex items-center gap-3 p-4">
         <div className="icon-frame"><Gauge size={20} /></div>
-        <div className="min-w-0 flex-1"><p className="font-display text-xl tracking-[0.04em]">Training progression</p><p className="text-xs text-muted">Mesocycle week / RIR / deload signals</p></div>
+        <div className="min-w-0 flex-1"><p className="font-display text-xl tracking-[0.04em]">Training progression</p><p className="text-xs text-muted">Routine targets, training volume and recovery</p></div>
       </Link>
-
-      <section className="mb-6">
-        <h2 className="section-title">Bodyweight</h2>
-        <div className="card min-w-0 p-3 min-[360px]:p-4">
-          <Chart
-            data={bw.map((b) => ({ date: b.day, weightKg: b.weightKg }))}
-            dataKey="weightKg"
-            color="#d6ff45"
-          />
-          {recentWeightAvg != null && <p className="text-xs text-muted text-center -mt-1 mb-2">Recent average: <span className="text-text font-semibold">{Math.round(recentWeightAvg * 10) / 10} kg</span></p>}
-          <form onSubmit={logWeight} className="flex gap-2 mt-3">
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="Today's weight (kg)"
-              value={weightInput}
-              onChange={(e) => setWeightInput(normalizeDecimalInput(e.target.value))}
-              className="input min-w-0 flex-1"
-            />
-            <button className="btn-primary shrink-0" disabled={!weightInput}>
-              <Plus size={18} /> Log
-            </button>
-          </form>
-          {bw.length > 0 && (
-            <ul className="mt-3 flex flex-col gap-1">
-              {[...bw].reverse().slice(0, 5).map((entry) => (
-                <li key={entry.id} className="flex items-center justify-between text-sm">
-                  <span className="text-muted">{formatDate(entry.day)}</span>
-                  <span className="flex items-center gap-2">
-                    <span className="font-semibold tabular-nums">{entry.weightKg} kg</span>
-                    <button
-                      type="button"
-                      onClick={() => deleteWeight(entry.id)}
-                      className="text-muted hover:text-red-400 transition-colors p-1"
-                      aria-label="Delete entry"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      <section className="mb-6">
-        <h2 className="section-title">Measurements & photos</h2>
-        <form onSubmit={logMeasurements} className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
-          <div className="grid grid-cols-1 gap-2 min-[340px]:grid-cols-2">
-            {([
-              ["waistCm", "Waist (cm)"], ["chestCm", "Chest (cm)"],
-              ["armsCm", "Arms (cm)"], ["thighsCm", "Thighs (cm)"],
-              ["bodyFatPct", "Body fat (%)"],
-            ] as const).map(([key, label]) => (
-              <input key={key} type="number" inputMode="decimal" step={0.1} className="input" placeholder={label}
-                value={measure[key]} onChange={(e) => setMeasure({ ...measure, [key]: e.target.value })} />
-            ))}
-          </div>
-          <input className="input" placeholder="Notes (optional)" value={measure.notes} onChange={(e) => setMeasure({ ...measure, notes: e.target.value })} />
-          <label className="btn-ghost cursor-pointer">
-            <Camera size={18} /> {measure.photoDataUrl ? "Photo selected" : "Add progress photo"}
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => selectPhoto(e.target.files?.[0])} />
-          </label>
-          <button className="btn-primary" disabled={!measure.waistCm && !measure.chestCm && !measure.armsCm && !measure.thighsCm && !measure.bodyFatPct && !measure.photoDataUrl}>
-            <Ruler size={18} /> Save check-in
-          </button>
-        </form>
-        {latestMeasurement && (
-          <div className="card p-4 mt-3">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-1"><p className="font-semibold">Latest check-in</p><span className="text-xs text-muted">{formatDate(latestMeasurement.day)}</span></div>
-            <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
-              {([['waistCm', 'Waist'], ['chestCm', 'Chest'], ['armsCm', 'Arms'], ['thighsCm', 'Thighs'], ['bodyFatPct', 'Body fat']] as const).map(([key, label]) => latestMeasurement[key] != null ? (
-                <div key={key} className="bg-surface-2 rounded-xl p-2 text-center"><p className="font-bold tabular-nums">{latestMeasurement[key]}<span className="text-[10px] text-muted">{key === 'bodyFatPct' ? '%' : 'cm'}</span></p><p className="text-[10px] text-muted">{label}</p></div>
-              ) : null)}
-            </div>
-          </div>
-        )}
-        {measurements.filter((m) => m.waistCm != null).length >= 2 && (
-          <div className="card p-3 mt-3">
-            <p className="text-xs text-muted mb-2">Waist trend</p>
-            <Chart data={measurements.filter((m) => m.waistCm != null).map((m) => ({ date: m.day, waistCm: m.waistCm! }))} dataKey="waistCm" color="#ffc857" />
-          </div>
-        )}
-        {measurements.some((m) => m.photoDataUrl) && (
-          <div className="flex gap-2 overflow-x-auto mt-3">
-            {measurements.filter((m) => m.photoDataUrl).slice(-8).map((m) => (
-              <div key={m.id} className="shrink-0">
-                {/* Private in-memory data URLs cannot benefit from image optimization. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={m.photoDataUrl!} alt={`Progress ${m.day}`} className="w-28 h-36 object-cover rounded-xl border border-border" />
-                <p className="text-[11px] text-muted mt-1">{formatDate(m.day)}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
       <section>
         <h2 className="section-title">Personal records</h2>
@@ -279,15 +191,16 @@ export default function ProgressPage() {
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="grid items-start gap-2 min-[1050px]:grid-cols-2">
             {prs.map((pr) => (
               <div key={pr.exerciseId} className="card overflow-hidden">
                 <button
                   onClick={() => toggleExercise(pr.exerciseId)}
+                  aria-expanded={expanded === pr.exerciseId}
                   className="w-full p-4 flex items-center gap-3 text-left"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{pr.name}</p>
+                    <p className="break-words text-sm font-extrabold">{pr.name}</p>
                     <p className="text-xs text-muted">
                       Best: {pr.bestWeightKg}kg × {pr.bestReps} · ~
                       {pr.est1RM}kg 1RM
@@ -312,7 +225,7 @@ export default function ProgressPage() {
                         est1RM: p.est1RM,
                       }))}
                       dataKey="est1RM"
-                      color="#d6ff45"
+                      color="rgb(var(--fitlog-accent))"
                     />
                   </div>
                 )}
@@ -321,6 +234,110 @@ export default function ProgressPage() {
           </div>
         )}
       </section>
+      </>)}
+
+      {view === "body" && (
+        <div className="grid items-start gap-5 min-[1050px]:grid-cols-2">
+      <section className="mb-6">
+        <h2 className="section-title">Body weight</h2>
+        <div className="card min-w-0 p-3 min-[360px]:p-4">
+          <Chart
+            data={bw.map((b) => ({ date: b.day, weightKg: b.weightKg }))}
+            dataKey="weightKg"
+            color="rgb(var(--fitlog-accent))"
+          />
+          {recentWeightAvg != null && <p className="text-xs text-muted text-center -mt-1 mb-2">Recent average: <span className="text-text font-semibold">{Math.round(recentWeightAvg * 10) / 10} kg</span></p>}
+          <form onSubmit={logWeight} className="flex gap-2 mt-3">
+            <input
+              type="text"
+              inputMode="decimal"
+              aria-label="Today’s weight in kilograms"
+              placeholder="Today’s weight (kg)"
+              value={weightInput}
+              onChange={(e) => setWeightInput(normalizeDecimalInput(e.target.value))}
+              className="input min-w-0 flex-1"
+            />
+            <button className="btn-primary shrink-0" disabled={!weightInput}>
+              <Plus size={18} /> Log
+            </button>
+          </form>
+          {bw.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-1">
+              {[...bw].reverse().slice(0, 5).map((entry) => (
+                <li key={entry.id} className="flex items-center justify-between text-sm">
+                  <span className="text-muted">{formatDate(entry.day)}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-semibold tabular-nums">{entry.weightKg} kg</span>
+                    <button
+                      type="button"
+                      onClick={() => deleteWeight(entry.id)}
+                      className="flex min-h-10 min-w-10 items-center justify-center text-muted hover:text-danger transition-colors"
+                      aria-label="Delete entry"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="section-title">Measurements & photos</h2>
+        <form onSubmit={logMeasurements} className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
+          <div className="grid grid-cols-1 gap-2 min-[340px]:grid-cols-2">
+            {([
+              ["waistCm", "Waist (cm)"], ["chestCm", "Chest (cm)"],
+              ["armsCm", "Arms (cm)"], ["thighsCm", "Thighs (cm)"],
+              ["bodyFatPct", "Body fat (%)"],
+            ] as const).map(([key, label]) => (
+              <input key={key} type="number" inputMode="decimal" step={0.1} className="input" placeholder={label} aria-label={label}
+                value={measure[key]} onChange={(e) => setMeasure({ ...measure, [key]: e.target.value })} />
+            ))}
+          </div>
+          <input className="input" aria-label="Optional measurement notes" placeholder="Notes (optional)" value={measure.notes} onChange={(e) => setMeasure({ ...measure, notes: e.target.value })} />
+          <label className="btn-ghost cursor-pointer">
+            <Camera size={18} /> {measure.photoDataUrl ? "Photo selected" : "Add progress photo"}
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => selectPhoto(e.target.files?.[0])} />
+          </label>
+          <button className="btn-primary" disabled={!measure.waistCm && !measure.chestCm && !measure.armsCm && !measure.thighsCm && !measure.bodyFatPct && !measure.photoDataUrl}>
+            <Ruler size={18} /> Save check-in
+          </button>
+        </form>
+        {latestMeasurement && (
+          <div className="card p-4 mt-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-1"><p className="font-semibold">Latest check-in</p><span className="text-xs text-muted">{formatDate(latestMeasurement.day)}</span></div>
+            <div className="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
+              {([['waistCm', 'Waist'], ['chestCm', 'Chest'], ['armsCm', 'Arms'], ['thighsCm', 'Thighs'], ['bodyFatPct', 'Body fat']] as const).map(([key, label]) => latestMeasurement[key] != null ? (
+                <div key={key} className="bg-surface-2 rounded-xl p-2 text-center"><p className="font-bold tabular-nums">{latestMeasurement[key]}<span className="text-[10px] text-muted">{key === 'bodyFatPct' ? '%' : 'cm'}</span></p><p className="text-[10px] text-muted">{label}</p></div>
+              ) : null)}
+            </div>
+          </div>
+        )}
+        {measurements.filter((m) => m.waistCm != null).length >= 2 && (
+          <div className="card p-3 mt-3">
+            <p className="text-xs text-muted mb-2">Waist trend</p>
+            <Chart data={measurements.filter((m) => m.waistCm != null).map((m) => ({ date: m.day, waistCm: m.waistCm! }))} dataKey="waistCm" color="rgb(var(--fitlog-success))" />
+          </div>
+        )}
+        {measurements.some((m) => m.photoDataUrl) && (
+          <div className="flex gap-2 overflow-x-auto mt-3">
+            {measurements.filter((m) => m.photoDataUrl).slice(-8).map((m) => (
+              <div key={m.id} className="shrink-0">
+                {/* Private in-memory data URLs cannot benefit from image optimization. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={m.photoDataUrl!} alt={`Progress ${m.day}`} className="w-28 h-36 object-cover rounded-xl border border-border" />
+                <p className="text-[11px] text-muted mt-1">{formatDate(m.day)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+        </div>
+      )}
     </div>
   );
 }

@@ -211,6 +211,12 @@ try {
   );
   await request(`/api/sessions/${fs.rows[0].id}`, "GET", undefined, 404);
   await request(
+    `/api/sessions/${fs.rows[0].id}`,
+    "PATCH",
+    { skipSets: { exerciseId, setNumbers: [1, 2] } },
+    404,
+  );
+  await request(
     `/api/sessions/${fs.rows[0].id}/sets`,
     "POST",
     { exerciseId, setNumber: 1, weightKg: 10, reps: 10 },
@@ -224,6 +230,12 @@ try {
     `/api/sessions/${current.id}/sets`,
     "POST",
     { exerciseId: fe.rows[0].id, setNumber: 1, weightKg: 10, reps: 10 },
+    404,
+  );
+  await request(
+    `/api/sessions/${current.id}`,
+    "PATCH",
+    { skipSets: { exerciseId: fe.rows[0].id, setNumbers: [1, 2] } },
     404,
   );
   await request(
@@ -287,7 +299,7 @@ try {
   await page.getByRole("button", { name: "Log warm-up", exact: true }).click();
   await page.getByText("Warm-up sets · 1 logged", { exact: true }).waitFor();
   await page
-    .getByRole("button", { name: "Remove this set", exact: true })
+    .getByRole("button", { name: "Skip set", exact: true })
     .click();
   await page.getByText(/sets skipped\/removed/).waitFor();
   await page.reload();

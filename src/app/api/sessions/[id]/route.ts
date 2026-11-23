@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, lt, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, lt, inArray, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { sessions, sessionSets, exercises } from "@/db/schema";
 import {
@@ -210,10 +210,11 @@ export async function PATCH(
       { error: "Invalid workout update" },
       { status: 400 },
     );
-  const { finish, skipSet, ...fields } = parsed.data;
+  const { finish, skipSet, skipSets, ...fields } = parsed.data;
   const set: Record<string, unknown> = { ...fields };
   if (finish !== undefined) set.finishedAt = finish ? new Date() : null;
-  if (skipSet) {
+  const exerciseId = skipSets?.exerciseId ?? skipSet?.exerciseId;
+  if (exerciseId !== undefined) {
     if (owned.finishedAt)
       return NextResponse.json(
         { error: "Cannot skip sets in a finished workout" },
@@ -224,21 +225,45 @@ export async function PATCH(
       .from(exercises)
       .where(
         and(
-          eq(exercises.id, skipSet.exerciseId),
+          eq(exercises.id, exerciseId),
           sql`(${exercises.ownerUserId} is null or ${exercises.ownerUserId} = ${user.id})`,
         ),
       );
     if (!exercise)
       return NextResponse.json({ error: "Not found" }, { status: 404 });
-    set.skippedSets = sql`${sessions.skippedSets} || ${JSON.stringify([skipSet])}::jsonb`;
+    const additions = skipSets
+      ? [...new Set(skipSets.setNumbers)].map((setNumber) => ({ exerciseId, setNumber }))
+      : [skipSet];
+    // A retry can repeat some or all of the same skips without duplicating them.
+    set.skippedSets = sql`${sessions.skippedSets} || coalesce((
+      select jsonb_agg(candidate.value)
+      from jsonb_array_elements(${JSON.stringify(additions)}::jsonb) candidate
+      where not ${sessions.skippedSets} @> jsonb_build_array(candidate.value)
+    ), '[]'::jsonb)`;
   }
   if (!Object.keys(set).length)
     return NextResponse.json({ error: "No changes" }, { status: 400 });
   const [row] = await db
     .update(sessions)
     .set(set)
-    .where(and(eq(sessions.id, Number(id)), eq(sessions.userId, user.id)))
+    .where(and(
+      eq(sessions.id, Number(id)),
+      eq(sessions.userId, user.id),
+      exerciseId === undefined ? undefined : isNull(sessions.finishedAt),
+      skipSets ? notExists(
+        db.select({ id: sessionSets.id }).from(sessionSets).where(and(
+          eq(sessionSets.sessionId, Number(id)),
+          eq(sessionSets.exerciseId, skipSets.exerciseId),
+          eq(sessionSets.isWarmup, false),
+          inArray(sessionSets.setNumber, skipSets.setNumbers),
+        )),
+      ) : undefined,
+    ))
     .returning();
+  if (!row) return NextResponse.json(
+    { error: "The workout changed. Reload before skipping sets." },
+    { status: 409 },
+  );
   return NextResponse.json(row);
 }
 

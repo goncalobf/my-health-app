@@ -136,13 +136,18 @@ export const sessionPatch = z
     finish: z.boolean(),
     exerciseOrder: z.array(integer(1, 2147483647)).max(100).nullable(),
     performanceContext: z.enum(performanceContexts),
+    skipSets: z.object({
+      exerciseId: integer(1, 2147483647),
+      setNumbers: z.array(integer(1, 100000)).min(1).max(100),
+    }).strict(),
     skipSet: z.object({
       exerciseId: integer(1, 2147483647),
       setNumber: integer(1, 100000),
     }),
   })
   .partial()
-  .strict();
+  .strict()
+  .refine((update) => !update.skipSets || (!update.skipSet && update.finish === undefined));
 export const createSession = z
   .object({
     routineId: integer(1, 2147483647).nullish(),

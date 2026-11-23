@@ -43,7 +43,7 @@ export default function RestTimer({
   return (
     <div className="card min-w-0 overflow-hidden p-4 min-[360px]:p-5">
       <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
-        <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-accent">
+        <p className="text-xs font-extrabold text-accent">
           Resting
         </p>
         <Timer size={18} className={reached ? "text-accent" : "text-muted"} />
@@ -71,7 +71,7 @@ export default function RestTimer({
           className="h-full rounded-full transition-all"
           style={{
             width: `${pct}%`,
-            backgroundColor: reached ? "#d6ff45" : "#93ae39",
+            backgroundColor: reached ? "rgb(var(--fitlog-success))" : "rgb(var(--fitlog-accent))",
           }}
         />
       </div>

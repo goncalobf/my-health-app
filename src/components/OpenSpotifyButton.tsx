@@ -27,7 +27,7 @@ export default function OpenSpotifyButton() {
   return (
     <button
       onClick={open}
-      className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-[#1DB954] transition active:scale-95 [border-radius:2px_9px_2px_2px]"
+      className="flex h-10 w-10 shrink-0 items-center justify-center border border-border bg-surface text-[#1DB954] transition active:scale-95 rounded-xl"
       aria-label="Open Spotify"
     >
       <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

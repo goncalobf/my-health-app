@@ -1,11 +1,11 @@
 {
   "name": "Fitlog",
   "short_name": "Fitlog",
-  "description": "Your personal training archive",
+  "description": "Track training, nutrition and progress.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#070706",
-  "theme_color": "#070706",
+  "background_color": "#0f1013",
+  "theme_color": "#0f1013",
   "orientation": "portrait",
   "icons": [
     {

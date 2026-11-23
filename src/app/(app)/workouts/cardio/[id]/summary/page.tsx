@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle, Home } from "lucide-react";
+import { loggedMobilityRoutine } from "@/lib/mobility";
 import { JIU_JITSU } from "@/lib/jiu-jitsu";
 import { dateISOInTimeZone, formatDate } from "@/lib/utils";
 import { apiGet } from "@/lib/api";
@@ -54,6 +55,7 @@ export default function CardioSummaryPage({
     );
   }
 
+  const mobility = loggedMobilityRoutine(session.type);
   const isJiuJitsu = session.type === JIU_JITSU;
   const distKm = session.distanceM ? session.distanceM / 1000 : null;
   const paceSecPerKm =
@@ -70,13 +72,13 @@ export default function CardioSummaryPage({
       <div className="text-center py-6">
         <CheckCircle size={40} className="mx-auto mb-3 text-accent" />
         <h1 className="font-display text-4xl tracking-[0.04em]">
-          {TYPE_LABELS[session.type] ?? session.type}
+          {mobility?.name ?? TYPE_LABELS[session.type] ?? session.type}
         </h1>
         <p className="mt-1 text-sm text-muted">{isJiuJitsu ? formatDate(dateISOInTimeZone(new Date(session.startedAt))) : "Complete"}</p>
       </div>
 
       {/* Key stats */}
-      <div className={`card grid divide-x divide-border overflow-hidden p-0 ${isJiuJitsu && !session.effort ? "grid-cols-1" : "grid-cols-2"}`}>
+      <div className={`card grid divide-x divide-border overflow-hidden p-0 ${(mobility || (isJiuJitsu && !session.effort)) ? "grid-cols-1" : "grid-cols-2"}`}>
         <div className="p-4 text-center">
           <p className="label mb-1">Duration</p>
           <p className="font-display text-3xl tabular-nums">
@@ -88,7 +90,7 @@ export default function CardioSummaryPage({
             <p className="label mb-1">Reported effort</p>
             <p className="font-display text-3xl capitalize">{session.effort}</p>
           </div>
-        ) : isJiuJitsu ? null : distKm ? (
+        ) : mobility || isJiuJitsu ? null : distKm ? (
           <div className="p-4 text-center">
             <p className="label mb-1">Distance</p>
             <p className="font-display text-3xl tabular-nums">{distKm.toFixed(2)} km</p>
@@ -213,6 +215,9 @@ export default function CardioSummaryPage({
         </div>
       )}
 
+      {mobility && (
+        <Link href={`/workouts/mobility/${mobility.id}`} className="btn-ghost w-full">View routine</Link>
+      )}
       <Link href="/workouts" className="btn-primary mt-2 justify-center">
         <Home size={18} /> Back to workouts
       </Link>

@@ -122,7 +122,15 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <PageHeader title="Settings" back="/" />
+      <PageHeader title="Settings" back="/" description="Manage your preferences, targets and connected services." />
+      <nav aria-label="Settings sections" className="mb-5 flex flex-wrap gap-2">
+        {[
+          ["profile", "Profile"],
+          ["nutrition-targets", "Nutrition targets"],
+          ["weekly-defaults", "Weekly defaults"],
+          ["connections", "Connections"],
+        ].map(([id, label]) => <a className="btn-ghost px-3 text-xs" href={`#${id}`} key={id}>{label}</a>)}
+      </nav>
 
       <Link href="/settings/access" className="card mb-6 flex items-center gap-3 p-4 active:scale-[0.99] transition">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"><Users size={20} /></div>
@@ -130,7 +138,7 @@ export default function SettingsPage() {
         <ChevronRight size={19} className="shrink-0 text-muted" />
       </Link>
 
-      <h2 className="text-sm font-semibold text-muted mb-2">Your profile</h2>
+      <h2 id="profile" className="section-title scroll-mt-4">Your profile</h2>
       <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
         <ProfileNumber
           label="Current weight"
@@ -165,7 +173,7 @@ export default function SettingsPage() {
           onChange={(value) => setT({ ...t, ageYears: value })}
         />
         <label>
-          <span className="label">Biological sex</span>
+          <span className="label">Sex for the energy estimate</span>
           <select
             className="input mt-1"
             value={t.biologicalSex}
@@ -195,7 +203,7 @@ export default function SettingsPage() {
         </button>
       </div>
 
-      <h2 className="text-sm font-semibold text-muted mb-2 mt-6">Food search</h2>
+      <h2 className="section-title mt-6">Food search</h2>
       <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
         <label>
           <span className="label">Preferred food region</span>
@@ -239,7 +247,7 @@ export default function SettingsPage() {
         </button>
       </div>
 
-      <h2 className="text-sm font-semibold text-muted mb-2 mt-6">Goal</h2>
+      <h2 id="nutrition-targets" className="section-title mt-6 scroll-mt-4">Goal</h2>
       <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
         <label>
           <span className="label">Training goal</span>
@@ -282,7 +290,7 @@ export default function SettingsPage() {
         </label>
       </div>
 
-      <h2 className="text-sm font-semibold text-muted mb-2 mt-6">Daily targets</h2>
+      <h2 className="section-title mt-6">Daily targets</h2>
       <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3 mt-2">
         {fields.map((f) => (
           <label key={f.key} className="flex items-center justify-between gap-2 min-[360px]:gap-3">
@@ -355,7 +363,7 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <h2 className="text-sm font-semibold text-muted mb-2 mt-6">Optional weekly defaults</h2>
+      <h2 id="weekly-defaults" className="section-title mt-6 scroll-mt-4">Optional weekly defaults</h2>
       <div className="card p-3 min-[360px]:p-4 flex flex-col gap-3">
         {schedule.map((row) => (
           <label key={row.dayOfWeek} className="flex min-w-0 items-center gap-2 min-[360px]:gap-3">
@@ -370,7 +378,7 @@ export default function SettingsPage() {
         <button onClick={save} className="btn-primary">Save schedule & settings</button>
       </div>
 
-      <GarminSettings />
+      <div id="connections" className="scroll-mt-4"><GarminSettings /></div>
 
       <button onClick={logout} className="btn-ghost w-full mt-6">
         <LogOut size={18} /> Sign out

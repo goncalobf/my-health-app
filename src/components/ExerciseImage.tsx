@@ -65,7 +65,7 @@ export default function ExerciseImage({
     <>
       <div
         className={cn(
-          "relative shrink-0 overflow-hidden border border-border bg-surface-2 [border-radius:2px_12px_2px_2px] grayscale contrast-110",
+          "relative shrink-0 overflow-hidden border border-border bg-surface-2 rounded-xl grayscale contrast-110",
           canExpand && "cursor-zoom-in active:opacity-80",
           className
         )}

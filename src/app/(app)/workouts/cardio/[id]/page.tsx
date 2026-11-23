@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { loggedMobilityRoutine } from "@/lib/mobility";
 import { JIU_JITSU } from "@/lib/jiu-jitsu";
 import { apiGet } from "@/lib/api";
 import EasyRunRecording from "@/components/cardio/EasyRunRecording";
@@ -44,6 +45,10 @@ export default function CardioSessionPage({
   if (session.type === "indoor_cycling" || session.type === "outdoor_cycling")
     return <CyclingRecording session={session} onDone={onDone} />;
   if (session.type === "hyrox") return <HyroxRecording session={session} onDone={onDone} />;
+
+  if (loggedMobilityRoutine(session.type)) {
+    return <Link className="btn-primary" href={`/workouts/cardio/${id}/summary`}>View mobility session</Link>;
+  }
 
   if (session.type === JIU_JITSU) {
     return <Link className="btn-primary" href={`/workouts/cardio/${id}/summary`}>View jiu-jitsu session</Link>;
