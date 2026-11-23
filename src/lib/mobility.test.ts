@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { readdirSync } from "node:fs";
+import { basename } from "node:path";
 import test from "node:test";
-import { loggedMobilityRoutine, mobilityActivityType, mobilityMinutes, mobilityRoutines, mobilitySources, mobilitySteps, searchMobilityRoutines } from "./mobility";
+import { loggedMobilityRoutine, mobilityActivityType, mobilityIllustrationPath, mobilityMinutes, mobilityRoutines, mobilitySources, mobilitySteps, searchMobilityRoutines } from "./mobility";
 
 test("each mobility routine has a stable activity identifier and sourced, playable steps", () => {
   assert.equal(new Set(mobilityRoutines.map((routine) => routine.id)).size, mobilityRoutines.length);
@@ -20,6 +22,20 @@ test("each mobility routine has a stable activity identifier and sourced, playab
   }
   assert.equal(loggedMobilityRoutine("run_easy"), undefined);
   assert.equal(loggedMobilityRoutine("mobility:unknown"), undefined);
+});
+
+test("every mobility exercise has a bundled illustration with two frame captions", () => {
+  const illustrated = new Set(
+    readdirSync(new URL("../../public/mobility-illustrations/", import.meta.url))
+      .filter((file) => file.endsWith(".webp")),
+  );
+  const expected = new Set<string>();
+  for (const step of mobilityRoutines.flatMap(mobilitySteps)) {
+    expected.add(basename(mobilityIllustrationPath(step.id)));
+    assert.equal(step.frames.length, 2, step.name);
+    assert.ok(step.frames.every((caption) => caption.trim().length > 0), step.name);
+  }
+  assert.deepEqual(illustrated, expected);
 });
 
 test("region filtering and search handle plural names and exercise names", () => {

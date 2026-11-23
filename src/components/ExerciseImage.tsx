@@ -48,11 +48,13 @@ export default function ExerciseImage({
   imageUrl,
   className,
   expandable,
+  variant = "photo",
 }: {
   name: string;
   imageUrl: string | null;
   className?: string;
   expandable?: boolean;
+  variant?: "photo" | "illustration";
 }) {
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState(false);
@@ -60,12 +62,14 @@ export default function ExerciseImage({
   useEffect(() => setFailed(false), [imageUrl]);
 
   const canExpand = expandable && imageUrl && !failed;
+  const illustration = variant === "illustration";
 
   return (
     <>
       <div
         className={cn(
-          "relative shrink-0 overflow-hidden border border-border bg-surface-2 rounded-xl grayscale contrast-110",
+          "relative shrink-0 overflow-hidden rounded-xl border border-border bg-surface-2",
+          !illustration && "grayscale contrast-110",
           canExpand && "cursor-zoom-in active:opacity-80",
           className
         )}
@@ -74,15 +78,16 @@ export default function ExerciseImage({
         {imageUrl && !failed ? (
           <Image
             src={imageUrl}
-            alt={`${name} demonstration`}
+            alt={`${name} ${illustration ? "movement illustration" : "demonstration"}`}
             fill
-            sizes="80px"
-            className="object-cover"
+            sizes={illustration ? undefined : "80px"}
+            unoptimized={illustration}
+            className={illustration ? "object-contain" : "object-cover"}
             onError={() => setFailed(true)}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted">
-            <Dumbbell size={20} />
+            {illustration ? <p className="p-2 text-center text-sm">Illustration unavailable</p> : <Dumbbell size={20} />}
           </div>
         )}
       </div>

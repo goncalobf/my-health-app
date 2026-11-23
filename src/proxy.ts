@@ -34,6 +34,6 @@ export default function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|sw.js).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|mobility-illustrations/[A-Za-z]+\\.webp$|sw.js).*)",
   ],
 };
