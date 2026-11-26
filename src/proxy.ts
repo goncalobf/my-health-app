@@ -15,6 +15,12 @@ export default function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // The Python Garmin function has no browser session. It accepts only fresh
+  // HMAC-signed requests from the authenticated Next.js Garmin route.
+  if (request.method === "POST" && request.nextUrl.pathname === "/api/garmin_auth") {
+    return NextResponse.next();
+  }
+
   // Local mode runs without Neon Auth, so there is no session to check and no
   // login page to redirect to.
   if (isLocalMode()) return NextResponse.next();

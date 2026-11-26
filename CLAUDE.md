@@ -1,6 +1,6 @@
 # Fitlog project guide
 
-Fitlog is a multi-user, iPhone-first health, nutrition, strength, and cardio tracker. It uses Next.js App Router, Neon Postgres/Auth, Drizzle, Vercel, OpenAI, and an optional Cloudflare Worker for Garmin authentication.
+Fitlog is a multi-user, iPhone-first health, nutrition, strength, and cardio tracker. It uses Next.js App Router, Neon Postgres/Auth, Drizzle, Vercel, OpenAI, and a Vercel Python function for Garmin authentication.
 
 ## Before editing
 
@@ -25,7 +25,8 @@ Fitlog is a multi-user, iPhone-first health, nutrition, strength, and cardio tra
 - `src/lib/`: domain logic and external-service adapters.
 - `src/db/schema.ts`: desired Drizzle schema; `drizzle/` is append-only production history.
 - `scripts/`: operational or data-changing tasks; inspect a script before running it.
-- `workers/garmin-auth/`: separate Cloudflare Worker runtime for the Garmin login handshake.
+- `api/garmin_auth.py`: private HMAC-signed Vercel Python function for Garmin login and MFA.
+- `workers/garmin-auth/`: retired legacy Cloudflare Worker, retained only as migration history/fallback reference.
 
 ## Common commands
 
@@ -51,6 +52,6 @@ Use targeted tests while iterating. Before handoff, run `npm test` and `npm run 
 
 - Authentication and account lifecycle: `docs/authentication.md`
 - Food providers and normalization: `docs/food-data.md`
-- Garmin connection and worker boundary: `docs/garmin.md`
+- Garmin connection, MFA, token, and sync boundary: `docs/garmin.md`
 - AI Coach data feed and memory: `docs/coach.md`
 - Repeated workflows: `/implement-fitlog-feature`, `/migrate-fitlog-database`, `/audit-fitlog`, and user-invoked `/release-fitlog`

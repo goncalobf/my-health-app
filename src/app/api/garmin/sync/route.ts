@@ -4,7 +4,12 @@ import { db } from "@/db";
 import { garminConnections, garminPendingImports, garminDailyMetrics } from "@/db/schema";
 import { requireAppUser } from "@/lib/app-user";
 import { decrypt, encrypt } from "@/lib/garmin-crypto";
-import { fetchWithToken, fetchDailyMetricsWithToken, type GarminToken } from "@/lib/garmin-client";
+import {
+  fetchWithToken,
+  fetchDailyMetricsWithToken,
+  isGarminToken,
+  type GarminToken,
+} from "@/lib/garmin-client";
 import { isRateLimited } from "@/lib/rate-limit";
 
 export async function POST() {
@@ -22,7 +27,14 @@ export async function POST() {
     return NextResponse.json({ error: "No Garmin account connected" }, { status: 400 });
   }
 
-  let token = JSON.parse(decrypt(connection.encryptedData)) as GarminToken;
+  let token: GarminToken;
+  try {
+    const parsed = JSON.parse(decrypt(connection.encryptedData)) as unknown;
+    if (!isGarminToken(parsed)) throw new Error("invalid token");
+    token = parsed;
+  } catch {
+    return NextResponse.json({ error: "Garmin connection is invalid. Disconnect and reconnect your account." }, { status: 502 });
+  }
 
   let activities;
   try {
@@ -30,14 +42,14 @@ export async function POST() {
     activities = result.activities;
     token = result.updatedToken; // may have been refreshed
   } catch {
-    return NextResponse.json({ error: "Garmin sync failed — your token may have expired. Run the garmin-auth script again and reconnect." }, { status: 502 });
+    return NextResponse.json({ error: "Garmin sync failed — reconnect your Garmin account and try again." }, { status: 502 });
   }
 
   let imported = 0;
   for (const activity of activities) {
     const garminActivityId = String(activity.activityId);
     try {
-      await db
+      const inserted = await db
         .insert(garminPendingImports)
         .values({
           userId: user.id,
@@ -45,8 +57,9 @@ export async function POST() {
           garminActivityType: activity.activityType?.typeKey ?? "other",
           garminDataJson: JSON.stringify(activity),
         })
-        .onConflictDoNothing();
-      imported++;
+        .onConflictDoNothing()
+        .returning({ id: garminPendingImports.id });
+      if (inserted.length > 0) imported++;
     } catch {
       // Skip duplicate or malformed entries
     }

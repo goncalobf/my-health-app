@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { garminConnections } from "@/db/schema";
 import { requireAppUser } from "@/lib/app-user";
 import { encrypt } from "@/lib/garmin-crypto";
-import { validateToken, type GarminToken } from "@/lib/garmin-client";
+import { isGarminToken, validateToken, type GarminToken } from "@/lib/garmin-client";
 
 export async function GET() {
   const user = await requireAppUser();
@@ -26,8 +26,9 @@ export async function POST(req: Request) {
 
   let token: GarminToken;
   try {
-    token = JSON.parse(raw) as GarminToken;
-    if (!token.oauth1 || !token.oauth2) throw new Error("invalid shape");
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isGarminToken(parsed)) throw new Error("invalid shape");
+    token = parsed;
   } catch {
     return NextResponse.json({ error: "Invalid token — paste the full JSON output from the garmin-auth script" }, { status: 400 });
   }
