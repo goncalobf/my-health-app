@@ -277,7 +277,9 @@ def _claim_nonce(nonce: str) -> bool:
         raise RuntimeError("Garmin database is not configured")
     # Keep the entry longer than the entire acceptance window, including a
     # sender clock ahead of this instance. A unique key enforces one claimant.
-    with psycopg.connect(url, connect_timeout=4, options="-c statement_timeout=4000") as db:
+    with psycopg.connect(url, connect_timeout=4) as db:
+        # Neon pooled URLs use PgBouncer, which rejects startup options.
+        db.execute("SET LOCAL statement_timeout = '4s'")
         db.execute("DELETE FROM garmin_request_nonces WHERE expires_at < now()")
         result = db.execute(
             """INSERT INTO garmin_request_nonces (nonce, expires_at)

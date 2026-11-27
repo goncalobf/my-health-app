@@ -8,7 +8,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer
 from threading import Thread
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -91,6 +91,17 @@ class GarminAuthTest(unittest.TestCase):
             with self.assertRaises(TimeoutError):
                 bounded(None, "GET", "https://example.test")
         call.assert_called_once()
+
+    def test_nonce_sql_timeout_is_transaction_local_for_pooled_neon(self):
+        with patch.dict(os.environ, {"DATABASE_URL": "postgresql://localhost/fixture"}):
+            with patch.object(auth.psycopg, "connect", return_value=MagicMock()) as connect:
+                database = connect.return_value.__enter__.return_value
+                nonce = str(uuid4())
+                database.execute.return_value.fetchone.return_value = (nonce,)
+                self.assertTrue(auth._claim_nonce(nonce))
+        connect.assert_called_once_with("postgresql://localhost/fixture", connect_timeout=4)
+        self.assertEqual(database.execute.call_args_list[0].args, ("SET LOCAL statement_timeout = '4s'",))
+        self.assertEqual(database.execute.call_args_list[-1].args[-1], (nonce,))
 
     def test_http_contract_and_atomic_nonce_claim(self):
         database = os.environ.get("GARMIN_TEST_DATABASE_URL")
