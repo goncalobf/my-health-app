@@ -1,56 +1,72 @@
-import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { coachMessages } from "@/db/schema";
-import { CoachChatPayload, chatSchema } from "@/lib/coach";
+import { chatSchema } from "@/lib/coach";
+import { COACH_QUESTION_LIMIT, coachChatResponse, formatCoachConversation } from "@/lib/coach-chat";
 import { getCoachSnapshot, saveCoachMemoryNote } from "@/lib/coach-data";
 import { formatCoachSnapshotAsMarkdown } from "@/lib/coach-snapshot-markdown";
 import { isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
 import { requireAppUser } from "@/lib/app-user";
 import { isRateLimited } from "@/lib/rate-limit";
 
+const privateHeaders = { "Cache-Control": "no-store" };
+
+function recentMessages(userId: number, limit: number) {
+  return db.select().from(coachMessages).where(eq(coachMessages.userId, userId))
+    .orderBy(desc(coachMessages.createdAt), desc(coachMessages.id)).limit(limit);
+}
+
 export async function GET() {
   const user = await requireAppUser();
-  const recent = await db.select().from(coachMessages).where(eq(coachMessages.userId, user.id)).orderBy(desc(coachMessages.createdAt)).limit(30);
-  return NextResponse.json({ configured: isCoachConfigured(), messages: recent.reverse() });
+  const recent = await recentMessages(user.id, 30);
+  return Response.json({ configured: isCoachConfigured(), messages: recent.reverse() }, { headers: privateHeaders });
 }
 
 export async function POST(req: Request) {
   const user = await requireAppUser();
-  if (!isCoachConfigured()) return NextResponse.json({ error: "Add OPENAI_API_KEY in Vercel to enable Fitlog Coach." }, { status: 503 });
-  if (isRateLimited(`coach-chat:${user.id}`, { max: 20, windowMs: 10 * 60 * 1000 })) {
-    return NextResponse.json({ error: "Too many requests. Try again shortly." }, { status: 429 });
-  }
+  if (!isCoachConfigured()) return Response.json({ error: "Coach is currently unavailable." }, { status: 503 });
   const body = await req.json().catch(() => ({}));
   const message = typeof body?.message === "string" ? body.message.trim() : "";
-  if (!message || message.length > 1200) return NextResponse.json({ error: "Enter a question up to 1200 characters." }, { status: 400 });
-  const history = await db.select().from(coachMessages).where(eq(coachMessages.userId, user.id)).orderBy(desc(coachMessages.createdAt)).limit(10);
-  const snapshot = await getCoachSnapshot({ userId: user.id, days: 28 });
-  const historyText = history.length
-    ? history.reverse().map((x) => `- **${x.role}:** ${x.content}`).join("\n")
-    : "_No prior messages._";
+  if (!message || message.length > COACH_QUESTION_LIMIT) {
+    return Response.json({ error: `Enter a question up to ${COACH_QUESTION_LIMIT} characters.` }, { status: 400 });
+  }
+  if (isRateLimited(`coach-chat:${user.id}`, { max: 20, windowMs: 10 * 60 * 1000 })) {
+    return Response.json({ error: "Too many requests. Try again shortly." }, { status: 429 });
+  }
+
   try {
-    const payload = await structuredCoachResponse<CoachChatPayload>({
+    const [history, snapshot] = await Promise.all([
+      recentMessages(user.id, 10),
+      getCoachSnapshot({ userId: user.id, days: 28 }),
+    ]);
+    const payload = coachChatResponse.parse(await structuredCoachResponse<unknown>({
       name: "fitlog_coach_chat", schema: chatSchema,
       data: [
-        `## User question\n${message}`,
-        `## Recent conversation\n${historyText}`,
         formatCoachSnapshotAsMarkdown(snapshot),
-      ].join("\n\n"),
-    });
-    await db.insert(coachMessages).values([
+        history.length ? `## Recent conversation\n${formatCoachConversation(history.reverse())}` : "",
+        `## User question\n${formatCoachConversation([{ role: "user", content: message }])}`,
+      ].filter(Boolean).join("\n\n"),
+    }));
+    const messages = await db.insert(coachMessages).values([
       { userId: user.id, role: "user", content: message },
       { userId: user.id, role: "assistant", content: JSON.stringify(payload) },
-    ]);
-    await saveCoachMemoryNote(user.id, payload.memoryNote);
-    return NextResponse.json(payload, { status: 201 });
+    ]).returning({
+      id: coachMessages.id, role: coachMessages.role, content: coachMessages.content, createdAt: coachMessages.createdAt,
+    });
+    // The reply is already saved. An optional memory failure must not cause a resubmission.
+    await saveCoachMemoryNote(user.id, payload.memoryNote).catch(() => {
+      console.error("Fitlog Coach could not save the optional memory note");
+    });
+    return Response.json({ ...payload, messages: messages.sort((a, b) => a.id - b.id) }, {
+      status: 201, headers: privateHeaders,
+    });
   } catch {
-    return NextResponse.json({ error: "Coach request failed. Try again." }, { status: 502 });
+    return Response.json({ error: "Coach couldn’t reply. Your question is ready to retry." }, { status: 502 });
   }
 }
 
 export async function DELETE() {
   const user = await requireAppUser();
   await db.delete(coachMessages).where(eq(coachMessages.userId, user.id));
-  return NextResponse.json({ ok: true });
+  return Response.json({ ok: true }, { headers: privateHeaders });
 }

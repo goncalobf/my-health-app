@@ -108,7 +108,7 @@ test("the playbook selects the guidance and task for each Coach endpoint", async
   const playbook = await readFile(new URL("../../docs/coach-playbook.md", import.meta.url), "utf8");
   const tasks = {
     fitlog_training_suggestions: "Suggest the next one to three consecutive calendar days",
-    fitlog_coach_chat: "Answer the question directly",
+    fitlog_coach_chat: "Follow the user's lead in an open conversation",
     fitlog_coach_daily: "Give one to three timely insights",
     fitlog_coach_weekly: "Prioritize relevant trends and actions",
     fitlog_coach_post_workout: "Analyze the completed focal workout",
