@@ -21,8 +21,8 @@ export interface GarminActivity {
 }
 
 export interface GarminLegacyToken {
-  oauth1: Record<string, unknown>;
-  oauth2: Record<string, unknown>;
+  oauth1: { oauth_token: string; oauth_token_secret: string };
+  oauth2: { access_token: string };
 }
 
 export interface GarminDiToken {
@@ -46,16 +46,21 @@ export function isGarminDiToken(value: unknown): value is GarminDiToken {
   return isRecord(value)
     && value.kind === "di"
     && typeof value.accessToken === "string"
-    && value.accessToken.length > 20
+    && value.accessToken.length > 20 && value.accessToken.length <= 16_384
     && typeof value.refreshToken === "string"
-    && value.refreshToken.length > 20
+    && value.refreshToken.length > 20 && value.refreshToken.length <= 16_384
     && typeof value.clientId === "string"
     && value.clientId.length > 2
     && value.clientId.length <= 200;
 }
 
 export function isGarminLegacyToken(value: unknown): value is GarminLegacyToken {
-  return isRecord(value) && isRecord(value.oauth1) && isRecord(value.oauth2);
+  return isRecord(value)
+    && isRecord(value.oauth1)
+    && isRecord(value.oauth2)
+    && typeof value.oauth1.oauth_token === "string" && value.oauth1.oauth_token.length > 0
+    && typeof value.oauth1.oauth_token_secret === "string" && value.oauth1.oauth_token_secret.length > 0
+    && typeof value.oauth2.access_token === "string" && value.oauth2.access_token.length > 0;
 }
 
 export function isGarminToken(value: unknown): value is GarminToken {
@@ -76,7 +81,7 @@ export function normalizeGarminActivity(value: unknown): GarminActivity | null {
   if (!isRecord(value)) return null;
   const rawType = isRecord(value.activityType) ? value.activityType : null;
   const activityId = finiteNumber(value.activityId, 1, Number.MAX_SAFE_INTEGER);
-  if (!activityId) return null;
+  if (!activityId || !Number.isSafeInteger(activityId)) return null;
 
   return {
     activityId,

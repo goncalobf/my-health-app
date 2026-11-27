@@ -1,12 +1,9 @@
-import { createHmac } from "crypto";
-import { and, eq, gt } from "drizzle-orm";
+import { createHmac, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { db } from "@/db";
-import { garminAuthSessions } from "@/db/schema";
 import { requireAppUser } from "@/lib/app-user";
-import { completeGarminAuthSession } from "@/lib/garmin-auth-session";
-import { isGarminDiToken } from "@/lib/garmin-client";
-import { isRateLimited } from "@/lib/rate-limit";
+import { claimGarminAuth, completeGarminAuthSession, settleGarminAuth } from "@/lib/garmin-auth-session";
+import { isGarminDiToken } from "@/lib/garmin-data";
+import { garminDenied, garminPrivateHeaders, isGarminBrowserRequest } from "@/lib/garmin-browser-request";
 
 export const maxDuration = 60;
 
@@ -33,175 +30,122 @@ const serviceSuccess = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("mfa_required"),
     state: z.string().min(20).max(200_000),
-    errorCode: z.literal("MFA_INVALID").optional(),
+    errorCode: z.enum(["MFA_INVALID", "MFA_RATE_LIMITED"]).optional(),
   }),
   z.object({
     status: z.literal("connected"),
-    token: z.object({
-      kind: z.literal("di"),
-      accessToken: z.string().min(20),
-      refreshToken: z.string().min(20),
-      clientId: z.string().min(3).max(200),
-    }),
+    token: z.custom(isGarminDiToken),
   }),
 ]);
 
-function serviceUrl(): string {
+const path = "/api/garmin_auth";
+
+function serviceTarget() {
+  const host = process.env.VERCEL_URL;
+  const previewHost = host && /^[a-z0-9.-]+\.vercel\.app$/i.test(host) ? host : null;
   const configured = process.env.GARMIN_AUTH_SERVICE_URL;
-  if (configured) {
-    const url = new URL(configured);
-    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
-    if (url.protocol !== "https:" && !(local && url.protocol === "http:")) {
-      throw new Error("GARMIN_AUTH_SERVICE_URL must use HTTPS");
-    }
-    return url.toString();
+  const automationSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  const directOrigin = previewHost ? `https://${previewHost}` : null;
+  const origin = process.env.VERCEL_ENV === "production" && !(directOrigin && automationSecret)
+    ? "https://fitlog.site" : directOrigin;
+  if (!configured && !origin) throw new Error("Missing Garmin auth destination");
+  const url = new URL(configured ?? `${origin}${path}`);
+  const local = !process.env.VERCEL_ENV && ["localhost", "127.0.0.1"].includes(url.hostname);
+  if (url.pathname !== path || url.search || url.hash || url.username || url.password
+    || (url.protocol !== "https:" && !(local && url.protocol === "http:"))) {
+    throw new Error("Invalid Garmin auth destination");
   }
-  const deploymentHost = process.env.VERCEL_URL;
-  if (!deploymentHost || !/^[a-z0-9.-]+$/i.test(deploymentHost)) {
-    throw new Error("Garmin auth service is not configured");
-  }
-  return `https://${deploymentHost}/api/garmin_auth`;
+  const bypass = url.origin === directOrigin ? automationSecret : undefined;
+  return { url, bypass };
 }
 
-function signingKey(): Buffer {
+function sign(timestamp: string, nonce: string, body: string) {
   const value = process.env.GARMIN_ENCRYPTION_KEY;
-  if (!value || !/^[a-f0-9]{64}$/i.test(value)) {
-    throw new Error("GARMIN_ENCRYPTION_KEY is not configured");
-  }
-  return createHmac("sha256", Buffer.from(value, "hex"))
-    .update("fitlog-garmin-auth-signing-v1")
-    .digest();
+  if (!value || !/^[a-f0-9]{64}$/i.test(value)) throw new Error("Missing Garmin encryption key");
+  const key = createHmac("sha256", Buffer.from(value, "hex"))
+    .update("fitlog-garmin-auth-signing-v2").digest();
+  return createHmac("sha256", key).update(`POST\n${path}\n${timestamp}\n${nonce}\n${body}`).digest("hex");
 }
 
-function safeServiceError(status: number, code: unknown): { status: number; message: string } {
-  if (status === 401 && code === "MFA_INVALID") {
-    return { status: 401, message: "That verification code was not accepted. Try a new code." };
+function reply(data: object, status = 200) {
+  return Response.json(data, { status, headers: garminPrivateHeaders });
+}
+
+function expired() {
+  return reply({ code: "RESTART", error: "Garmin sign-in expired or was replaced. Start again." }, 409);
+}
+
+function serviceError(code: unknown) {
+  switch (code) {
+    case "AUTH_REJECTED": return reply({ error: "Garmin rejected the sign-in. Check your email and password." }, 401);
+    case "RATE_LIMITED": return reply({ error: "Garmin is limiting attempts. Wait a few minutes and try again." }, 429);
+    case "AUTH_TIMEOUT": return reply({ code: "RESTART", error: "Garmin took too long. Start the sign-in again." }, 504);
+    case "MFA_EXPIRED": return expired();
+    case "TOKEN_UNAVAILABLE": return reply({ code: "RESTART", error: "Garmin did not return a renewable session. Start again." }, 502);
+    default: return reply({ code: "RESTART", error: "Garmin sign-in is temporarily unavailable. Start again." }, 502);
   }
-  if (status === 401) {
-    return { status: 401, message: "Garmin rejected the sign-in. Check your email and password." };
-  }
-  if (status === 408) {
-    return { status: 408, message: "Garmin took too long to respond. Please try again." };
-  }
-  if (status === 429) {
-    return { status: 429, message: "Garmin is limiting sign-in attempts. Wait a few minutes and try again." };
-  }
-  if (status === 400 && code === "MFA_EXPIRED") {
-    return { status: 400, message: "That verification session expired. Start the Garmin sign-in again." };
-  }
-  return { status: 502, message: "Garmin sign-in is temporarily unavailable. Please try again." };
 }
 
 export async function POST(req: Request) {
+  if (!isGarminBrowserRequest(req)) return garminDenied();
   const user = await requireAppUser();
   const parsed = authRequest.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) {
-    return Response.json({ error: "Invalid Garmin sign-in request." }, { status: 400 });
-  }
+  if (!parsed.success) return reply({ error: "Invalid Garmin sign-in request." }, 400);
   const body = parsed.data;
-  const [session] = await db.select({ id: garminAuthSessions.id })
-    .from(garminAuthSessions)
-    .where(and(
-      eq(garminAuthSessions.id, body.sessionId),
-      eq(garminAuthSessions.userId, user.id),
-      eq(garminAuthSessions.secret, body.secret),
-      eq(garminAuthSessions.status, "pending"),
-      gt(garminAuthSessions.expiresAt, new Date()),
-    ));
-  if (!session) {
-    return Response.json({ error: "Garmin sign-in expired. Start again." }, { status: 404 });
-  }
-
-  const limit = body.action === "start"
-    ? { key: `garmin-auth-start:${user.id}`, max: 5, windowMs: 30 * 60 * 1000 }
-    : { key: `garmin-auth-mfa:${user.id}`, max: 10, windowMs: 10 * 60 * 1000 };
-  if (isRateLimited(limit.key, { max: limit.max, windowMs: limit.windowMs })) {
-    return Response.json(
-      { error: "Too many Garmin sign-in attempts. Please wait and try again." },
-      { status: 429 },
-    );
-  }
-
+  const owner = { userId: user.id, sessionId: body.sessionId, secret: body.secret, purpose: "browser" as const };
   const serviceBody = JSON.stringify(body.action === "start"
-    ? {
-        action: body.action,
-        sessionId: body.sessionId,
-        username: body.username,
-        password: body.password,
-      }
-    : {
-        action: body.action,
-        sessionId: body.sessionId,
-        state: body.state,
-        mfaCode: body.mfaCode,
-      });
-  const timestamp = String(Math.floor(Date.now() / 1000));
+    ? { action: body.action, sessionId: body.sessionId, username: body.username, password: body.password }
+    : { action: body.action, sessionId: body.sessionId, state: body.state, mfaCode: body.mfaCode });
+  let target: ReturnType<typeof serviceTarget>;
   let signature: string;
-  let url: string;
+  const nonce = randomUUID();
+  const timestamp = String(Math.floor(Date.now() / 1000));
   try {
-    signature = createHmac("sha256", signingKey())
-      .update(`${timestamp}.${serviceBody}`)
-      .digest("hex");
-    url = serviceUrl();
+    target = serviceTarget();
+    signature = sign(timestamp, nonce, serviceBody);
   } catch {
-    return Response.json(
-      { error: "Garmin sign-in is not configured on this deployment." },
-      { status: 503 },
-    );
+    return reply({ error: "Garmin sign-in is not configured on this deployment." }, 503);
   }
-
-  let response: Response;
+  const claim = await claimGarminAuth(user.id, body).catch(() => null);
+  if (!claim) return reply({ error: "Could not start the Garmin request. Try again shortly." }, 503);
+  if (claim.status === "stale") return expired();
+  if (claim.status === "limited") return reply({ error: "Too many Garmin sign-in attempts." }, 429);
   try {
-    response = await fetch(url, {
+    const response = await fetch(target.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Fitlog-Timestamp": timestamp,
+        "X-Fitlog-Nonce": nonce,
         "X-Fitlog-Signature": signature,
+        ...(target.bypass ? { "x-vercel-protection-bypass": target.bypass } : {}),
       },
       body: serviceBody,
-      signal: AbortSignal.timeout(55_000),
+      signal: AbortSignal.timeout(48_000),
+      redirect: "error",
       cache: "no-store",
     });
-  } catch {
-    return Response.json(
-      { error: "Garmin sign-in could not reach the authentication service." },
-      { status: 502 },
-    );
-  }
-
-  const serviceData = await response.json().catch(() => null) as unknown;
-  if (!response.ok) {
-    const code = typeof serviceData === "object" && serviceData !== null && "code" in serviceData
-      ? serviceData.code
-      : null;
-    const safe = safeServiceError(response.status, code);
-    return Response.json({ error: safe.message }, { status: safe.status });
-  }
-  const result = serviceSuccess.safeParse(serviceData);
-  if (!result.success) {
-    return Response.json({ error: "Garmin returned an invalid sign-in response." }, { status: 502 });
-  }
-  if (result.data.status === "mfa_required") {
-    return Response.json({
-      status: result.data.status,
-      state: result.data.state,
-      ...(result.data.errorCode === "MFA_INVALID"
-        ? { error: "That verification code was not accepted. Try a new code." }
-        : {}),
-    });
-  }
-  if (!isGarminDiToken(result.data.token)) {
-    return Response.json({ error: "Garmin returned an invalid session." }, { status: 502 });
-  }
-
-  try {
-    const saved = await completeGarminAuthSession(body.sessionId, body.secret, result.data.token);
-    if (!saved) {
-      return Response.json({ error: "Garmin sign-in expired. Start again." }, { status: 409 });
+    const data = await response.json().catch(() => null) as unknown;
+    if (!response.ok) {
+      const code = typeof data === "object" && data !== null && "code" in data ? data.code : null;
+      if (!await settleGarminAuth(owner, claim.attemptId)) return expired();
+      return serviceError(code);
     }
-  } catch {
-    return Response.json({ error: "Could not save the Garmin connection." }, { status: 502 });
+    const result = serviceSuccess.parse(data);
+    if (result.status === "mfa_required") {
+      if (!await settleGarminAuth(owner, claim.attemptId, result.state)) return expired();
+      const error = result.errorCode === "MFA_INVALID"
+        ? "That verification code was not accepted. Try a new code."
+        : result.errorCode === "MFA_RATE_LIMITED"
+          ? "Garmin is limiting attempts. Wait a few minutes and try again."
+          : undefined;
+      return reply({ status: result.status, state: result.state, error });
+    }
+    return await completeGarminAuthSession(owner, result.token, claim.attemptId)
+      ? reply({ status: "connected" })
+      : expired();
+  } catch (error) {
+    await settleGarminAuth(owner, claim.attemptId).catch(() => false);
+    return serviceError(error instanceof DOMException && error.name === "TimeoutError" ? "AUTH_TIMEOUT" : null);
   }
-  return Response.json({ status: "connected" });
 }

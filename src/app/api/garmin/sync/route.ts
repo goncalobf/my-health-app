@@ -1,90 +1,95 @@
-import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { garminConnections, garminPendingImports, garminDailyMetrics } from "@/db/schema";
+import { garminConnections, garminDailyMetrics, garminOperationState, garminPendingImports } from "@/db/schema";
 import { requireAppUser } from "@/lib/app-user";
+import { garminDenied, garminPrivateHeaders, isGarminBrowserRequest } from "@/lib/garmin-browser-request";
+import { createGarminClient, GarminAuthenticationFailed, isGarminToken, type GarminToken } from "@/lib/garmin-client";
 import { decrypt, encrypt } from "@/lib/garmin-crypto";
-import {
-  fetchWithToken,
-  fetchDailyMetricsWithToken,
-  isGarminToken,
-  type GarminToken,
-} from "@/lib/garmin-client";
-import { isRateLimited } from "@/lib/rate-limit";
+import { clearGarminSync, GarminSyncSuperseded, takeGarminAttempt, withGarminAccount, withGarminSync } from "@/lib/garmin-operations";
+import { todayISO } from "@/lib/utils";
 
-export async function POST() {
-  const user = await requireAppUser();
-  if (isRateLimited(`garmin-sync:${user.id}`, { max: 6, windowMs: 60 * 60 * 1000 })) {
-    return NextResponse.json({ error: "Too many sync requests. Try again later." }, { status: 429 });
-  }
+export const maxDuration = 60;
 
-  const [connection] = await db
-    .select({ encryptedData: garminConnections.encryptedData })
-    .from(garminConnections)
-    .where(eq(garminConnections.userId, user.id));
+function reply(data: object, status = 200) {
+  return Response.json(data, { status, headers: garminPrivateHeaders });
+}
 
-  if (!connection) {
-    return NextResponse.json({ error: "No Garmin account connected" }, { status: 400 });
-  }
-
-  let token: GarminToken;
-  try {
-    const parsed = JSON.parse(decrypt(connection.encryptedData)) as unknown;
-    if (!isGarminToken(parsed)) throw new Error("invalid token");
-    token = parsed;
-  } catch {
-    return NextResponse.json({ error: "Garmin connection is invalid. Disconnect and reconnect your account." }, { status: 502 });
-  }
-
-  let activities;
-  try {
-    const result = await fetchWithToken(token, 20);
-    activities = result.activities;
-    token = result.updatedToken; // may have been refreshed
-  } catch {
-    return NextResponse.json({ error: "Garmin sync failed — reconnect your Garmin account and try again." }, { status: 502 });
-  }
-
-  let imported = 0;
-  for (const activity of activities) {
-    const garminActivityId = String(activity.activityId);
-    try {
-      const inserted = await db
-        .insert(garminPendingImports)
-        .values({
-          userId: user.id,
-          garminActivityId,
-          garminActivityType: activity.activityType?.typeKey ?? "other",
-          garminDataJson: JSON.stringify(activity),
-        })
-        .onConflictDoNothing()
-        .returning({ id: garminPendingImports.id });
-      if (inserted.length > 0) imported++;
-    } catch {
-      // Skip duplicate or malformed entries
+export async function POST(req: Request) {
+  if (!isGarminBrowserRequest(req)) return garminDenied();
+  const { id: userId } = await requireAppUser();
+  const lease = randomUUID();
+  const started = await withGarminAccount(userId, async (tx, state) => {
+    if (state.syncLease && state.syncExpiresAt && state.syncExpiresAt.getTime() > Date.now()) {
+      return { status: "busy" } as const;
     }
-  }
+    const [connection] = await tx.select({ encryptedData: garminConnections.encryptedData })
+      .from(garminConnections).where(eq(garminConnections.userId, userId));
+    if (!connection) return { status: "disconnected" } as const;
+    if (!await takeGarminAttempt(tx, state, "sync")) return { status: "limited" } as const;
+    await tx.update(garminOperationState)
+      .set({ syncLease: lease, syncExpiresAt: new Date(Date.now() + 60_000) })
+      .where(eq(garminOperationState.userId, userId));
+    return { status: "started", encryptedData: connection.encryptedData } as const;
+  }).catch(() => null);
+  if (!started) return reply({ error: "Could not start Garmin sync. Try again shortly." }, 503);
+  if (started.status === "busy") return reply({ error: "A Garmin sync is already running." }, 409);
+  if (started.status === "disconnected") return reply({ error: "No Garmin account connected." }, 400);
+  if (started.status === "limited") return reply({ error: "Too many sync requests. Try again later." }, 429);
 
-  // Pull today's health metrics. Best-effort — never blocks the sync response.
-  const today = new Date();
+  const connection = eq(garminConnections.userId, userId);
   try {
-    const { metrics, updatedToken } = await fetchDailyMetricsWithToken(token, today);
-    token = updatedToken;
-    const dateStr = today.toISOString().slice(0, 10);
-    await db
-      .insert(garminDailyMetrics)
-      .values({ userId: user.id, date: dateStr, ...metrics })
-      .onConflictDoUpdate({
-        target: [garminDailyMetrics.userId, garminDailyMetrics.date],
-        set: { ...metrics, syncedAt: new Date() },
-      });
-  } catch { /* optional metrics */ }
-
-  // Persist the (possibly refreshed) token back to DB.
-  await db
-    .update(garminConnections)
-    .set({ encryptedData: encrypt(JSON.stringify(token)), lastSyncedAt: new Date() })
-    .where(eq(garminConnections.userId, user.id));
-
-  return NextResponse.json({ synced: activities.length, imported });
+    const day = todayISO();
+    let token: GarminToken;
+    try {
+      const parsed: unknown = JSON.parse(decrypt(started.encryptedData));
+      if (!isGarminToken(parsed)) throw new Error("Invalid token shape");
+      token = parsed;
+    } catch {
+      throw new GarminAuthenticationFailed();
+    }
+    const garmin = createGarminClient(token, {
+      signal: AbortSignal.timeout(42_000),
+      onRefresh: async (updated) => {
+        const encryptedData = encrypt(JSON.stringify(updated));
+        await withGarminSync(userId, lease, async (tx) => {
+          await tx.update(garminConnections).set({ encryptedData }).where(connection);
+        });
+      },
+    });
+    const activities = await garmin.activities();
+    const metrics = await garmin.dailyMetrics(day, AbortSignal.timeout(12_000));
+    const imported = await withGarminSync(userId, lease, async (tx) => {
+      const inserted = activities.length ? await tx.insert(garminPendingImports)
+        .values(activities.map((activity) => ({
+          userId,
+          garminActivityId: String(activity.activityId),
+          garminActivityType: activity.activityType.typeKey,
+          garminDataJson: JSON.stringify(activity),
+        })))
+        .onConflictDoNothing({ target: [garminPendingImports.userId, garminPendingImports.garminActivityId] })
+        .returning({ id: garminPendingImports.id }) : [];
+      const syncedAt = new Date();
+      if (Object.keys(metrics).length) {
+        await tx.insert(garminDailyMetrics).values({ userId, date: day, ...metrics, syncedAt })
+          .onConflictDoUpdate({
+            target: [garminDailyMetrics.userId, garminDailyMetrics.date],
+            set: { ...metrics, syncedAt },
+          });
+      }
+      await tx.update(garminConnections).set({ lastSyncedAt: syncedAt }).where(connection);
+      await clearGarminSync(tx, userId);
+      return inserted.length;
+    });
+    return reply({ synced: activities.length, imported });
+  } catch (error) {
+    await withGarminSync(userId, lease, (tx) => clearGarminSync(tx, userId)).catch(() => {});
+    if (error instanceof GarminSyncSuperseded
+      || (error instanceof Error && error.cause instanceof GarminSyncSuperseded)) {
+      return reply({ error: "The Garmin connection changed during sync. Try again." }, 409);
+    }
+    if (error instanceof GarminAuthenticationFailed) {
+      return reply({ error: "Garmin rejected this connection. Reconnect your Garmin account and try again." }, 502);
+    }
+    return reply({ error: "Garmin sync failed. Try again shortly." }, 502);
+  }
 }

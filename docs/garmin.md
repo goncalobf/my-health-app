@@ -1,111 +1,98 @@
 # Garmin integration
 
-Fitlog connects to Garmin Connect through the community `garminconnect`
-Python package and undocumented Garmin Connect endpoints. This is not Garmin's
-official Health API. Treat authentication behavior, response shapes, and
-availability as unstable external dependencies.
+Fitlog uses the community `garminconnect` Python package and undocumented
+Garmin Connect endpoints outside the official Health API. Endpoint behavior and availability can change
+independently of Fitlog.
 
-## Runtime boundaries
+## Runtime and deployment
 
-- The authenticated Next.js app owns Fitlog user identity, one-time auth
-  sessions, encrypted token storage, sync, staging, and imports.
-- `api/garmin_auth.py` is a Vercel Python function used only for the credential
-  and MFA exchange that the maintained Python client supports.
-- `src/lib/garmin-client.ts` performs read-only sync with Garmin's DI Bearer
-  tokens and auto-refreshes them. It retains legacy OAuth support so an old
-  connection can continue to sync until it is reconnected.
-- `workers/garmin-auth/` and `scripts/garmin-auth.mjs` are legacy fallbacks.
-  They are not the normal browser flow and use the older OAuth token format.
-
-Required configuration:
+The Next.js app owns the Fitlog user identity, handshakes, encrypted
+connections, and read-only data sync. The Vercel Python function
+`api/garmin_auth.py` exchanges Garmin credentials and MFA codes for DI tokens.
+The local script and retired Worker remain compatibility paths for legacy
+OAuth tokens.
 
 | Variable | Scope | Purpose |
 | --- | --- | --- |
-| `GARMIN_ENCRYPTION_KEY` | Vercel server and Python function | Exactly 32 bytes encoded as 64 hexadecimal characters; encrypts stored tokens and MFA state and derives the internal HMAC signature |
-| `GARMIN_AUTH_SERVICE_URL` | Optional Next.js server override | Explicit Python function URL for a non-Vercel development environment; HTTPS is mandatory except for localhost |
+| `GARMIN_ENCRYPTION_KEY` | Next.js and Python | Exactly 64 hexadecimal characters. Both runtimes require the same key. It protects tokens and MFA state and derives the internal signing key. |
+| `DATABASE_URL` (or `POSTGRES_URL`) | Next.js and Python | Postgres URL for transactions and durable request deduplication. Both runtimes must use the same database. |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | Next.js, Vercel system variable | Enables the internal call to a protected deployment URL. |
+| `GARMIN_AUTH_SERVICE_URL` | Optional Next.js override | Trusted absolute URL ending in `/api/garmin_auth`, with HTTPS except for localhost outside Vercel. Next.js refuses redirects. |
 
-Vercel supplies `VERCEL_URL`, so production and preview deployments call their
-own `/api/garmin_auth` function without another URL variable. Rotating
-`GARMIN_ENCRYPTION_KEY` invalidates stored tokens and in-progress MFA states
-unless records are re-encrypted first. The safe fallback is to disconnect and
-require users to authenticate again.
+Apply [migration 0029](../drizzle/0029_garmin_operation_guards.sql) before
+deploying this version. It preserves the encrypted connections and adds
+handshake fields, per-account operation state, and request nonces. A Garmin
+sign-in begun before rollout must be restarted because older handshakes did
+not record how they were created.
+Rotating the encryption key requires re-encrypting stored connections or asking
+users to connect again.
 
-## Authentication and MFA flow
+When Vercel supplies both `VERCEL_URL` and the automation bypass, Next.js calls
+the Python function on the same deployment. It sends the bypass header only to
+that exact deployment origin. Production otherwise uses `https://fitlog.site`.
+Preview uses its generated URL and requires the bypass if protected. The
+browser calls only the authenticated Next.js routes.
+[Vercel Python runtime](https://vercel.com/docs/functions/runtimes/python) ·
+[Vercel automation bypass](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation)
 
-1. An authenticated Fitlog user creates a ten-minute row through
-   `/api/garmin/auth-session`. It contains a random session ID, random one-time
-   secret, initiating `user_id`, status, and expiry.
-2. The browser sends the Garmin email/password and handshake to the
-   authenticated `/api/garmin/auth` route. Credentials never go directly to a
-   public third-party origin.
-3. The Next.js route proves that the pending handshake belongs to the current
-   Fitlog user. It sends a fresh HMAC-signed server-to-server request to the
-   Python function with a finite timeout.
-4. The Python function uses the credentials once. If Garmin requires MFA, it
-   returns only an opaque AES-256-GCM state containing the pending Garmin
-   cookies, Fitlog session ID, and expiry. The password is not included.
-5. The browser submits the Garmin verification code, opaque state, and same
-   handshake to `/api/garmin/auth`. The Next.js route rechecks ownership before
-   the Python function resumes the Garmin login.
-6. The Python function returns DI access/refresh tokens only to the signed
-   server caller. Next.js atomically consumes the one-time Fitlog session and
-   stores the token for that session's user as AES-256-GCM ciphertext.
+## Authentication and MFA
 
-Security invariants:
+1. The browser starts a ten-minute handshake with
+   `POST /api/garmin/auth-session` and `{"purpose":"browser"}`. Starting a
+   new handshake invalidates the previous attempt for that Fitlog user.
+2. `POST /api/garmin/auth` binds the request to the current user, handshake
+   secret, and expected phase. Browser mutations require a trusted origin.
+   The database stores a digest of the handshake secret. Only one request
+   can claim a phase at a time.
+3. Next.js signs the HTTP method, path, timestamp, nonce, and exact request
+   body. Python checks the signature and atomically claims the nonce in
+   Postgres before contacting Garmin. Each account has durable attempt limits.
+4. The Python client uses the submitted credentials for the exchange. If
+   Garmin asks for a code, Python encrypts the pending cookies and binds the
+   result to the handshake ID. A rejected code can update those cookies while
+   retaining the original expiry. A newer challenge replaces the old challenge.
+5. After Garmin authenticates, one database transaction consumes the
+   handshake and stores the encrypted connection. The browser gets the result
+   of the connection, without its token. Verification expiry or a replaced
+   handshake requires a new sign-in.
 
-- Never persist, log, echo, or put Garmin email/password or MFA codes in error
-  text. The Python handler disables its default HTTP request log.
-- `/api/garmin_auth` has no browser session, but accepts only a fresh HMAC over
-  the exact request body. The signing key stays server-only.
-- MFA state is encrypted, expires after ten minutes, and is cryptographically
-  bound to the initiating session ID. Completion still requires the random
-  Fitlog session secret and current Fitlog user.
-- Consume a successful handshake atomically and reject reuse or expiry.
-- Never return Garmin token plaintext or database ciphertext to the browser.
-- Provider errors are mapped to stable Fitlog messages; response bodies and
-  tokens do not enter logs.
+`DELETE /api/garmin/auth-session/:id` cancels the current user's browser
+handshake. Disconnect also invalidates any pending handshake and sync lease.
+Passwords and MFA codes are transient inputs. Error responses and logs must
+keep provider diagnostics, credentials, cookies, and tokens private.
 
-The legacy `/api/garmin/auth-callback` remains available only for the local
-script/retired Worker. It uses the same one-time session completion helper, so
-replay and cross-account completion remain rejected.
+The legacy `/api/garmin/auth-callback` accepts only legacy handshakes. Older
+clients can create them with an empty POST body. New legacy callers can use
+`{"purpose":"legacy"}`. The callback consumes the expiring secret once. A
+user can also submit a legacy token through the authenticated manual endpoint.
 
 ## Sync and import
 
-`POST /api/garmin/sync` decrypts the current user's token, loads recent
-activities and today's optional health metrics, persists any refreshed token,
-and updates `last_synced_at`.
+`POST /api/garmin/sync` grants one sync lease to the current Fitlog user. The
+lease is checked before each database write, so a superseded connection cannot
+store a token, health metrics, or staged activities. DI renewals and legacy
+OAuth exchanges persist the new credentials before subsequent Garmin requests.
 
-- Current connections use DI Bearer auth and refresh through Garmin's DI OAuth2
-  endpoint. Pre-migration `{oauth1, oauth2}` records still use the legacy Node
-  client.
-- Every undocumented activity value is normalized and bounded before staging.
-  Malformed activities are discarded.
-- Strength activities are filtered out because Fitlog records resistance
-  workouts through its guided session model.
-- Non-strength activities are staged in `garmin_pending_imports` with a
-  per-user activity-ID uniqueness key. The imported count includes only rows
-  actually inserted, not duplicates.
-- The user labels a staged activity before it becomes an `activity_session`.
-- Daily metrics include resting heart rate, HRV values, sleep duration/score,
-  active/total calories, and steps when Garmin supplies them.
-- Optional metric failures do not invalidate an otherwise successful activity
-  sync. Authentication/activity failures do.
-- Disconnect deletes only the encrypted connection. Previously imported
-  Fitlog sessions remain.
+- Recent activities are normalized and bounded. Strength activities stay out
+  of the import queue because Fitlog records them in guided sessions.
+- Each activity is staged once per user. The response counts newly staged
+  rows. The user labels a staged activity before it becomes an
+  `activity_session`.
+- The metric date follows Fitlog's configured timezone. Available fields are
+  updated independently, preserving existing values when Garmin omits fields.
+- Optional metric outages allow activity sync to finish. Rejected credentials,
+  token persistence failures, and activity write failures return a failure.
+- Disconnect removes the encrypted connection and preserves imported sessions.
 
-All connection, handshake, metric, staging, and activity operations stay
-scoped to the current Fitlog `user_id`. Coach data receives normalized
-health/activity aggregates, never credentials or token material.
+## Local verification
 
-## Development and verification
+Install the pinned requirements with Python 3.12 or 3.13. The Next.js dev
+server does not serve the Vercel Python function. Use a local mock or an
+explicitly configured local function URL. Fixtures must use synthetic accounts
+and avoid live Garmin calls.
 
-Python dependencies are pinned in `requirements.txt`; Vercel builds
-`api/garmin_auth.py` as a Python function. `vercel.json` gives the login enough
-time for Garmin's multi-strategy SSO flow. Local `next dev` does not execute
-Vercel Python functions, so use mocks for route/unit tests or an explicitly
-configured local function URL.
-
-Tests must mock Garmin. Never run automated tests against a real Garmin account.
-Cover malformed/partial fields, token refresh, MFA expiry/invalid codes,
-duplicate activities, optional-metric failure, handshake expiry/reuse, and
-cross-account IDs. Production deployment is a separate authorized action.
+Run `npm test` with Node.js 22.15 or later and
+`PYTHONPATH=api python -m unittest discover -s tests`. With the local app
+running, run `node scripts/test-garmin-ui-local.mjs` for the mobile MFA flow.
+Set `GARMIN_TEST_DATABASE_URL` to a disposable local Postgres database with all
+migrations applied to include the concurrent handshake, lease and nonce tests.

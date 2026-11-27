@@ -2,6 +2,7 @@ import "server-only";
 import {
   boundedText,
   isGarminDiToken,
+  isGarminLegacyToken,
   isRecord,
   isStrengthActivity,
   normalizeGarminActivity,
@@ -25,11 +26,11 @@ export type {
 } from "@/lib/garmin-data";
 // Kept for users who connected before the DI-token migration.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { GarminConnect } = require("garmin-connect");
+const { GarminConnect } = require("garmin-connect") as typeof import("garmin-connect");
 
 const CONNECT_API = "https://connectapi.garmin.com";
 const DI_TOKEN_URL = "https://diauth.garmin.com/di-oauth2-service/oauth/token";
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 8_000;
 
 const NATIVE_HEADERS = {
   "User-Agent": "GCM-Android-5.23",
@@ -61,22 +62,47 @@ function boundedInteger(value: unknown, min: number, max: number): number | null
   return Math.round(value);
 }
 
-function emptyMetrics(): GarminDailyMetricsRaw {
-  return {
-    restingHrBpm: null,
-    hrvScore: null,
-    hrvBalanceScore: null,
-    sleepDurationSeconds: null,
-    sleepScoreValue: null,
-    caloriesActive: null,
-    caloriesTotal: null,
-    steps: null,
-  };
+export class GarminAuthenticationFailed extends Error {}
+export class GarminRefreshPersistenceFailed extends Error {}
+
+interface GarminClientOptions {
+  signal: AbortSignal;
+  onRefresh?: (token: GarminToken) => Promise<void>;
+  fetch?: typeof fetch;
 }
 
-function legacyClientFromToken(token: GarminLegacyToken) {
-  const gc = new GarminConnect({});
-  gc.loadToken(token.oauth1, token.oauth2);
+type LegacyClient = InstanceType<typeof GarminConnect>;
+
+function requestSignal(signal: AbortSignal) {
+  return AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]);
+}
+
+function legacyClientFromToken(
+  token: GarminLegacyToken, getSignal: () => AbortSignal, fetcher: typeof fetch,
+): LegacyClient {
+  const gc = new GarminConnect({ username: "", password: "" });
+  // The SDK's default 401 interceptor queues refreshes globally and can
+  // retry another client's request with this client's bearer token.
+  gc.client.client.interceptors.response.clear();
+  gc.client.client.interceptors.request.use((config) => {
+    config.signal = getSignal();
+    config.timeout = REQUEST_TIMEOUT_MS;
+    config.maxRedirects = 0;
+    return config;
+  });
+  gc.client.fetchOauthConsumer = async () => {
+    const response = await fetcher("https://thegarth.s3.amazonaws.com/oauth_consumer.json", {
+      signal: getSignal(), redirect: "error", cache: "no-store",
+    });
+    if (!response.ok) throw new Error("Garmin OAuth consumer unavailable");
+    const data: unknown = await response.json();
+    if (!isRecord(data) || typeof data.consumer_key !== "string" || typeof data.consumer_secret !== "string") {
+      throw new Error("Garmin OAuth consumer response invalid");
+    }
+    gc.client.OAUTH_CONSUMER = { key: data.consumer_key, secret: data.consumer_secret };
+  };
+  // The SDK's refresh uses OAuth1; only the access token is needed for data requests.
+  gc.loadToken(token.oauth1, token.oauth2 as Parameters<LegacyClient["loadToken"]>[1]);
   return gc;
 }
 
@@ -107,13 +133,13 @@ function tokenClientId(accessToken: string): string | null {
   }
 }
 
-async function refreshDiToken(token: GarminDiToken): Promise<GarminDiToken> {
+async function refreshDiToken(token: GarminDiToken, signal: AbortSignal, fetcher: typeof fetch): Promise<GarminDiToken> {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     client_id: token.clientId,
     refresh_token: token.refreshToken,
   });
-  const response = await fetch(DI_TOKEN_URL, {
+  const response = await fetcher(DI_TOKEN_URL, {
     method: "POST",
     headers: {
       ...NATIVE_HEADERS,
@@ -123,197 +149,162 @@ async function refreshDiToken(token: GarminDiToken): Promise<GarminDiToken> {
       "Cache-Control": "no-cache",
     },
     body,
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: requestSignal(signal),
+    redirect: "error",
     cache: "no-store",
   });
+  if ([400, 401, 403].includes(response.status)) throw new GarminAuthenticationFailed("Garmin rejected the refresh token");
   if (!response.ok) throw new Error("Garmin token refresh failed");
   const data = await response.json().catch(() => null) as unknown;
-  if (!isRecord(data) || typeof data.access_token !== "string") {
-    throw new Error("Garmin token refresh returned an invalid response");
-  }
-  return {
+  const next = isRecord(data) && typeof data.access_token === "string" ? {
     kind: "di",
     accessToken: data.access_token,
-    refreshToken: typeof data.refresh_token === "string" ? data.refresh_token : token.refreshToken,
+    refreshToken: data.refresh_token === undefined ? token.refreshToken : data.refresh_token,
     clientId: tokenClientId(data.access_token) ?? token.clientId,
-  };
+  } : null;
+  if (!isGarminDiToken(next)) throw new Error("Garmin token refresh returned an invalid response");
+  return next;
 }
 
-async function diRequest(
-  originalToken: GarminDiToken,
-  path: string,
-  params?: Record<string, string>,
-): Promise<{ data: unknown; token: GarminDiToken }> {
-  let token = tokenExpiresSoon(originalToken.accessToken)
-    ? await refreshDiToken(originalToken)
-    : originalToken;
+export function createGarminClient(original: GarminToken, options: GarminClientOptions) {
+  let token = original;
+  let signal = options.signal;
+  let refreshed = false;
+  const fetcher = options.fetch ?? fetch;
+  const gc = isGarminDiToken(original) ? null : legacyClientFromToken(original, () => requestSignal(signal), fetcher);
 
-  const request = async () => {
+  async function refresh() {
+    if (isGarminDiToken(token)) {
+      token = await refreshDiToken(token, signal, fetcher);
+    } else if (gc) {
+      try {
+        await gc.client.refreshOauth2Token();
+      } catch (error) {
+        if ([400, 401, 403].includes(responseStatus(error))) throw new GarminAuthenticationFailed("Garmin rejected the legacy token");
+        throw error;
+      }
+      const next = gc.exportToken();
+      if (!isGarminLegacyToken(next)) throw new Error("Garmin did not renew the legacy token");
+      token = next;
+    }
+    refreshed = true;
+    // Garmin may rotate credentials. Commit them before any follow-up request.
+    try {
+      await options.onRefresh?.(token);
+    } catch (error) {
+      throw new GarminRefreshPersistenceFailed("Could not persist renewed Garmin credentials", { cause: error });
+    }
+  }
+
+  async function request(path: string, params?: Record<string, string>) {
+    signal.throwIfAborted();
+    if (!refreshed && isGarminDiToken(token) && tokenExpiresSoon(token.accessToken)) await refresh();
     const url = new URL(path, CONNECT_API);
     for (const [key, value] of Object.entries(params ?? {})) url.searchParams.set(key, value);
-    return fetch(url, {
-      headers: {
-        ...NATIVE_HEADERS,
-        Authorization: `Bearer ${token.accessToken}`,
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      cache: "no-store",
-    });
+
+    const send = async (): Promise<unknown> => {
+      if (gc) return gc.client.get(url.toString());
+      if (!isGarminDiToken(token)) throw new GarminAuthenticationFailed();
+      const response = await fetcher(url, {
+        headers: { ...NATIVE_HEADERS, Authorization: `Bearer ${token.accessToken}`, Accept: "application/json" },
+        signal: requestSignal(signal), cache: "no-store", redirect: "error",
+      });
+      if ([401, 403].includes(response.status)) throw new GarminAuthenticationFailed();
+      if (!response.ok) throw new Error(`Garmin API request failed (${response.status})`);
+      return response.json();
+    };
+    try {
+      return await send();
+    } catch (error) {
+      if (!isRejected(error)) throw error;
+      if (refreshed) throw new GarminAuthenticationFailed();
+    }
+    await refresh();
+    try {
+      return await send();
+    } catch (error) {
+      if (isRejected(error)) throw new GarminAuthenticationFailed();
+      throw error;
+    }
+  }
+
+  return {
+    get token() { return token; },
+    async activities(limit = 20) {
+      const size = Math.min(Math.max(Math.trunc(limit), 1), 100);
+      const raw = await request("/activitylist-service/activities/search/activities", {
+        start: "0", limit: String(size),
+      });
+      if (!Array.isArray(raw)) throw new Error("Invalid Garmin activities response");
+      const normalized = raw.slice(0, size).map(normalizeGarminActivity);
+      if (raw.length && normalized.every((value) => value === null)) throw new Error("Invalid Garmin activities");
+      const cardio = new Map<number, GarminActivity>();
+      for (const activity of normalized) {
+        if (activity && !isStrengthActivity(activity.activityType.typeKey) && !cardio.has(activity.activityId)) {
+          cardio.set(activity.activityId, activity);
+        }
+      }
+      return [...cardio.values()];
+    },
+    async dailyMetrics(date: string, budget: AbortSignal) {
+      signal = AbortSignal.any([options.signal, budget]);
+      try {
+        return await dailyMetrics(request, date);
+      } finally {
+        signal = options.signal;
+      }
+    },
   };
+}
 
-  let response = await request();
-  if (response.status === 401) {
-    token = await refreshDiToken(token);
-    response = await request();
+function responseStatus(error: unknown) {
+  return isRecord(error) && isRecord(error.response) ? Number(error.response.status) : 0;
+}
+
+function isRejected(error: unknown) {
+  return error instanceof GarminAuthenticationFailed || [401, 403].includes(responseStatus(error));
+}
+
+async function dailyMetrics(
+  request: (path: string, params?: Record<string, string>) => Promise<unknown>, date: string,
+): Promise<Partial<GarminDailyMetricsRaw>> {
+  const metrics: Partial<GarminDailyMetricsRaw> = {};
+  function record(key: keyof GarminDailyMetricsRaw, value: unknown, min: number, max: number) {
+    const integer = boundedInteger(value, min, max);
+    if (integer !== null) metrics[key] = integer;
   }
-  if (!response.ok) throw new Error(`Garmin API request failed (${response.status})`);
-  return { data: await response.json(), token };
-}
-
-export async function fetchWithToken(
-  token: GarminToken,
-  limit = 20,
-): Promise<{ activities: GarminActivity[]; updatedToken: GarminToken }> {
-  const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
-  if (isGarminDiToken(token)) {
-    const result = await diRequest(token, "/activitylist-service/activities/search/activities", {
-      start: "0",
-      limit: String(safeLimit),
-    });
-    const activities = Array.isArray(result.data)
-      ? result.data
-          .map(normalizeGarminActivity)
-          .filter((activity): activity is GarminActivity => activity !== null)
-          .filter((activity) => !isStrengthActivity(activity.activityType.typeKey))
-      : [];
-    return { activities, updatedToken: result.token };
+  async function optional(path: string, params?: Record<string, string>) {
+    try {
+      const data = await request(path, params);
+      return isRecord(data) ? data : null;
+    } catch (error) {
+      if (error instanceof GarminAuthenticationFailed) throw error;
+      // Persistence of a rotated token is mandatory even on optional endpoints.
+      if (error instanceof GarminRefreshPersistenceFailed) throw error;
+      return null;
+    }
   }
 
-  const gc = legacyClientFromToken(token);
-  const raw = await gc.getActivities(0, safeLimit) as unknown;
-  const activities = Array.isArray(raw)
-    ? raw
-        .map(normalizeGarminActivity)
-        .filter((activity): activity is GarminActivity => activity !== null)
-        .filter((activity) => !isStrengthActivity(activity.activityType.typeKey))
-    : [];
-  return { activities, updatedToken: gc.exportToken() as GarminLegacyToken };
-}
-
-async function fetchDiDailyMetrics(
-  token: GarminDiToken,
-  dateStr: string,
-): Promise<{ metrics: GarminDailyMetricsRaw; updatedToken: GarminDiToken }> {
-  const metrics = emptyMetrics();
-  let currentToken = token;
-  const profileResult = await diRequest(currentToken, "/userprofile-service/socialProfile");
-  currentToken = profileResult.token;
-  const profile = isRecord(profileResult.data) ? profileResult.data : null;
-  const displayName = boundedText(profile?.displayName, 200);
-  if (!displayName) throw new Error("Garmin profile has no display name");
-  const encodedName = encodeURIComponent(displayName);
-
-  try {
-    const result = await diRequest(
-      currentToken,
-      `/wellness-service/wellness/dailyHeartRate/${encodedName}`,
-      { date: dateStr },
-    );
-    currentToken = result.token;
-    const data = isRecord(result.data) ? result.data : null;
-    metrics.restingHrBpm = boundedInteger(data?.restingHeartRate, 20, 300);
-  } catch { /* optional metric */ }
-
-  try {
-    const result = await diRequest(
-      currentToken,
-      `/wellness-service/wellness/dailySleepData/${encodedName}`,
-      { date: dateStr, nonSleepBufferMinutes: "60" },
-    );
-    currentToken = result.token;
-    const data = isRecord(result.data) ? result.data : null;
-    const dto = isRecord(data?.dailySleepDTO) ? data.dailySleepDTO : null;
-    const scores = isRecord(dto?.sleepScores) ? dto.sleepScores : null;
-    const overall = isRecord(scores?.overall) ? scores.overall : null;
-    metrics.sleepDurationSeconds = boundedInteger(dto?.sleepTimeSeconds, 0, 60 * 60 * 36);
-    metrics.sleepScoreValue = boundedInteger(overall?.value, 0, 100);
-  } catch { /* optional metric */ }
-
-  try {
-    const result = await diRequest(currentToken, `/hrv-service/hrv/${dateStr}`);
-    currentToken = result.token;
-    const data = isRecord(result.data) ? result.data : null;
-    const summary = isRecord(data?.hrvSummary) ? data.hrvSummary : null;
-    metrics.hrvScore = boundedInteger(summary?.lastNight, 0, 1_000);
-    metrics.hrvBalanceScore = boundedInteger(summary?.lastNightAvg, 0, 1_000);
-  } catch { /* device may not support HRV */ }
-
-  try {
-    const result = await diRequest(
-      currentToken,
-      `/usersummary-service/usersummary/daily/${encodedName}`,
-      { calendarDate: dateStr },
-    );
-    currentToken = result.token;
-    const data = isRecord(result.data) ? result.data : null;
-    metrics.caloriesActive = boundedInteger(data?.activeKilocalories, 0, 50_000);
-    metrics.caloriesTotal = boundedInteger(data?.totalKilocalories, 0, 50_000);
-    metrics.steps = boundedInteger(data?.totalSteps, 0, 500_000);
-  } catch { /* optional metric */ }
-
-  return { metrics, updatedToken: currentToken };
-}
-
-export async function fetchDailyMetricsWithToken(
-  token: GarminToken,
-  date: Date,
-): Promise<{ metrics: GarminDailyMetricsRaw; updatedToken: GarminToken }> {
-  const dateStr = date.toISOString().slice(0, 10);
-  if (isGarminDiToken(token)) return fetchDiDailyMetrics(token, dateStr);
-
-  const gc = legacyClientFromToken(token);
-  const metrics = emptyMetrics();
-
-  try {
-    const hr = await gc.getHeartRate(date) as Record<string, unknown>;
-    metrics.restingHrBpm = boundedInteger(hr?.restingHeartRate, 20, 300);
-  } catch { /* optional */ }
-
-  try {
-    const sleep = await gc.getSleepData(date) as Record<string, unknown>;
+  const profile = await optional("/userprofile-service/socialProfile");
+  const name = boundedText(profile?.displayName, 200);
+  if (name && name !== "." && name !== "..") {
+    const encodedName = encodeURIComponent(name);
+    const hr = await optional(`/wellness-service/wellness/dailyHeartRate/${encodedName}`, { date });
+    record("restingHrBpm", hr?.restingHeartRate, 20, 300);
+    const sleep = await optional(`/wellness-service/wellness/dailySleepData/${encodedName}`, { date, nonSleepBufferMinutes: "60" });
     const dto = isRecord(sleep?.dailySleepDTO) ? sleep.dailySleepDTO : null;
     const scores = isRecord(dto?.sleepScores) ? dto.sleepScores : null;
     const overall = isRecord(scores?.overall) ? scores.overall : null;
-    metrics.sleepDurationSeconds = boundedInteger(dto?.sleepTimeSeconds, 0, 60 * 60 * 36);
-    metrics.sleepScoreValue = boundedInteger(overall?.value, 0, 100);
-  } catch { /* optional */ }
-
-  try {
-    const hrv = await gc.get(`${CONNECT_API}/hrv-service/hrv/${dateStr}`) as unknown;
-    const data = isRecord(hrv) ? hrv : null;
-    const summary = isRecord(data?.hrvSummary) ? data.hrvSummary : null;
-    metrics.hrvScore = boundedInteger(summary?.lastNight, 0, 1_000);
-    metrics.hrvBalanceScore = boundedInteger(summary?.lastNightAvg, 0, 1_000);
-  } catch { /* device may not support HRV */ }
-
-  try {
-    const cal = await gc.get(
-      `${CONNECT_API}/usersummary-service/usersummary/daily/${dateStr}`,
-    ) as Record<string, unknown>;
-    metrics.caloriesActive = boundedInteger(cal?.activeKilocalories, 0, 50_000);
-    metrics.caloriesTotal = boundedInteger(cal?.totalKilocalories, 0, 50_000);
-    metrics.steps = boundedInteger(cal?.totalSteps, 0, 500_000);
-  } catch { /* optional */ }
-
-  return { metrics, updatedToken: gc.exportToken() as GarminLegacyToken };
-}
-
-export async function validateToken(token: GarminToken): Promise<void> {
-  if (isGarminDiToken(token)) {
-    await diRequest(token, "/userprofile-service/socialProfile");
-    return;
+    record("sleepDurationSeconds", dto?.sleepTimeSeconds, 0, 36 * 3600);
+    record("sleepScoreValue", overall?.value, 0, 100);
+    const summary = await optional(`/usersummary-service/usersummary/daily/${encodedName}`, { calendarDate: date });
+    record("caloriesActive", summary?.activeKilocalories, 0, 50_000);
+    record("caloriesTotal", summary?.totalKilocalories, 0, 50_000);
+    record("steps", summary?.totalSteps, 0, 500_000);
   }
-  const gc = legacyClientFromToken(token);
-  await gc.getActivities(0, 1);
+  const hrv = await optional(`/hrv-service/hrv/${date}`);
+  const summary = isRecord(hrv?.hrvSummary) ? hrv.hrvSummary : null;
+  record("hrvScore", summary?.lastNight, 0, 1000);
+  record("hrvBalanceScore", summary?.lastNightAvg, 0, 1000);
+  return metrics;
 }

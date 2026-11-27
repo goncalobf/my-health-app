@@ -639,18 +639,33 @@ export type GarminConnection = typeof garminConnections.$inferSelect;
 export type GarminPendingImport = typeof garminPendingImports.$inferSelect;
 export type GarminDailyMetrics = typeof garminDailyMetrics.$inferSelect;
 
-// Short-lived (10 min) session that lets a local script POST a token back to the server.
-// The browser creates it, polls it; the script completes it from a non-datacenter IP.
+// Short-lived handshakes for browser sign-in and the legacy token fallbacks.
 export const garminAuthSessions = pgTable("garmin_auth_sessions", {
   id: text("id").primaryKey(),
   userId: integer("user_id")
     .notNull()
     .references(() => appUsers.id, { onDelete: "cascade" }),
   secret: text("secret").notNull(),
-  status: text("status").notNull().default("pending"), // 'pending' | 'done' | 'error'
+  status: text("status").notNull().default("pending"),
   errorMessage: text("error_message"),
+  purpose: text("purpose").notNull().default("unclassified"),
+  attemptId: uuid("attempt_id"),
+  challengeDigest: text("challenge_digest"),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type GarminAuthSession = typeof garminAuthSessions.$inferSelect;
+
+// Durable per-account Garmin rate limits and a fenced sync lease.
+export const garminOperationState = pgTable("garmin_operation_state", {
+  userId: integer("user_id").primaryKey().references(() => appUsers.id, { onDelete: "cascade" }),
+  syncLease: uuid("sync_lease"),
+  syncExpiresAt: timestamp("sync_expires_at"),
+  authRate: jsonb("auth_rate").$type<Partial<Record<"session" | "start" | "resume" | "sync", { count: number; resetAt: number }>>>().notNull().default({}),
+});
+
+export const garminRequestNonces = pgTable("garmin_request_nonces", {
+  nonce: uuid("nonce").primaryKey(),
+  expiresAt: timestamp("expires_at").notNull(),
+}, (table) => [index("garmin_request_nonces_expires_idx").on(table.expiresAt)]);

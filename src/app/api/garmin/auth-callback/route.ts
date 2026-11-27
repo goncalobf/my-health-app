@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { completeGarminAuthSession, failGarminAuthSession } from "@/lib/garmin-auth-session";
+import { garminPrivateHeaders } from "@/lib/garmin-browser-request";
+import { isGarminLegacyToken } from "@/lib/garmin-data";
+import { completeGarminAuthSession, failGarminAuthSession, findLegacyGarminSession } from "@/lib/garmin-auth-session";
 
 const handshake = z.object({
   sessionId: z.string().uuid(),
@@ -8,30 +10,23 @@ const handshake = z.object({
 const callback = z.union([
   handshake.extend({ error: z.string().min(1).max(500) }),
   handshake.extend({
-    token: z.object({
-      oauth1: z.record(z.unknown()),
-      oauth2: z.record(z.unknown()),
-    }),
+    token: z.custom(isGarminLegacyToken),
   }),
 ]);
 
 // Only the worker's one-time secret authorizes this browser-session-free route.
 export async function POST(req: Request) {
+  const headers = garminPrivateHeaders;
   const parsed = callback.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "Invalid Garmin callback." }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: "Invalid Garmin callback." }, { status: 400, headers });
   const body = parsed.data;
   try {
-    if ("error" in body) {
-      if (await failGarminAuthSession(body.sessionId, body.secret)) {
-        return Response.json({ ok: true });
-      }
-    } else {
-      if (await completeGarminAuthSession(body.sessionId, body.secret, body.token)) {
-        return Response.json({ ok: true });
-      }
+    const owner = await findLegacyGarminSession(body.sessionId, body.secret);
+    if (owner && await ("error" in body ? failGarminAuthSession(owner) : completeGarminAuthSession(owner, body.token))) {
+      return Response.json({ ok: true }, { headers });
     }
-    return Response.json({ error: "Session not found, already used, or expired." }, { status: 404 });
+    return Response.json({ error: "Session not found, already used, or expired." }, { status: 404, headers });
   } catch {
-    return Response.json({ error: "Could not save the Garmin connection." }, { status: 502 });
+    return Response.json({ error: "Could not save the Garmin connection." }, { status: 502, headers });
   }
 }

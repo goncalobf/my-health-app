@@ -204,6 +204,13 @@
       "when": 1795360518394,
       "tag": "0028_flowery_war_machine",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1795724230356,
+      "tag": "0029_garmin_operation_guards",
+      "breakpoints": true
     }
   ]
 }

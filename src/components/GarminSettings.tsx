@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Eye,
   EyeOff,
@@ -10,7 +10,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
-import { apiGet } from "@/lib/api";
+import { api } from "@/lib/api";
 
 interface ConnectionStatus {
   connected: boolean;
@@ -23,14 +23,20 @@ interface Handshake {
   secret: string;
 }
 
-type AuthPhase = "idle" | "mfa" | "done" | "error";
+type AuthPhase = "idle" | "mfa" | "error";
 type AuthResult = { status: "connected" } | {
   status: "mfa_required";
   state: string;
   error?: string;
 };
 
-const AUTH_TIMEOUT_MS = 90_000;
+const AUTH_TIMEOUT_MS = 65_000;
+
+class GarminSignInError extends Error {
+  constructor(message: string, readonly canRetryVerification: boolean) {
+    super(message);
+  }
+}
 
 function authErrorMessage(error: unknown) {
   if (error instanceof DOMException && error.name === "AbortError") {
@@ -55,7 +61,12 @@ async function authRequest(body: Record<string, string>): Promise<AuthResult> {
       state?: string;
       error?: string;
     };
-    if (!response.ok) throw new Error(result.error ?? "Garmin sign-in failed. Please try again.");
+    if (!response.ok) {
+      throw new GarminSignInError(
+        result.error ?? "Garmin sign-in failed. Please try again.",
+        response.status === 429 || response.status === 503,
+      );
+    }
     if (result.status === "mfa_required" && typeof result.state === "string") {
       return {
         status: "mfa_required",
@@ -84,21 +95,39 @@ export default function GarminSettings() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [syncError, setSyncError] = useState("");
+  const [statusError, setStatusError] = useState(false);
+  const statusRequest = useRef(0);
 
-  async function load() {
-    const nextStatus = await apiGet<ConnectionStatus>("/api/garmin/connect");
-    setStatus(nextStatus);
-  }
+  const load = useCallback(async () => {
+    const requestId = ++statusRequest.current;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
+    try {
+      const nextStatus = await api<ConnectionStatus>("/api/garmin/connect", { signal: controller.signal });
+      if (requestId !== statusRequest.current) return;
+      setStatus(nextStatus);
+      setStatusError(false);
+    } catch {
+      if (requestId === statusRequest.current) setStatusError(true);
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
-  async function finishConnection() {
-    setPhase("done");
-    setUsername("");
-    setPassword("");
+  function clearVerification() {
     setMfaCode("");
     setMfaState("");
     setHandshake(null);
+  }
+
+  async function finishConnection() {
+    setStatus({ connected: true, connectedAt: null, lastSyncedAt: null });
+    setPhase("idle");
+    setUsername("");
+    setPassword("");
+    clearVerification();
     await load();
   }
 
@@ -107,8 +136,15 @@ export default function GarminSettings() {
     setBusy(true);
     setAuthError("");
     try {
-      const sessionResponse = await fetch("/api/garmin/auth-session", { method: "POST" });
-      if (!sessionResponse.ok) throw new Error("Could not start the Garmin sign-in.");
+      const sessionResponse = await fetch("/api/garmin/auth-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purpose: "browser" }),
+      });
+      if (!sessionResponse.ok) {
+        const result = await sessionResponse.json().catch(() => ({}));
+        throw new Error(result.error ?? "Could not start the Garmin sign-in.");
+      }
       const session = await sessionResponse.json() as Handshake;
       setHandshake(session);
       const result = await authRequest({
@@ -129,6 +165,7 @@ export default function GarminSettings() {
       setPhase("error");
       setAuthError(authErrorMessage(error));
       setPassword("");
+      clearVerification();
     } finally {
       setBusy(false);
     }
@@ -154,27 +191,53 @@ export default function GarminSettings() {
       }
       await finishConnection();
     } catch (error: unknown) {
-      setPhase("mfa");
       setAuthError(authErrorMessage(error));
       setMfaCode("");
+      if (!(error instanceof GarminSignInError && error.canRetryVerification)) {
+        clearVerification();
+        setPhase("error");
+        // A transport failure can happen after the server saves the connection.
+        await load();
+      }
     } finally {
       setBusy(false);
     }
   }
 
-  function cancelMfa() {
-    setPhase("idle");
-    setHandshake(null);
-    setMfaState("");
-    setMfaCode("");
+  async function cancelMfa() {
+    if (!handshake || busy) return;
+    setBusy(true);
     setAuthError("");
+    try {
+      const response = await fetch(`/api/garmin/auth-session/${handshake.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error();
+      clearVerification();
+      setPhase("idle");
+      await load();
+    } catch {
+      setAuthError("Could not cancel the Garmin sign-in. Try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function disconnect() {
-    if (!confirm("Disconnect Garmin? Your imported activities will remain.")) return;
-    await fetch("/api/garmin/connect", { method: "DELETE" });
-    setStatus({ connected: false, connectedAt: null, lastSyncedAt: null });
-    setPhase("idle");
+    if (busy || syncing || !confirm("Disconnect Garmin? Your imported activities will remain.")) return;
+    setBusy(true);
+    setSyncError("");
+    try {
+      const response = await fetch("/api/garmin/connect", { method: "DELETE" });
+      if (!response.ok) throw new Error();
+      statusRequest.current++;
+      setStatus({ connected: false, connectedAt: null, lastSyncedAt: null });
+      setSyncResult(null);
+      setPhase("idle");
+      setStatusError(false);
+    } catch {
+      setSyncError("Could not disconnect Garmin. Try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function sync() {
@@ -188,7 +251,8 @@ export default function GarminSettings() {
         setSyncError(body.error ?? "Sync failed");
         return;
       }
-      setSyncResult(`${body.imported ?? 0} new activities imported`);
+      const count = body.imported ?? 0;
+      setSyncResult(count === 0 ? "No new Garmin activities." : `${count} new ${count === 1 ? "activity" : "activities"} ready to review.`);
       await load();
     } catch {
       setSyncError("Sync failed");
@@ -197,13 +261,19 @@ export default function GarminSettings() {
     }
   }
 
-  if (!status) return null;
+  if (!status && !statusError) return null;
 
   return (
     <div className="mt-6">
       <h2 className="text-sm font-semibold text-muted mb-2">Garmin Connect</h2>
       <div className="card p-4 flex flex-col gap-4">
-        {status.connected ? (
+        {statusError && (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted" role="status">
+            <span>Could not refresh Garmin connection details.</span>
+            <button type="button" onClick={load} disabled={busy || syncing} className="underline">Retry</button>
+          </div>
+        )}
+        {!status ? null : status.connected ? (
           <>
             <div className="flex items-center gap-3">
               <Link2 size={18} className="text-accent shrink-0" />
@@ -215,7 +285,7 @@ export default function GarminSettings() {
                   </p>
                 )}
               </div>
-              <button onClick={disconnect} className="btn-danger px-3 py-2 text-sm shrink-0">
+              <button onClick={disconnect} disabled={busy || syncing} className="btn-danger px-3 py-2 text-sm shrink-0">
                 <Link2Off size={14} /> Disconnect
               </button>
             </div>
@@ -227,12 +297,12 @@ export default function GarminSettings() {
               </p>
             </div>
 
-            <button onClick={sync} disabled={syncing} className="btn-ghost w-full">
+            <button onClick={sync} disabled={busy || syncing} className="btn-ghost w-full">
               <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
               {syncing ? "Syncing…" : "Sync now"}
             </button>
             {syncResult && <p className="text-xs text-accent text-center">{syncResult}</p>}
-            {syncError && <p className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{syncError}</p>}
+            {syncError && <p role="alert" className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{syncError}</p>}
           </>
         ) : phase === "mfa" ? (
           <>
@@ -265,7 +335,7 @@ export default function GarminSettings() {
             </label>
 
             {authError && (
-              <p className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{authError}</p>
+              <p role="alert" className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{authError}</p>
             )}
 
             <div className="grid grid-cols-2 gap-2">
@@ -332,7 +402,7 @@ export default function GarminSettings() {
             </div>
 
             {authError && (
-              <p className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{authError}</p>
+              <p role="alert" className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{authError}</p>
             )}
 
             <button
@@ -343,10 +413,6 @@ export default function GarminSettings() {
               {busy ? <RefreshCw size={16} className="animate-spin" /> : <Link2 size={16} />}
               {busy ? "Signing in…" : phase === "error" ? "Try again" : "Connect Garmin"}
             </button>
-
-            {phase === "done" && (
-              <p className="text-sm text-accent text-center font-medium">Connected!</p>
-            )}
           </>
         )}
       </div>
