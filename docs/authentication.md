@@ -89,9 +89,13 @@ account creation and even when authentication is temporarily misconfigured.
 Private route handlers must still call `requireAppUser()` close to the database
 operation; proxy checks are not the ownership boundary.
 
-The Garmin worker sends `POST /api/garmin/auth-callback` without a browser
-session. That exact method and path reach the callback handler, which verifies
-and consumes the initiating account's expiring one-time secret.
+The Garmin Python function receives `POST /api/garmin_auth` without a browser
+session. That exact method and path bypass Neon middleware, but the function
+accepts only a fresh request signed by the authenticated Next.js Garmin route
+and claims each signed nonce once in Postgres.
+The legacy Worker callback at `POST /api/garmin/auth-callback` remains exempt
+while the fallback exists; it still requires and consumes an initiating
+account's expiring one-time secret for a legacy Garmin handshake.
 
 ## Support email and DNS
 

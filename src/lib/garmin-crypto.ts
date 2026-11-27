@@ -5,7 +5,7 @@ const ALGO = "aes-256-gcm";
 const KEY_HEX = process.env.GARMIN_ENCRYPTION_KEY;
 
 function getKey(): Buffer {
-  if (!KEY_HEX || KEY_HEX.length < 64) {
+  if (!KEY_HEX || !/^[a-f0-9]{64}$/i.test(KEY_HEX)) {
     throw new Error("GARMIN_ENCRYPTION_KEY must be a 64-hex-char (32-byte) value");
   }
   return Buffer.from(KEY_HEX, "hex");
