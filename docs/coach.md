@@ -16,8 +16,11 @@ validates the response schema, and computes deterministic values in code.
 
 These endpoints use `structuredCoachResponse()` in `src/lib/openai.ts`:
 
-- `POST /api/coach/chat` — freeform Q&A. Includes the last 10 stored messages
-  as conversation history.
+- `POST /api/coach/chat` — open-ended conversation guided by the Markdown
+  playbook. Includes the last 10 messages as a compact transcript. It sends
+  past answers without suggestion buttons or memory metadata and places
+  the current question after the app context. Optional follow-ups come from
+  the Coach and users can edit them before sending.
 - `POST /api/coach/insights` — `daily` / `weekly` / `post_workout`. Cached per
   `sourceKey` (e.g. `daily:2026-08-31`) unless `refresh: true` is sent, so a
   page load never forces a new model call.
