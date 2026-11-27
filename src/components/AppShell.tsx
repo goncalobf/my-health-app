@@ -60,7 +60,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               ))}
             </nav>
           </aside>
-          <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 backdrop-blur-md safe-bottom min-[880px]:hidden" aria-label="Primary navigation">
+          <nav className="fixed inset-x-0 bottom-0 z-40 transform-gpu border-t border-border bg-surface safe-bottom min-[880px]:hidden" aria-label="Primary navigation">
             <div className="mx-auto grid max-w-xl grid-cols-5 px-1 py-1.5">
               {primary.map(({ href, label, icon: Icon }) => (
                 <Link
