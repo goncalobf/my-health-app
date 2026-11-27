@@ -1,4 +1,5 @@
 import type { CoachSnapshot } from "@/lib/coach-data";
+import { formatSleepDuration, summarizeGarminSleep, type GarminSleepDay } from "./garmin-sleep";
 import { loggedMobilityRoutine } from "./mobility";
 import { JIU_JITSU, type JiuJitsuEffort } from "./jiu-jitsu";
 import type { WorkoutDay } from "./workout-day";
@@ -34,6 +35,40 @@ function table(
   const divider = `| ${headers.map(() => "---").join(" | ")} |`;
   const body = rows.map((row) => `| ${row.map(cell).join(" | ")} |`).join("\n");
   return `${head}\n${divider}\n${body}`;
+}
+
+function garminSleepSummary(day: string, summary: ReturnType<typeof summarizeGarminSleep>) {
+  const latest = summary.nights[0];
+  if (!latest) return "No Garmin sleep recorded in the last seven days.";
+  const metrics = [
+    formatSleepDuration(latest.sleepDurationSeconds),
+    latest.sleepScoreValue !== null ? `sleep score ${latest.sleepScoreValue}/100` : null,
+  ].filter(Boolean).join(", ");
+  const recording = latest.date === day ? "Latest sleep recorded for today" : "Latest earlier sleep record";
+  return [
+    `- ${recording} (${latest.date}): ${metrics}.`,
+    latest.date !== day ? "- No Garmin sleep record for today. Use earlier sleep as background only." : null,
+    summary.earlierMeanSeconds === null
+      ? "- Fewer than three earlier nights with a measured duration in the last seven days."
+      : `- Average of ${summary.earlierRecordedNights} earlier measured nights in the last seven days: ${formatSleepDuration(summary.earlierMeanSeconds)}.`,
+  ].filter(Boolean).join("\n");
+}
+
+function garminSleepSection(day: string, rows: GarminSleepDay[], includeNights = false) {
+  const summary = summarizeGarminSleep(day, rows);
+  return [
+    "## Garmin sleep and recovery",
+    garminSleepSummary(day, summary),
+    includeNights && summary.nights.length
+      ? table(
+        ["Recorded for", "Sleep duration", "Sleep score (/100)"],
+        summary.nights.map((row) => [
+          row.date, formatSleepDuration(row.sleepDurationSeconds), row.sleepScoreValue,
+        ]),
+        "",
+      )
+      : null,
+  ].filter(Boolean).join("\n");
 }
 
 function mobilityHistory(sessions: { day: string; routine: string; durationSeconds: number | null }[]) {
@@ -186,6 +221,8 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
     ].join("\n"),
   );
 
+  sections.push(garminSleepSection(snapshot.generatedFor, snapshot.garminHealthTrend));
+
   sections.push(
     [
       "## Garmin health trend",
@@ -206,7 +243,7 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
           g.restingHrBpm,
           g.hrvScore,
           g.hrvBalanceScore,
-          g.sleepDurationSeconds != null
+          g.sleepDurationSeconds != null && g.sleepDurationSeconds > 0
             ? Math.round((g.sleepDurationSeconds / 3600) * 10) / 10
             : null,
           g.sleepScoreValue,
@@ -391,6 +428,8 @@ export function formatTrainingSuggestionContext(
     checkin
       ? `- Recovery check-in (${checkin.day}): poor sleep ${checkin.sleepPoor}, low appetite ${checkin.appetiteLow}, joint pain ${checkin.jointPain}`
       : "- No recent recovery check-in.",
+    "",
+    garminSleepSection(plan.day, context.garminSleep, true),
     "",
     "## Available routines",
     table(["ID", "Name", "Primary muscles"], context.routines.map((r) => [

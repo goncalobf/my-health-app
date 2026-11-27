@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Eye,
   EyeOff,
@@ -301,6 +302,7 @@ export default function GarminSettings() {
               <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
               {syncing ? "Syncing…" : "Sync now"}
             </button>
+            <Link href="/progress?view=garmin" className="btn-ghost w-full">View Garmin health</Link>
             {syncResult && <p className="text-xs text-accent text-center">{syncResult}</p>}
             {syncError && <p role="alert" className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{syncError}</p>}
           </>

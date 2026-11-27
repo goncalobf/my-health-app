@@ -7,9 +7,26 @@ export function isCoachConfigured() {
   return !!process.env.OPENAI_API_KEY;
 }
 
-// Read lazily to keep imports build-safe and run every task under the same playbook.
+// Read lazily so the playbook is only needed when the Coach runs.
 function readCoachPlaybook() {
   return readFile(path.join(process.cwd(), "docs", "coach-playbook.md"), "utf8");
+}
+
+export function selectCoachInstructions(playbook: string, name: string): string {
+  const [shared, ...topics] = playbook.replace(/\r\n/g, "\n").trim().split(/^## /m);
+  const tasks = topics.pop();
+  if (!tasks?.startsWith("Response tasks\n")) throw new Error("Coach playbook has no response tasks");
+
+  const task = tasks.split(/^### /m).slice(1).find((block) => block.startsWith(`${name}\n`));
+  const match = task?.match(/^[^\n]+\n<!-- Include: (.+) -->\n([\s\S]+)$/);
+  if (!match?.[2].trim()) throw new Error("Coach task is missing from the playbook");
+
+  const instructions = match[1].split(",").map((heading) => {
+    const topic = topics.find((block) => block.startsWith(`${heading.trim()}\n`));
+    if (!topic) throw new Error("Coach task references a missing playbook topic");
+    return `## ${topic.trim()}`;
+  });
+  return [shared.trim(), ...instructions, `## Task\n\n${match[2].trim()}`].join("\n\n");
 }
 
 function extractOutputText(body: Record<string, unknown>): string | null {
@@ -61,7 +78,7 @@ export async function structuredCoachResponse<T>({
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("AI coach is not configured. Add OPENAI_API_KEY in Vercel.");
 
-  const instructions = await readCoachPlaybook();
+  const instructions = selectCoachInstructions(await readCoachPlaybook(), name);
   const signal = AbortSignal.timeout(25_000);
 
   const request = async (tokenLimit: number) => {
@@ -72,7 +89,7 @@ export async function structuredCoachResponse<T>({
       body: JSON.stringify({
         model: COACH_MODEL,
         store: false,
-        instructions: `${instructions}\n\n## Active task\n${name}`,
+        instructions,
         input: data,
         max_output_tokens: tokenLimit,
         text: { format: { type: "json_schema", name, strict: true, schema } },

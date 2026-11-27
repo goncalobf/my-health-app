@@ -15,6 +15,7 @@ import { Plus, Trophy, ChevronDown, Ruler, Camera, Gauge, Trash2 } from "lucide-
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { normalizeDecimalInput } from "@/lib/decimal-input";
 import PageHeader from "@/components/PageHeader";
+import GarminHealth from "@/components/GarminHealth";
 import { formatDate, todayISO } from "@/lib/utils";
 
 interface PR {
@@ -96,7 +97,8 @@ function Chart({
 
 export default function ProgressPage() {
   const router = useRouter();
-  const view = useSearchParams().get("view") === "body" ? "body" : "training";
+  const requestedView = useSearchParams().get("view");
+  const view = requestedView === "body" || requestedView === "garmin" ? requestedView : "training";
   const [prs, setPrs] = useState<PR[]>([]);
   const [bw, setBw] = useState<BW[]>([]);
   const [weightInput, setWeightInput] = useState("");
@@ -168,11 +170,14 @@ export default function ProgressPage() {
 
   return (
     <div>
-      <PageHeader title="Progress" description="Look back at your training and any body measurements you choose to track." />
-      <div className="mb-5 inline-flex max-w-full flex-wrap gap-1 rounded-2xl border border-border bg-surface p-1" role="group" aria-label="Progress views">
-        <button type="button" onClick={() => router.replace("/progress", { scroll: false })} aria-pressed={view === "training"} className={view === "training" ? "btn-primary" : "btn"}>Training</button>
-        <button type="button" onClick={() => router.replace("/progress?view=body", { scroll: false })} aria-pressed={view === "body"} className={view === "body" ? "btn-primary" : "btn"}>Body measurements</button>
+      <PageHeader title="Progress" description="Review your training, body measurements and Garmin health metrics." />
+      <div className="mb-5 grid w-full max-w-md grid-cols-[1fr_1.55fr_1fr] gap-1 rounded-2xl border border-border bg-surface p-1" role="group" aria-label="Progress views">
+        <button type="button" onClick={() => router.replace("/progress", { scroll: false })} aria-pressed={view === "training"} className={`${view === "training" ? "btn-primary" : "btn"} min-w-0 px-2`}>Training</button>
+        <button type="button" onClick={() => router.replace("/progress?view=body", { scroll: false })} aria-pressed={view === "body"} aria-label="Body measurements" className={`${view === "body" ? "btn-primary" : "btn"} min-w-0 px-2`}>Measurements</button>
+        <button type="button" onClick={() => router.replace("/progress?view=garmin", { scroll: false })} aria-pressed={view === "garmin"} className={`${view === "garmin" ? "btn-primary" : "btn"} min-w-0 px-2`}>Garmin</button>
       </div>
+
+      {view === "garmin" && <GarminHealth />}
 
       {view === "training" && (<>
 

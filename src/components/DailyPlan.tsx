@@ -1,20 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Watch } from "lucide-react";
 import { apiPost } from "@/lib/api";
 import WorkoutDayCard from "./WorkoutDayCard";
 
-export default function DailyPlan({ day, garminCalories }: {
+export default function DailyPlan({ day, loggedCalories, syncedCalories }: {
   day: string;
-  garminCalories: number | null;
+  loggedCalories: number | null;
+  syncedCalories: number | null;
 }) {
   const router = useRouter();
-  const [burn, setBurn] = useState(garminCalories ? String(garminCalories) : "");
-  const [burnSaved, setBurnSaved] = useState(!!garminCalories);
+  const [burn, setBurn] = useState(loggedCalories === null ? "" : String(loggedCalories));
+  const [burnSaved, setBurnSaved] = useState(loggedCalories !== null);
   const [burnError, setBurnError] = useState("");
   const [saving, setSaving] = useState(false);
+  const displayedCalories = syncedCalories ?? loggedCalories;
 
   async function saveBurn() {
     setSaving(true);
@@ -38,11 +41,12 @@ export default function DailyPlan({ day, garminCalories }: {
         <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
           <span className="icon-frame h-8 w-8"><Watch size={16} aria-hidden="true" /></span>
           <span className="min-w-0 flex-1 text-sm font-extrabold">Garmin daily energy</span>
-          {garminCalories != null && <span className="text-xs font-semibold text-muted">{garminCalories} kcal</span>}
+          {displayedCalories !== null && <span className="shrink-0 text-xs font-semibold text-muted">{displayedCalories} kcal</span>}
           <ChevronDown size={16} className="shrink-0 text-muted" aria-hidden="true" />
         </summary>
         <div className="px-4 pb-4">
-          <label className="label" htmlFor="garmin-daily-calories">Total calories in Garmin Connect</label>
+          {syncedCalories !== null && <p className="mb-2 text-sm text-muted">{syncedCalories} kcal synced from Garmin today.</p>}
+          <label className="label" htmlFor="garmin-daily-calories">Log total calories manually</label>
           <div className="mt-1.5 flex gap-2">
             <input
               id="garmin-daily-calories"
@@ -58,6 +62,9 @@ export default function DailyPlan({ day, garminCalories }: {
             </button>
           </div>
           {burnError && <p role="alert" className="mt-2 text-sm text-danger">{burnError}</p>}
+          <Link href="/progress?view=garmin" className="mt-1 inline-flex min-h-11 items-center text-sm font-bold text-accent hover:underline">
+            View Garmin health
+          </Link>
         </div>
       </details>
     </div>

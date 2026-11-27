@@ -1,8 +1,8 @@
 import "server-only";
-import { and, asc, desc, eq, exists, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  activitySessions, exercises, routineExercises, routines, sessions, sessionSets,
+  activitySessions, exercises, garminDailyMetrics, routineExercises, routines, sessions, sessionSets,
   trainingCheckins, trainingPlanState, workoutDayChoices, workoutSchedule,
 } from "@/db/schema";
 import { dateISOInTimeZone, dayOfWeekISO, shiftISODate, startOfAppDay } from "./utils";
@@ -68,7 +68,7 @@ export async function getWorkoutDay(userId: number, day: string): Promise<Workou
 
 export async function getTrainingSuggestionContext(userId: number, plan: WorkoutDay) {
   const from = startOfAppDay(shiftISODate(plan.day, -13));
-  const [slots, work, activities, [checkin], [state]] = await Promise.all([
+  const [slots, work, activities, checkins, [state], garminSleep] = await Promise.all([
     plan.routines.length
       ? db.select({
           routineId: routineExercises.routineId,
@@ -124,6 +124,16 @@ export async function getTrainingSuggestionContext(userId: number, plan: Workout
       .limit(1),
     db.select({ isDeload: trainingPlanState.isDeload }).from(trainingPlanState)
       .where(eq(trainingPlanState.userId, userId)),
+    db.select({
+      date: garminDailyMetrics.date,
+      sleepDurationSeconds: garminDailyMetrics.sleepDurationSeconds,
+      sleepScoreValue: garminDailyMetrics.sleepScoreValue,
+    }).from(garminDailyMetrics)
+      .where(and(
+        eq(garminDailyMetrics.userId, userId),
+        gte(garminDailyMetrics.date, shiftISODate(plan.day, -6)),
+        lte(garminDailyMetrics.date, plan.day),
+      )),
   ]);
 
   return {
@@ -134,7 +144,8 @@ export async function getTrainingSuggestionContext(userId: number, plan: Workout
     })),
     work: work.map((row) => ({ ...row, day: dateISOInTimeZone(row.startedAt) })),
     activities: activities.map((row) => ({ ...row, day: dateISOInTimeZone(row.startedAt) })),
-    checkin: checkin ?? null,
+    checkin: checkins.at(0) ?? null,
+    garminSleep,
     isDeload: state?.isDeload ?? false,
   };
 }

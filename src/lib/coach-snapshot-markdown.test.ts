@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { CoachSnapshot } from "@/lib/coach-data";
-import { formatCoachSnapshotAsMarkdown } from "./coach-snapshot-markdown";
+import { formatCoachSnapshotAsMarkdown, formatTrainingSuggestionContext } from "./coach-snapshot-markdown";
 
 function baseSnapshot(overrides: Partial<CoachSnapshot> = {}): CoachSnapshot {
   return {
@@ -182,4 +182,50 @@ test("mobility is presented with session name and elapsed time", () => {
     mobilitySessions: [{ day: "2026-08-31", routine: "Hip mobility", durationSeconds: 150 }],
   }));
   assert.match(markdown, /## Completed mobility sessions\n[\s\S]*\| 2026-08-31 \| Hip mobility \| 2\.5 \|/);
+});
+
+test("Garmin recovery compares today's sleep with measured earlier nights", () => {
+  const reading = (date: string, sleepDurationSeconds: number, sleepScoreValue: number | null = null) => ({
+    date, sleepDurationSeconds, sleepScoreValue, restingHrBpm: null, hrvScore: null,
+    hrvBalanceScore: null, caloriesActive: null, caloriesTotal: null, steps: null,
+  });
+  const markdown = formatCoachSnapshotAsMarkdown(baseSnapshot({
+    garminHealthTrend: [
+      reading("2026-08-24", 36000),
+      reading("2026-08-25", 27000),
+      reading("2026-08-29", 28800),
+      reading("2026-08-30", 25200),
+      reading("2026-08-31", 20100, 54),
+      reading("2026-08-28", 0),
+    ],
+  }));
+  const recovery = markdown.split("## Garmin sleep and recovery\n")[1].split("\n\n")[0];
+  assert.match(recovery, /Latest sleep recorded for today \(2026-08-31\): 5h 35m, sleep score 54\/100/);
+  assert.match(recovery, /Average of 3 earlier measured nights in the last seven days: 7h 30m/);
+});
+
+test("training suggestions receive dated sleep evidence alongside gym and jiu-jitsu plans", () => {
+  const day = "2026-08-31";
+  const routine = { id: 1, name: "Full body" };
+  const markdown = formatTrainingSuggestionContext({
+    day, routines: [routine], choice: { routineId: 1, jiuJitsu: true },
+    defaultRoutineId: null, activeSessionId: null, completedToday: false,
+  }, {
+    routines: [{ ...routine, muscles: ["Quads"] }], work: [], activities: [],
+    checkin: null, isDeload: false, garminSleep: [
+      { date: "2026-08-30", sleepDurationSeconds: null, sleepScoreValue: 64 },
+      { date: day, sleepDurationSeconds: 0, sleepScoreValue: null },
+      { date: "2026-09-01", sleepDurationSeconds: 27000, sleepScoreValue: 95 },
+    ],
+  });
+  assert.match(markdown, /Jiu-jitsu planned for today: yes/);
+  assert.match(markdown, /Latest earlier sleep record \(2026-08-30\): sleep score 64\/100/);
+  assert.match(markdown, /No Garmin sleep record for today/);
+  assert.match(markdown, /\| 2026-08-30 \| — \| 64 \|/);
+  assert.doesNotMatch(markdown, /2026-09-01|Latest sleep recorded for today|Average of/);
+});
+
+test("the Coach snapshot describes missing Garmin sleep without inventing a value", () => {
+  const markdown = formatCoachSnapshotAsMarkdown(baseSnapshot());
+  assert.match(markdown, /## Garmin sleep and recovery\nNo Garmin sleep recorded in the last seven days/);
 });

@@ -94,6 +94,7 @@ export default function CoachPage() {
 
   const weekly = insights.filter((x) => x.kind === "weekly");
   const prompts = [
+    "Based on my sleep, should I train or rest today?",
     "How should I balance lifting and jiu-jitsu?",
     "What stands out in my recent training?",
     "Help me pick a mobility routine.",

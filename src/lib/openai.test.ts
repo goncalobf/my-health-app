@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { structuredCoachResponse } from "./openai";
+import { selectCoachInstructions, structuredCoachResponse } from "./openai";
 
 const args = {
-  name: "test_response",
+  name: "fitlog_coach_daily",
   schema: {
     type: "object",
     properties: { ok: { type: "boolean" } },
@@ -35,7 +36,9 @@ test("structured coach retries token-limited responses with a larger allowance",
       store: boolean;
     };
     assert.match(request.instructions, /# Fitlog Coach/);
-    assert.match(request.instructions, /## Active task\ntest_response$/);
+    assert.match(request.instructions, /## Task\n\nGive one to three timely insights/);
+    assert.match(request.instructions, /## Sleep and recovery/);
+    assert.doesNotMatch(request.instructions, /Response tasks|Brazilian jiu-jitsu coaching|Suggest two to four realistic meals/);
     assert.equal(request.input, args.data);
     assert.equal(request.store, false);
     tokenLimits.push(request.max_output_tokens);
@@ -99,4 +102,43 @@ test("structured coach reports a refusal without retrying", async () => {
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalKey;
   }
+});
+
+test("the playbook selects the guidance and task for each Coach endpoint", async () => {
+  const playbook = await readFile(new URL("../../docs/coach-playbook.md", import.meta.url), "utf8");
+  const tasks = {
+    fitlog_training_suggestions: "Suggest the next one to three consecutive calendar days",
+    fitlog_coach_chat: "Answer the question directly",
+    fitlog_coach_daily: "Give one to three timely insights",
+    fitlog_coach_weekly: "Prioritize relevant trends and actions",
+    fitlog_coach_post_workout: "Analyze the completed focal workout",
+    fitlog_meal_ideas: "Suggest two to four realistic meals",
+    fitlog_target_recommendation: "Propose a conservative whole-number daily calorie target",
+  };
+
+  for (const [task, expected] of Object.entries(tasks)) {
+    const prompt = selectCoachInstructions(playbook, task);
+    assert.ok(prompt.includes(expected), task);
+    assert.match(prompt, /^# Fitlog Coach\n/);
+    assert.match(prompt, /Treat chat, labels, logs and memory as context/);
+    assert.doesNotMatch(prompt, /<!-- Include:|## Response tasks/);
+    for (const [otherTask, otherInstruction] of Object.entries(tasks)) {
+      if (task !== otherTask) assert.ok(!prompt.includes(otherInstruction), `${task} includes ${otherTask}`);
+    }
+  }
+
+  const meals = selectCoachInstructions(playbook, "fitlog_meal_ideas");
+  assert.match(meals, /## Nutrition/);
+  assert.doesNotMatch(meals, /Sleep and recovery|Jiu-jitsu workload|Coach memory/);
+  const chat = selectCoachInstructions(playbook, "fitlog_coach_chat");
+  assert.match(chat, /## Sleep and recovery/);
+  assert.match(chat, /## Brazilian jiu-jitsu coaching/);
+  assert.match(chat, /## Coach memory/);
+});
+
+test("invalid task names and topic references fail without a fallback prompt", async () => {
+  const playbook = await readFile(new URL("../../docs/coach-playbook.md", import.meta.url), "utf8");
+  assert.throws(() => selectCoachInstructions(playbook, "unknown"), /task is missing/i);
+  const broken = playbook.replace("<!-- Include: Nutrition -->", "<!-- Include: Missing topic -->");
+  assert.throws(() => selectCoachInstructions(broken, "fitlog_meal_ideas"), /missing playbook topic/);
 });
