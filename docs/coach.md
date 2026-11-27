@@ -1,11 +1,16 @@
 # AI Coach architecture
 
 Each request calls the OpenAI Responses API (`gpt-5-mini` by default,
-`OPENAI_MODEL` overrides). [The coach playbook](coach-playbook.md) supplies
-the model’s instructions and room for judgment. The call also includes the
-active task, a scoped Markdown data snapshot, and a strict response schema.
-Editing the playbook changes future responses after deployment. This is
-prompt configuration, with no model fine-tuning step.
+`OPENAI_MODEL` overrides). [The coach playbook](coach-playbook.md) defines
+coaching behavior. A request receives the opening guidance, the topics named
+by its task’s `<!-- Include: ... -->` line, and that task’s instructions. This
+keeps specialized requests from carrying unrelated coaching rules.
+
+Keep topic headings at level two and tasks at level three under the final
+`Response tasks` section. Use the request’s schema name for the task heading
+and exact topic titles in its include line. Editing the playbook updates
+coaching behavior after deployment. Fitlog still supplies the data snapshot,
+validates the response schema, and computes deterministic values in code.
 
 ## Endpoints
 
@@ -19,7 +24,7 @@ These endpoints use `structuredCoachResponse()` in `src/lib/openai.ts`:
 - `POST /api/coach/training` — suggests the next one to three days after
   the current saved daily choice. It receives available routine names and
   muscle groups, recent strength, cardio and jiu-jitsu summaries, today’s
-  planned mat time, and recovery flags.
+  planned mat time, recovery flags, and Garmin sleep recorded in the last seven days.
   The server verifies routine IDs and returns suggestions for display.
 - `POST /api/coach/meals` — meal ideas from today's remaining macros.
 - `POST /api/coach/targets` — proposes a calorie number only; macros are
@@ -51,6 +56,18 @@ shape changes; do not fall back to ad hoc `JSON.stringify` for part of it.
 The **output** stays strict JSON Schema (`text.format.type: "json_schema"`,
 `strict: true`) regardless of the input format — that's what lets the UI
 render structured insight cards instead of parsing prose.
+
+## Garmin sleep and recovery
+
+Home shows the duration and sleep score for the current Garmin report when
+available. Progress → Garmin shows the individual days stored by sync.
+The general Coach snapshot and the upcoming-training context both identify
+the most recent dated sleep report. They include an earlier mean only when
+at least three prior nights have a recorded duration in the seven-day window.
+The playbook combines sleep with reported fatigue and recent workouts when
+suggesting normal training, an easier session, or a rest day. The Home
+guidance can be refreshed after Garmin syncs a new report.
+[Sleep and the athlete expert consensus](https://bjsm.bmj.com/content/55/7/356)
 
 ## Jiu-jitsu and gym on the same day
 

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { and, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
-import { Dumbbell, Apple, Settings, ChevronRight, Scale, Users, Move, ChartNoAxesCombined } from "lucide-react";
+import { Dumbbell, Apple, Settings, ChevronRight, Moon, Scale, Users, Move, ChartNoAxesCombined } from "lucide-react";
 import { db } from "@/db";
-import { nutritionLogs, sessions, bodyweightLogs, expenditureLogs, friendships } from "@/db/schema";
+import { nutritionLogs, sessions, bodyweightLogs, expenditureLogs, friendships, garminDailyMetrics } from "@/db/schema";
 import { getTargets } from "@/lib/server-data";
 import {
   dateISOInTimeZone,
@@ -18,6 +18,7 @@ import CoachDashboardCard from "@/components/CoachDashboardCard";
 import NutritionPhaseCard from "@/components/NutritionPhaseCard";
 import BrandMark from "@/components/BrandMark";
 import { requireAppUser } from "@/lib/app-user";
+import { formatSleepDuration } from "@/lib/garmin-sleep";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export default async function DashboardPage() {
     lastSessions,
     latestWeights,
     todayBurns,
+    todayGarmin,
     trainingRows,
     nutritionDayRows,
     pendingFriendRequests,
@@ -61,6 +63,14 @@ export default async function DashboardPage() {
         and(eq(expenditureLogs.userId, user.id), eq(expenditureLogs.day, today))
       ),
     db
+      .select({
+        caloriesTotal: garminDailyMetrics.caloriesTotal,
+        sleepDurationSeconds: garminDailyMetrics.sleepDurationSeconds,
+        sleepScoreValue: garminDailyMetrics.sleepScoreValue,
+      })
+      .from(garminDailyMetrics)
+      .where(and(eq(garminDailyMetrics.userId, user.id), eq(garminDailyMetrics.date, today))),
+    db
       .select({ count: sql<number>`count(*)::int` })
       .from(sessions)
       .where(
@@ -84,6 +94,8 @@ export default async function DashboardPage() {
   const lastSession = lastSessions[0];
   const latestWeight = latestWeights[0];
   const todayBurn = todayBurns[0];
+  const sleepDuration = formatSleepDuration(todayGarmin[0]?.sleepDurationSeconds ?? null);
+  const sleepScore = todayGarmin[0]?.sleepScoreValue ?? null;
   const training = trainingRows[0];
   const nutritionDays = nutritionDayRows[0];
   const totals = todayLogs.reduce(
@@ -141,7 +153,12 @@ export default async function DashboardPage() {
 
       <div className="grid items-start gap-5 min-[1040px]:grid-cols-[1.15fr_1fr]">
         <div className="space-y-3">
-          <DailyPlan day={today} garminCalories={todayBurn?.totalCalories ?? null} />
+          <DailyPlan
+            key={today}
+            day={today}
+            loggedCalories={todayBurn?.totalCalories ?? null}
+            syncedCalories={todayGarmin[0]?.caloriesTotal ?? null}
+          />
           <Link href="/workouts/mobility" className="card surface-link flex items-center gap-3 p-4">
             <span className="icon-frame"><Move size={18} aria-hidden="true" /></span>
             <span className="min-w-0 flex-1 text-sm font-extrabold">Mobility &amp; flexibility</span>
@@ -157,7 +174,19 @@ export default async function DashboardPage() {
             <MacroSummary totals={totals} targets={targets} />
           </section>
           <NutritionPhaseCard />
-          <CoachDashboardCard />
+          {(sleepDuration || sleepScore !== null) && (
+            <Link href="/progress?view=garmin" className="card surface-link flex min-w-0 items-center gap-3 p-4">
+              <span className="icon-frame"><Moon size={18} aria-hidden="true" /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-extrabold">Last night’s sleep</p>
+                <p className="text-xs font-semibold text-muted">
+                  {[sleepDuration, sleepScore === null ? null : `${sleepScore}/100 sleep score`].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+              <ChevronRight className="shrink-0 text-muted" size={18} aria-hidden="true" />
+            </Link>
+          )}
+          <CoachDashboardCard key={today} day={today} />
         </div>
       </div>
 

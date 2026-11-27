@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lte, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   activitySessions,
@@ -203,6 +203,7 @@ export async function getCoachSnapshot({
         and(
           eq(garminDailyMetrics.userId, userId),
           gte(garminDailyMetrics.date, fromDay),
+          lte(garminDailyMetrics.date, today),
         ),
       )
       .orderBy(asc(garminDailyMetrics.date)),
