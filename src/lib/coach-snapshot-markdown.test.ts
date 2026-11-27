@@ -29,7 +29,7 @@ function baseSnapshot(overrides: Partial<CoachSnapshot> = {}): CoachSnapshot {
     today: {
       nutrition: { calories: 1200, proteinG: 90, carbsG: 120, fatG: 30 },
       remaining: { calories: 1250, proteinG: 107, carbsG: 135, fatG: 38 },
-      garminTotalCalories: 2780,
+      expenditure: { day: "2026-08-31", totalCalories: 2780, source: "Garmin sync" },
       garminHealth: null,
     },
     garminHealthTrend: [],
@@ -64,7 +64,7 @@ function baseSnapshot(overrides: Partial<CoachSnapshot> = {}): CoachSnapshot {
     },
     dataCoverage: {
       weighIns: 0,
-      garminExpendityureDays: 0,
+      expenditureDays: 0,
       garminHealthDays: 0,
       nutritionDays: 0,
       completedWorkouts: 0,

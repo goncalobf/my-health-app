@@ -132,7 +132,25 @@ test("keeps available metrics when another endpoint fails and never writes missi
     },
   });
   assert.deepEqual(await garmin.dailyMetrics("2026-11-27", new AbortController().signal), {
-    restingHrBpm: 51, steps: 0, hrvBalanceScore: 63, hrvScore: 61,
+    metrics: { restingHrBpm: 51, steps: 0, hrvBalanceScore: 63, hrvScore: 61 },
+    incomplete: true,
+  });
+});
+
+test("Garmin days with no recorded readings still complete the health pull", async () => {
+  const { createGarminClient } = await loadGarminClient();
+  const client = createGarminClient(token, {
+    signal: new AbortController().signal,
+    fetch: async (input) => {
+      const { pathname } = new URL(input.toString());
+      if (pathname.endsWith("/socialProfile")) return Response.json({ displayName: "fixture" });
+      if (pathname.includes("/dailySleepData/")) return new Response(null, { status: 204 });
+      if (pathname.includes("/usersummary/")) return Response.json({ totalKilocalories: null });
+      return new Response(null, { status: 404 });
+    },
+  });
+  assert.deepEqual(await client.dailyMetrics("2026-11-27", new AbortController().signal), {
+    metrics: {}, incomplete: false,
   });
 });
 

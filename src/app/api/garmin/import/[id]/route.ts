@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
-import { db } from "@/db";
+import { withDbTransaction } from "@/db/transactions";
 import { garminPendingImports, activitySessions } from "@/db/schema";
 import { requireAppUser } from "@/lib/app-user";
-import type { GarminActivity } from "@/lib/garmin-client";
+import { garminDenied, isGarminBrowserRequest } from "@/lib/garmin-browser-request";
+import { garminActivityStart, isRecord, normalizeGarminActivity } from "@/lib/garmin-data";
 
 const VALID_TYPES = new Set([
   "run_easy",
@@ -17,81 +18,78 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!isGarminBrowserRequest(req)) return garminDenied();
   const user = await requireAppUser();
   const { id } = await params;
   const importId = Number(id);
 
-  const [pending] = await db
-    .select()
-    .from(garminPendingImports)
-    .where(
-      and(
-        eq(garminPendingImports.id, importId),
-        eq(garminPendingImports.userId, user.id)
-      )
-    );
-  if (!pending) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (pending.labeledAt) return NextResponse.json({ error: "Already imported" }, { status: 409 });
-
-  const body = await req.json().catch(() => ({}));
-  if (!VALID_TYPES.has(body.type)) {
+  if (!Number.isInteger(importId) || importId <= 0 || importId > 2147483647) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body.type !== "string" || !VALID_TYPES.has(body.type)) {
     return NextResponse.json({ error: "Invalid activity type" }, { status: 400 });
   }
-  if (body.notes != null && String(body.notes).length > 1000) {
+  if (body.notes != null && (typeof body.notes !== "string" || body.notes.length > 1000)) {
     return NextResponse.json({ error: "Notes must be 1000 characters or fewer." }, { status: 400 });
   }
-  if (body.division != null && String(body.division).length > 200) {
+  if (body.division != null && (typeof body.division !== "string" || body.division.length > 200)) {
     return NextResponse.json({ error: "Division must be 200 characters or fewer." }, { status: 400 });
   }
 
-  const raw = JSON.parse(pending.garminDataJson) as GarminActivity;
+  const ownedImport = and(eq(garminPendingImports.id, importId), eq(garminPendingImports.userId, user.id));
+  return withDbTransaction(async (tx) => {
+    const [pending] = await tx.select().from(garminPendingImports).where(ownedImport).for("update");
+    if (!pending) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (pending.labeledAt) return NextResponse.json({ error: "Already imported" }, { status: 409 });
 
-  // Map Garmin fields to Fitlog activity session fields.
-  const durationSeconds = raw.duration ? Math.round(raw.duration) : null;
-  const distanceM = raw.distance ?? null;
-  const elevationM = raw.elevationGain ?? null;
-  const avgHeartRate = raw.averageHR ? Math.round(raw.averageHR) : null;
-  const maxHeartRate = raw.maxHR ? Math.round(raw.maxHR) : null;
-  const calories = raw.calories ? Math.round(raw.calories) : null;
-  // Convert m/s → km/h for outdoor activities
-  const avgSpeedKmh =
-    raw.averageSpeed && ["outdoor_cycling", "run_easy", "run_interval"].includes(body.type)
-      ? Math.round(raw.averageSpeed * 3.6 * 10) / 10
-      : null;
-  const avgPowerW = raw.averagePower ? Math.round(raw.averagePower) : null;
-  const avgCadence = raw.averageCadence ? Math.round(raw.averageCadence) : null;
-  const startedAt = raw.startTimeLocal ? new Date(raw.startTimeLocal) : new Date();
-  const finishedAt =
-    durationSeconds && raw.startTimeLocal
-      ? new Date(startedAt.getTime() + durationSeconds * 1000)
-      : null;
+    let staged: unknown;
+    try {
+      staged = JSON.parse(pending.garminDataJson) as unknown;
+    } catch {
+      return NextResponse.json({ error: "This Garmin activity is unreadable." }, { status: 422 });
+    }
+    const raw = normalizeGarminActivity(staged);
+    const startedAt = raw && garminActivityStart(raw);
+    if (!isRecord(staged) || !raw || !startedAt) {
+      return NextResponse.json({ error: "Garmin did not supply a usable start time for this activity." }, { status: 422 });
+    }
 
-  const [session] = await db
-    .insert(activitySessions)
-    .values({
+    const [alreadyImported] = await tx.select({ id: activitySessions.id }).from(activitySessions)
+      .where(and(eq(activitySessions.userId, user.id), eq(activitySessions.garminActivityId, pending.garminActivityId)))
+      .limit(1);
+    if (alreadyImported) {
+      await tx.update(garminPendingImports).set({ labeledAt: new Date() }).where(ownedImport);
+      return NextResponse.json({ error: "Already imported" }, { status: 409 });
+    }
+
+    const durationSeconds = raw.duration ? Math.round(raw.duration) : null;
+    const finishedAt = durationSeconds === null ? null : new Date(startedAt.getTime() + durationSeconds * 1000);
+    const avgSpeedKmh =
+      raw.averageSpeed && ["outdoor_cycling", "run_easy", "run_interval"].includes(body.type)
+        ? Math.round(raw.averageSpeed * 3.6 * 10) / 10
+        : null;
+
+    const [session] = await tx.insert(activitySessions).values({
       userId: user.id,
       type: body.type,
       startedAt,
       finishedAt,
       durationSeconds,
-      distanceM,
-      elevationM,
-      avgHeartRate,
-      maxHeartRate,
-      calories,
+      distanceM: typeof staged.distance === "number" ? raw.distance : null,
+      elevationM: typeof staged.elevationGain === "number" ? raw.elevationGain : null,
+      avgHeartRate: raw.averageHR ? Math.round(raw.averageHR) : null,
+      maxHeartRate: raw.maxHR ? Math.round(raw.maxHR) : null,
+      calories: raw.calories ? Math.round(raw.calories) : null,
       avgSpeedKmh,
-      avgPowerW,
-      avgCadence,
-      notes: body.notes ? String(body.notes) : null,
-      division: body.division ? String(body.division) : null,
+      avgPowerW: raw.averagePower ? Math.round(raw.averagePower) : null,
+      avgCadence: raw.averageCadence ? Math.round(raw.averageCadence) : null,
+      notes: body.notes || null,
+      division: body.division || null,
       garminActivityId: pending.garminActivityId,
-    })
-    .returning();
+    }).returning();
 
-  await db
-    .update(garminPendingImports)
-    .set({ labeledAt: new Date() })
-    .where(eq(garminPendingImports.id, importId));
-
-  return NextResponse.json(session, { status: 201 });
+    await tx.update(garminPendingImports).set({ labeledAt: new Date() }).where(ownedImport);
+    return NextResponse.json(session, { status: 201 });
+  });
 }

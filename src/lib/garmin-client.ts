@@ -65,6 +65,12 @@ function boundedInteger(value: unknown, min: number, max: number): number | null
 export class GarminAuthenticationFailed extends Error {}
 export class GarminRefreshPersistenceFailed extends Error {}
 
+class GarminResponseError extends Error {
+  constructor(readonly status: number) {
+    super(`Garmin API request failed (${status})`);
+  }
+}
+
 interface GarminClientOptions {
   signal: AbortSignal;
   onRefresh?: (token: GarminToken) => Promise<void>;
@@ -210,7 +216,8 @@ export function createGarminClient(original: GarminToken, options: GarminClientO
         signal: requestSignal(signal), cache: "no-store", redirect: "error",
       });
       if ([401, 403].includes(response.status)) throw new GarminAuthenticationFailed();
-      if (!response.ok) throw new Error(`Garmin API request failed (${response.status})`);
+      if (!response.ok) throw new GarminResponseError(response.status);
+      if (response.status === 204) return null;
       return response.json();
     };
     try {
@@ -258,6 +265,7 @@ export function createGarminClient(original: GarminToken, options: GarminClientO
 }
 
 function responseStatus(error: unknown) {
+  if (error instanceof GarminResponseError) return error.status;
   return isRecord(error) && isRecord(error.response) ? Number(error.response.status) : 0;
 }
 
@@ -267,8 +275,9 @@ function isRejected(error: unknown) {
 
 async function dailyMetrics(
   request: (path: string, params?: Record<string, string>) => Promise<unknown>, date: string,
-): Promise<Partial<GarminDailyMetricsRaw>> {
+) {
   const metrics: Partial<GarminDailyMetricsRaw> = {};
+  let incomplete = false;
   function record(key: keyof GarminDailyMetricsRaw, value: unknown, min: number, max: number) {
     const integer = boundedInteger(value, min, max);
     if (integer !== null) metrics[key] = integer;
@@ -276,11 +285,15 @@ async function dailyMetrics(
   async function optional(path: string, params?: Record<string, string>) {
     try {
       const data = await request(path, params);
-      return isRecord(data) ? data : null;
+      if (isRecord(data)) return data;
+      // The legacy Axios client returns an empty string for HTTP 204.
+      if (data != null && data !== "") incomplete = true;
+      return null;
     } catch (error) {
       if (error instanceof GarminAuthenticationFailed) throw error;
       // Persistence of a rotated token is mandatory even on optional endpoints.
       if (error instanceof GarminRefreshPersistenceFailed) throw error;
+      if (responseStatus(error) !== 404) incomplete = true;
       return null;
     }
   }
@@ -301,10 +314,12 @@ async function dailyMetrics(
     record("caloriesActive", summary?.activeKilocalories, 0, 50_000);
     record("caloriesTotal", summary?.totalKilocalories, 0, 50_000);
     record("steps", summary?.totalSteps, 0, 500_000);
+  } else {
+    incomplete = true;
   }
   const hrv = await optional(`/hrv-service/hrv/${date}`);
   const summary = isRecord(hrv?.hrvSummary) ? hrv.hrvSummary : null;
   record("hrvScore", summary?.lastNight, 0, 1000);
   record("hrvBalanceScore", summary?.lastNightAvg, 0, 1000);
-  return metrics;
+  return { metrics, incomplete };
 }

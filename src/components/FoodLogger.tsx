@@ -6,6 +6,7 @@ import { X, Search, ScanLine, Pencil, ChevronLeft, Star, Clock3, Utensils } from
 import { api, apiGet, apiPost } from "@/lib/api";
 import { round } from "@/lib/utils";
 import { normalizeDecimalInput, parseDecimalInput } from "@/lib/decimal-input";
+import { servingWeightGrams } from "@/lib/foods/serving-weight";
 import BarcodeScanner from "@/components/BarcodeScanner";
 
 interface FoodResult {
@@ -19,6 +20,7 @@ interface FoodResult {
   carbsG: number;
   fatG: number;
   servingSize: string | null;
+  savedServingGrams?: number;
   source?: string | null;
   sourceId?: string | null;
   sourceUrl?: string | null;
@@ -122,6 +124,7 @@ export default function FoodLogger({
     }
   }, []);
 
+  const servingGrams = selected?.savedServingGrams ?? servingWeightGrams(selected?.servingSize ?? null);
   const factor = parseDecimalInput(qty) / 100;
   const preview = selected
     ? {
@@ -155,7 +158,8 @@ export default function FoodLogger({
       barcode: food.barcode, name: food.name, brand: null, imageUrl: null,
       calories: food.caloriesPer100, proteinG: food.proteinPer100,
       carbsG: food.carbsPer100, fatG: food.fatPer100,
-      servingSize: food.servingName ? `${food.servingGrams}g ${food.servingName}` : `${food.servingGrams}g`,
+      servingSize: food.servingName ?? `${food.servingGrams} g`,
+      savedServingGrams: food.servingGrams,
     });
     setQty(String(food.servingGrams));
     setFavorited(!!food.id);
@@ -163,13 +167,10 @@ export default function FoodLogger({
 
   async function saveFavorite() {
     if (!selected) return;
-    const servingMatch = selected.servingSize?.match(/[\d.,]+/);
     await apiPost("/api/foods/saved", {
       name: selected.name, barcode: selected.barcode,
       servingName: selected.servingSize || null,
-      servingGrams: servingMatch
-        ? Number(servingMatch[0].replace(",", "."))
-        : parseDecimalInput(qty) || 100,
+      servingGrams: servingGrams ?? (parseDecimalInput(qty) || 100),
       caloriesPer100: selected.calories, proteinPer100: selected.proteinG,
       carbsPer100: selected.carbsG, fatPer100: selected.fatG,
     });
@@ -282,10 +283,11 @@ export default function FoodLogger({
                 value={qty}
                 onChange={(e) => setQty(normalizeDecimalInput(e.target.value))}
               />
-              {selected.servingSize && (() => {
-                const match = selected.servingSize.match(/[\d.,]+/);
-                return match ? <button onClick={() => setQty(match[0].replace(",", "."))} className="text-xs text-accent mt-2">Use serving · {selected.servingSize}</button> : null;
-              })()}
+              {servingGrams !== null && (
+                <button type="button" onClick={() => setQty(String(servingGrams))} className="min-h-11 text-xs text-accent">
+                  Use serving · {selected.servingSize ?? `${servingGrams} g`}
+                </button>
+              )}
             </div>
 
             <MealPicker meal={meal} setMeal={setMeal} />

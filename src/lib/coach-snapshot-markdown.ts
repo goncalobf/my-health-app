@@ -146,7 +146,9 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
       `- Daily targets: ${t.calories} kcal · ${t.proteinG}P ${t.carbsG}C ${t.fatG}F`,
       `- Logged today: ${today.nutrition.calories} kcal · ${today.nutrition.proteinG}P ${today.nutrition.carbsG}C ${today.nutrition.fatG}F`,
       `- Remaining today: ${today.remaining.calories} kcal · ${today.remaining.proteinG}P ${today.remaining.carbsG}C ${today.remaining.fatG}F`,
-      `- Garmin total calories today: ${cell(today.garminTotalCalories)}`,
+      today.expenditure
+        ? `- Total energy expenditure today: ${today.expenditure.totalCalories} kcal (${today.expenditure.source})${today.expenditure.source === "Garmin sync" ? ". Today’s total may still increase." : ""}`
+        : "- Total energy expenditure today: no reading.",
     ].join("\n"),
   );
 
@@ -212,11 +214,11 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
 
   sections.push(
     [
-      "## Garmin expenditure",
+      "## Daily energy expenditure",
       table(
-        ["Day", "Total calories"],
-        snapshot.expenditureTrend.map((e) => [e.day, e.totalCalories]),
-        "No Garmin expenditure in this period.",
+        ["Day", "Total calories", "Source"],
+        snapshot.expenditureTrend.map((e) => [e.day, e.totalCalories, e.source]),
+        "No energy expenditure recorded in this period.",
       ),
     ].join("\n"),
   );
@@ -235,7 +237,6 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
           "Sleep (h)",
           "Sleep score",
           "Active cal",
-          "Total cal",
           "Steps",
         ],
         snapshot.garminHealthTrend.map((g) => [
@@ -248,7 +249,6 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
             : null,
           g.sleepScoreValue,
           g.caloriesActive,
-          g.caloriesTotal,
           g.steps,
         ]),
         "No Garmin health data in this period.",
@@ -406,7 +406,7 @@ export function formatCoachSnapshotAsMarkdown(snapshot: CoachSnapshot): string {
     [
       "## Data coverage (use this to judge confidence)",
       `- Weigh-ins: ${coverage.weighIns} · Nutrition days logged: ${coverage.nutritionDays} · Completed workouts: ${coverage.completedWorkouts}`,
-      `- Cardio sessions: ${coverage.cardioSessions} · Garmin expenditure days: ${coverage.garminExpendityureDays} · Garmin health days: ${coverage.garminHealthDays}`,
+      `- Cardio sessions: ${coverage.cardioSessions} · Energy expenditure days: ${coverage.expenditureDays} · Garmin health days: ${coverage.garminHealthDays}`,
     ].join("\n"),
   );
 

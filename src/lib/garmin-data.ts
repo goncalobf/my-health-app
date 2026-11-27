@@ -1,3 +1,5 @@
+import { parseActivityTime } from "@/lib/utils";
+
 const STRENGTH_TYPE_KEYS = new Set([
   "strength_training",
   "fitness_equipment",
@@ -9,6 +11,7 @@ export interface GarminActivity {
   activityName: string;
   activityType: { typeKey: string };
   startTimeLocal: string;
+  startTimeGMT?: string;
   duration: number;
   distance: number;
   elevationGain: number;
@@ -83,11 +86,13 @@ export function normalizeGarminActivity(value: unknown): GarminActivity | null {
   const activityId = finiteNumber(value.activityId, 1, Number.MAX_SAFE_INTEGER);
   if (!activityId || !Number.isSafeInteger(activityId)) return null;
 
+  const startTimeGMT = boundedText(value.startTimeGMT, 40);
   return {
     activityId,
     activityName: boundedText(value.activityName, 200, "Garmin activity"),
     activityType: { typeKey: boundedText(rawType?.typeKey, 100, "other") },
     startTimeLocal: boundedText(value.startTimeLocal, 40),
+    ...(startTimeGMT && parseActivityTime(startTimeGMT, "utc") && { startTimeGMT }),
     duration: finiteNumber(value.duration, 0, 60 * 60 * 24 * 7),
     distance: finiteNumber(value.distance, 0, 2_000_000),
     elevationGain: finiteNumber(value.elevationGain, 0, 100_000),
@@ -98,4 +103,9 @@ export function normalizeGarminActivity(value: unknown): GarminActivity | null {
     averagePower: finiteNumber(value.averagePower, 0, 10_000),
     averageCadence: finiteNumber(value.averageCadence, 0, 500),
   };
+}
+
+export function garminActivityStart(activity: Pick<GarminActivity, "startTimeGMT" | "startTimeLocal">) {
+  return (activity.startTimeGMT ? parseActivityTime(activity.startTimeGMT, "utc") : null)
+    ?? (activity.startTimeLocal ? parseActivityTime(activity.startTimeLocal, "app") : null);
 }

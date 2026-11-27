@@ -71,7 +71,7 @@ export function completeGarminAuthSession(owner: SessionOwner, token: GarminToke
     await tx.insert(garminConnections).values({ userId: owner.userId, encryptedData })
       .onConflictDoUpdate({
         target: garminConnections.userId,
-        set: { encryptedData, connectedAt: new Date(), lastSyncedAt: null },
+        set: { encryptedData, connectedAt: new Date(), lastSyncedAt: null, lastActivitiesSyncedAt: null },
       });
     await cancelGarminSessions(tx, owner.userId, owner.sessionId);
     await clearGarminSync(tx, owner.userId);

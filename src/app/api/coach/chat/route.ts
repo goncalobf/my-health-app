@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { coachMessages } from "@/db/schema";
 import { chatSchema } from "@/lib/coach";
 import { COACH_QUESTION_LIMIT, coachChatResponse, formatCoachConversation } from "@/lib/coach-chat";
-import { getCoachSnapshot, saveCoachMemoryNote } from "@/lib/coach-data";
+import { getCoachSnapshot } from "@/lib/coach-data";
+import { clearCoachChat, getCoachRevisions, saveCoachExchange, saveCoachMemoryNote } from "@/lib/coach-storage";
 import { formatCoachSnapshotAsMarkdown } from "@/lib/coach-snapshot-markdown";
 import { isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
 import { requireAppUser } from "@/lib/app-user";
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    const { chatRevision, memoryRevision } = await getCoachRevisions(user.id);
     const [history, snapshot] = await Promise.all([
       recentMessages(user.id, 10),
       getCoachSnapshot({ userId: user.id, days: 28 }),
@@ -47,14 +49,14 @@ export async function POST(req: Request) {
         `## User question\n${formatCoachConversation([{ role: "user", content: message }])}`,
       ].filter(Boolean).join("\n\n"),
     }));
-    const messages = await db.insert(coachMessages).values([
-      { userId: user.id, role: "user", content: message },
-      { userId: user.id, role: "assistant", content: JSON.stringify(payload) },
-    ]).returning({
-      id: coachMessages.id, role: coachMessages.role, content: coachMessages.content, createdAt: coachMessages.createdAt,
-    });
+    const messages = await saveCoachExchange(user.id, chatRevision, message, JSON.stringify(payload));
+    if (!messages) {
+      return Response.json({ error: "The conversation was cleared while Coach was replying." }, {
+        status: 409, headers: privateHeaders,
+      });
+    }
     // The reply is already saved. An optional memory failure must not cause a resubmission.
-    await saveCoachMemoryNote(user.id, payload.memoryNote).catch(() => {
+    await saveCoachMemoryNote(user.id, memoryRevision, payload.memoryNote, chatRevision).catch(() => {
       console.error("Fitlog Coach could not save the optional memory note");
     });
     return Response.json({ ...payload, messages: messages.sort((a, b) => a.id - b.id) }, {
@@ -67,6 +69,6 @@ export async function POST(req: Request) {
 
 export async function DELETE() {
   const user = await requireAppUser();
-  await db.delete(coachMessages).where(eq(coachMessages.userId, user.id));
+  await clearCoachChat(user.id);
   return Response.json({ ok: true }, { headers: privateHeaders });
 }

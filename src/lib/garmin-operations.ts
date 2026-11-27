@@ -1,25 +1,17 @@
 import "server-only";
 import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
-import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { withDbTransaction, type DbTransaction as GarminTransaction } from "@/db/transactions";
 import * as schema from "@/db/schema";
 
-export type GarminTransaction = Parameters<Parameters<NodePgDatabase<typeof schema>["transaction"]>[0]>[0];
+export type { GarminTransaction };
 const { garminAuthSessions, garminConnections, garminOperationState } = schema;
-let store: NodePgDatabase<typeof schema> | undefined;
 
 export async function withGarminAccount<T>(
   userId: number,
   work: (tx: GarminTransaction, state: typeof garminOperationState.$inferSelect) => Promise<T>,
 ): Promise<T> {
-  if (!store) {
-    const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
-    if (!connectionString) throw new Error("Garmin database is not configured");
-    store = drizzle(new Pool({ connectionString, max: 2, connectionTimeoutMillis: 4_000, allowExitOnIdle: true }), { schema });
-  }
   // Lock one account for short writes only. Provider calls happen outside the transaction.
-  return store.transaction(async (tx) => {
-    await tx.execute(sql`set local statement_timeout = '5s'`);
+  return withDbTransaction(async (tx) => {
     await tx.insert(garminOperationState).values({ userId }).onConflictDoNothing();
     const [state] = await tx.select().from(garminOperationState)
       .where(eq(garminOperationState.userId, userId)).for("update");
