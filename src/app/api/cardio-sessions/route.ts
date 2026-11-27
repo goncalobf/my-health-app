@@ -110,7 +110,6 @@ export async function POST(req: Request) {
       division: body.division ? String(body.division) : null,
       location: body.location ? String(body.location) : null,
       roxZoneSeconds,
-      garminActivityId: body.garminActivityId ? String(body.garminActivityId) : null,
     })
     .returning();
 

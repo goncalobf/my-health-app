@@ -23,8 +23,8 @@ import {
   startOfAppDay,
   todayISO,
 } from "@/lib/utils";
+import { dailyExpenditureTrend } from "@/lib/daily-expenditure";
 import { buildNutritionPhase } from "@/lib/nutrition-phase";
-import { appendMemoryNote } from "@/lib/coach-memory";
 import { getTrainingInsights } from "@/lib/training-insights-data";
 import { loggedMobilityRoutine } from "@/lib/mobility";
 import { JIU_JITSU } from "@/lib/jiu-jitsu";
@@ -87,6 +87,7 @@ export async function getCoachSnapshot({
         and(
           eq(expenditureLogs.userId, userId),
           gte(expenditureLogs.day, fromDay),
+          lte(expenditureLogs.day, today),
         ),
       )
       .orderBy(asc(expenditureLogs.day)),
@@ -352,6 +353,8 @@ export async function getCoachSnapshot({
     effort: row.effort,
   }));
 
+  const expenditureTrend = dailyExpenditureTrend(garminHealth, expenditures);
+
   return {
     generatedFor: today,
     focusSessionId: sessionId ?? null,
@@ -383,8 +386,7 @@ export async function getCoachSnapshot({
         carbsG: Math.round(targets.carbsG - todayNutrition.carbsG),
         fatG: Math.round(targets.fatG - todayNutrition.fatG),
       },
-      garminTotalCalories:
-        expenditures.find((x) => x.day === today)?.totalCalories ?? null,
+      expenditure: expenditureTrend.find((x) => x.day === today) ?? null,
       garminHealth: garminHealth.find((x) => x.date === today) ?? null,
     },
     garminHealthTrend: garminHealth,
@@ -405,7 +407,7 @@ export async function getCoachSnapshot({
     jiuJitsuSessions,
     mobilitySessions,
     weightTrend: weights,
-    expenditureTrend: expenditures,
+    expenditureTrend,
     nutritionTrend: [...nutritionByDay].map(([day, totals]) => ({
       day,
       ...totals,
@@ -433,7 +435,7 @@ export async function getCoachSnapshot({
     }),
     dataCoverage: {
       weighIns: weights.length,
-      garminExpendityureDays: expenditures.length,
+      expenditureDays: expenditureTrend.length,
       garminHealthDays: garminHealth.length,
       nutritionDays: nutritionByDay.size,
       completedWorkouts: sessionRows.filter((session) => session.startedAt >= fromTime).length,
@@ -443,23 +445,3 @@ export async function getCoachSnapshot({
 }
 
 export type CoachSnapshot = Awaited<ReturnType<typeof getCoachSnapshot>>;
-
-/** Appends a coach-authored memory note for one user, capped and trimmed. No-op for an empty/whitespace note. */
-export async function saveCoachMemoryNote(
-  userId: number,
-  note: string | null | undefined,
-) {
-  if (!note || !note.trim()) return;
-  const [existing] = await db
-    .select({ notes: coachMemory.notes })
-    .from(coachMemory)
-    .where(eq(coachMemory.userId, userId));
-  const next = appendMemoryNote(existing?.notes ?? [], note);
-  await db
-    .insert(coachMemory)
-    .values({ userId, notes: next })
-    .onConflictDoUpdate({
-      target: coachMemory.userId,
-      set: { notes: next, updatedAt: new Date() },
-    });
-}

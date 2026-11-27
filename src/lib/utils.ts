@@ -67,7 +67,10 @@ export function hourInAppTimeZone(date = new Date()): number {
 
 export function startOfAppDay(day: string): Date {
   const [year, month, date] = day.split("-").map(Number);
-  const target = Date.UTC(year, month - 1, date);
+  return new Date(appWallTimeToInstant(Date.UTC(year, month - 1, date)));
+}
+
+function appWallTimeToInstant(target: number): number {
   let instant = target;
 
   // Resolve the timezone offset at this date. Repeating handles DST boundaries.
@@ -80,10 +83,29 @@ export function startOfAppDay(day: string): Date {
       parts.hour,
       parts.minute,
       parts.second
-    );
+    ) + new Date(instant).getUTCMilliseconds();
     instant += target - represented;
   }
-  return new Date(instant);
+  return instant;
+}
+
+export function parseActivityTime(value: string, zone: "utc" | "app"): Date | null {
+  const parts = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(\.\d{1,3})?(Z|[+-]\d{2}:?\d{2})?$/.exec(value);
+  if (!parts) return null;
+  const wall = `${parts[1]}T${parts[2]}`;
+  const time = wall + (parts[3] ?? "");
+  const utc = new Date(time + "Z");
+  if (!Number.isFinite(utc.getTime()) || utc.toISOString().slice(0, 19) !== wall) return null;
+  if (parts[4]) {
+    const date = new Date(time + parts[4]);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  if (zone === "utc") return utc;
+
+  const date = new Date(appWallTimeToInstant(utc.getTime()));
+  const actual = zonedParts(date);
+  const wallTime = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute, actual.second);
+  return wallTime + date.getUTCMilliseconds() === utc.getTime() ? date : null;
 }
 
 export function formatDate(iso: string): string {

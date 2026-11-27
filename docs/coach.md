@@ -45,6 +45,10 @@ targets, today’s explicit training choice, training-plan/deload state, a deter
 `nutritionPhase`, and `coachMemory`. It never selects progress photos or
 private measurement notes — there is no field to leak.
 
+Home and Coach use the synced Garmin daily calorie total when available and
+fall back to the manual entry for the same date. The Coach snapshot labels
+the source and includes one expenditure total per day.
+
 The snapshot is rendered as **Markdown**, not `JSON.stringify`, by
 `formatCoachSnapshotAsMarkdown()` (`src/lib/coach-snapshot-markdown.ts`):
 headed sections for scalar data, tables for every array of near-identical
@@ -95,7 +99,10 @@ soft context, not a source of truth.
   present, the route calls `saveCoachMemoryNote()`, which appends through the
   pure `appendMemoryNote()` (`src/lib/coach-memory.ts`) — capped server-side
   at 20 notes / ~2000 total characters / 300 characters per note, oldest
-  dropped first, regardless of what the model returns.
+  dropped first, regardless of what the model returns. Memory writes share a
+  per-user transaction lock. Each forget request advances the memory revision,
+  so replies generated from older context cannot restore a removed note.
+  Clearing chat likewise advances the chat revision before deleting messages.
 - **Reading**: `getCoachSnapshot()` includes `coachMemory` in every request.
   The system prompt instructs the model to treat it as soft prior context
   that current data always overrides, and never to restate a memory note as
@@ -123,7 +130,8 @@ soft context, not a source of truth.
 
 - `src/lib/openai.ts`: `structuredCoachResponse()` and loading the playbook.
 - `src/lib/coach.ts`: payload types and JSON Schemas per endpoint.
-- `src/lib/coach-data.ts`: `getCoachSnapshot()`, `saveCoachMemoryNote()`.
+- `src/lib/coach-data.ts`: `getCoachSnapshot()`.
+- `src/lib/coach-storage.ts`: chat and memory writes, deletions and revisions.
 - `src/lib/coach-snapshot-markdown.ts`: snapshot → Markdown formatter.
 - `src/lib/coach-memory.ts`: pure, tested memory append/trim logic.
 - `src/app/api/coach/`: chat, insights, meals, targets, training suggestions, and memory routes.

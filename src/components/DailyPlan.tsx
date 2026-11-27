@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Watch } from "lucide-react";
 import { apiPost } from "@/lib/api";
+import { dailyExpenditure } from "@/lib/daily-expenditure";
 import WorkoutDayCard from "./WorkoutDayCard";
 
 export default function DailyPlan({ day, loggedCalories, syncedCalories }: {
@@ -17,7 +18,7 @@ export default function DailyPlan({ day, loggedCalories, syncedCalories }: {
   const [burnSaved, setBurnSaved] = useState(loggedCalories !== null);
   const [burnError, setBurnError] = useState("");
   const [saving, setSaving] = useState(false);
-  const displayedCalories = syncedCalories ?? loggedCalories;
+  const displayedCalories = dailyExpenditure(syncedCalories, loggedCalories)?.totalCalories ?? null;
 
   async function saveBurn() {
     setSaving(true);

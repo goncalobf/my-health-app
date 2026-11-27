@@ -51,7 +51,7 @@ async function initializeUserData(userId: number) {
     .onConflictDoNothing();
 }
 
-export const getAppUser = cache(async function getAppUser() {
+const getAppAccess = cache(async function getAppAccess() {
   // Local mode has no Neon Auth at all: resolve a fixed local account so the
   // app can be opened without a login page. Guarded to non-deployed builds.
   if (isLocalMode()) {
@@ -60,7 +60,8 @@ export const getAppUser = cache(async function getAppUser() {
       .from(appUsers)
       .where(eq(appUsers.email, LOCAL_USER_EMAIL))
       .limit(1);
-    if (existing) return existing;
+    const signedInAt = new Date(performance.timeOrigin);
+    if (existing) return { user: existing, signedInAt };
     const [created] = await db
       .insert(appUsers)
       .values({
@@ -74,11 +75,11 @@ export const getAppUser = cache(async function getAppUser() {
       })
       .returning();
     await initializeUserData(created.id);
-    return created;
+    return { user: created, signedInAt };
   }
   const { data: session } = await auth.getSession();
   const authUser = session?.user;
-  if (!authUser?.id || !authUser.email) return null;
+  if (!session || !authUser?.id || !authUser.email) return null;
 
   const email = authUser.email.trim().toLowerCase();
   let [appUser] = await db
@@ -158,8 +159,19 @@ export const getAppUser = cache(async function getAppUser() {
     appUser = initialized;
   }
 
-  return appUser;
+  const signedInAt = session.session?.createdAt ? new Date(session.session.createdAt) : null;
+  return { user: appUser, signedInAt };
 });
+
+export async function getAppUser() {
+  return (await getAppAccess())?.user ?? null;
+}
+
+export async function requireAppAccess() {
+  const access = await getAppAccess();
+  if (!access) redirect("/access-pending");
+  return access;
+}
 
 export async function requireAppUser() {
   const user = await getAppUser();

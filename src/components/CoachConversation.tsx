@@ -53,6 +53,7 @@ export default function CoachConversation() {
       setDraft("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Couldn’t send your question. Try again.");
+      await load();
     } finally {
       inFlight.current = false;
       setPending(null);

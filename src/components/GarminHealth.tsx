@@ -5,6 +5,7 @@ import { ChevronDown, RefreshCw, Watch } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { GarminDailyMetrics } from "@/db/schema";
 import { api } from "@/lib/api";
+import { GARMIN_PARTIAL_MESSAGE, useGarminLoginSync } from "@/components/GarminLoginSync";
 import { formatSleepDuration } from "@/lib/garmin-sleep";
 import { dateISOInTimeZone, formatDate } from "@/lib/utils";
 
@@ -35,10 +36,11 @@ function readings(day: GarminDay) {
 }
 
 export default function GarminHealth() {
+  const { status, revision, sync: syncGarmin } = useGarminLoginSync();
+  const syncing = status === "syncing";
   const [data, setData] = useState<GarminHealthData | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
   const [loadError, setLoadError] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState("");
   const [syncResult, setSyncResult] = useState("");
 
@@ -60,23 +62,19 @@ export default function GarminHealth() {
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
-  }, [load]);
+  }, [load, revision]);
 
   async function sync() {
-    setSyncing(true);
     setSyncError("");
     setSyncResult("");
     try {
-      const { imported } = await api<{ imported: number }>("/api/garmin/sync", { method: "POST" });
+      const { imported, incomplete } = await syncGarmin();
       setSelectedDate("");
-      setSyncResult(imported
+      if (imported || !incomplete) setSyncResult(imported
         ? `${imported} new ${imported === 1 ? "activity" : "activities"} ready to review.`
         : "Sync complete.");
-      await load();
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : "Garmin sync failed. Try again.");
-    } finally {
-      setSyncing(false);
     }
   }
 
@@ -114,12 +112,18 @@ export default function GarminHealth() {
         </div>
       )}
       {syncError && <p className="text-sm text-danger" role="alert">{syncError}</p>}
+      {status === "failed" && connection?.connected && !syncError && !syncResult && (
+        <p className="text-sm text-muted" role="status">Automatic Garmin sync couldn’t finish. Tap Sync now to retry.</p>
+      )}
+      {status === "partial" && connection?.connected && <p className="text-sm text-muted" role="status">{GARMIN_PARTIAL_MESSAGE}</p>}
       {syncResult && <p className="text-sm text-accent" role="status">{syncResult}</p>}
 
       {!data && !loadError && <p className="text-sm text-muted" role="status">Loading Garmin data…</p>}
       {!day && connection && (
         <p className="text-sm text-muted">
-          {connection.connected
+          {syncing
+            ? "Fetching your latest Garmin data…"
+            : connection.connected
             ? lastSync
               ? "Garmin has shared no daily health metrics in the last seven days yet."
               : "Sync Garmin to see your steps, energy, sleep and recovery metrics."

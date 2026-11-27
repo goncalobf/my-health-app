@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Sparkles, Utensils, Trash2, X, ChevronDown } from "lucide-react";
-import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+import { api, apiGet, apiPatch, apiPost } from "@/lib/api";
 import type { CoachMealPayload } from "@/lib/coach";
 import CoachConversation from "@/components/CoachConversation";
 import CoachInsightCard, { CoachInsightRow } from "@/components/CoachInsightCard";
@@ -18,6 +18,7 @@ export default function CoachPage() {
   const [memoryNotes, setMemoryNotes] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [memoryError, setMemoryError] = useState("");
+  const [forgetting, setForgetting] = useState(false);
 
   useEffect(() => {
     apiGet<{ configured: boolean; insights: CoachInsightRow[] }>("/api/coach/insights")
@@ -30,12 +31,20 @@ export default function CoachPage() {
 
   async function forget(index?: number) {
     setMemoryError("");
+    setForgetting(true);
     try {
       const query = index === undefined ? "" : `?index=${index}`;
-      const result = await apiDelete<{ notes: string[] }>(`/api/coach/memory${query}`);
+      const result = await api<{ notes: string[] }>(`/api/coach/memory${query}`, {
+        method: "DELETE",
+        body: index === undefined ? undefined : JSON.stringify({ note: memoryNotes[index] }),
+      });
       setMemoryNotes(result.notes);
-    } catch {
-      setMemoryError("Couldn’t update Coach memory. Try again.");
+    } catch (error) {
+      setMemoryError(error instanceof Error ? error.message : "Couldn’t update Coach memory. Try again.");
+      const latest = await apiGet<{ notes: string[] }>("/api/coach/memory").catch(() => null);
+      if (latest) setMemoryNotes(latest.notes);
+    } finally {
+      setForgetting(false);
     }
   }
 
@@ -129,10 +138,10 @@ export default function CoachPage() {
             {memoryNotes.map((note, index) => (
               <div key={`${index}-${note.slice(0, 24)}`} className="flex items-center gap-2 rounded-xl bg-surface-2 p-2.5">
                 <p className="min-w-0 flex-1 break-words text-sm">{note}</p>
-                <button onClick={() => forget(index)} className="icon-button" aria-label="Forget this"><X size={16} /></button>
+                <button onClick={() => forget(index)} disabled={forgetting} className="icon-button" aria-label="Forget this"><X size={16} /></button>
               </div>
             ))}
-            <button onClick={() => forget()} className="btn-danger"><Trash2 size={16} /> Forget everything</button>
+            <button onClick={() => forget()} disabled={forgetting} className="btn-danger"><Trash2 size={16} /> Forget everything</button>
           </div>
         )}
       </details>

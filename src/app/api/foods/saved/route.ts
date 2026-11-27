@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { nutritionLogs, savedFoods } from "@/db/schema";
+import { savedServingWeightGrams } from "@/lib/foods/serving-weight";
 import { requireAppUser } from "@/lib/app-user";
 
 export async function GET() {
@@ -20,7 +21,12 @@ export async function GET() {
     carbsPer100: (x.carbsG / x.quantityG) * 100,
     fatPer100: (x.fatG / x.quantityG) * 100,
   }));
-  return NextResponse.json({ favorites, recent });
+  return NextResponse.json({
+    favorites: favorites.map((food) => ({
+      ...food, servingGrams: savedServingWeightGrams(food.servingName, food.servingGrams),
+    })),
+    recent,
+  });
 }
 
 export async function POST(req: Request) {

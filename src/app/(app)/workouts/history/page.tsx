@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, History, Download, RefreshCw } from "lucide-react";
-import { apiGet } from "@/lib/api";
+import { api } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import { loggedMobilityRoutine } from "@/lib/mobility";
 import { JIU_JITSU } from "@/lib/jiu-jitsu";
+import { garminActivityStart } from "@/lib/garmin-data";
 import { dateISOInTimeZone, formatDate } from "@/lib/utils";
+import { useGarminLoginSync } from "@/components/GarminLoginSync";
 import GarminImportModal from "@/components/GarminImportModal";
 
 interface SessionRow {
@@ -64,17 +66,19 @@ function formatDuration(seconds: number): string {
 }
 
 export default function HistoryPage() {
+  const { status, revision, sync } = useGarminLoginSync();
+  const syncing = status === "syncing";
   const [rows, setRows] = useState<AnyRow[]>([]);
   const [pending, setPending] = useState<PendingImport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState("");
   const [importTarget, setImportTarget] = useState<PendingImport | null>(null);
 
-  async function load() {
+  const load = useCallback(async (signal?: AbortSignal) => {
     const [sessions, cardio, imports] = await Promise.all([
-      apiGet<Omit<SessionRow, "kind">[]>("/api/sessions"),
-      apiGet<Omit<CardioRow, "kind">[]>("/api/cardio-sessions"),
-      apiGet<PendingImport[]>("/api/garmin/pending").catch(() => []),
+      api<Omit<SessionRow, "kind">[]>("/api/sessions", { signal }),
+      api<Omit<CardioRow, "kind">[]>("/api/cardio-sessions", { signal }),
+      api<PendingImport[]>("/api/garmin/pending", { signal }).catch(() => []),
     ]);
     const combined: AnyRow[] = [
       ...sessions.map((s) => ({ ...s, kind: "resistance" as const })),
@@ -83,22 +87,26 @@ export default function HistoryPage() {
       (a, b) =>
         new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
     );
+    if (signal?.aborted) return;
     setRows(combined);
     setPending(imports);
     setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal).catch(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
+    return () => controller.abort();
+  }, [load, revision]);
+
   async function syncGarmin() {
-    setSyncing(true);
+    setSyncError("");
     try {
-      await fetch("/api/garmin/sync", { method: "POST" });
-      await load();
-    } finally {
-      setSyncing(false);
+      await sync();
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Garmin sync failed. Try again.");
     }
   }
 
@@ -111,6 +119,8 @@ export default function HistoryPage() {
     <div>
       <PageHeader title="History" back="/workouts" />
 
+      {syncError && <p role="alert" className="mb-3 text-sm text-danger">{syncError}</p>}
+      {status === "partial" && <p role="status" className="mb-3 text-sm text-muted">Some Garmin health data couldn’t sync. You can retry from Garmin health.</p>}
       {/* Garmin pending imports */}
       {pending.length > 0 && (
         <div className="mb-5">
@@ -130,6 +140,7 @@ export default function HistoryPage() {
           <div className="flex flex-col gap-2">
             {pending.map((imp) => {
               const data = JSON.parse(imp.garminDataJson);
+              const startedAt = garminActivityStart(data);
               return (
                 <button
                   key={imp.id}
@@ -142,8 +153,8 @@ export default function HistoryPage() {
                       {data.activityName ?? imp.garminActivityType}
                     </p>
                     <p className="text-xs text-muted">
-                      {data.startTimeLocal
-                        ? formatDate(data.startTimeLocal.slice(0, 10))
+                      {startedAt
+                        ? formatDate(dateISOInTimeZone(startedAt))
                         : ""}
                       {" · "}
                       {imp.garminActivityType.replace(/_/g, " ")}

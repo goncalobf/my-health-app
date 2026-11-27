@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { GARMIN_PARTIAL_MESSAGE, useGarminLoginSync } from "@/components/GarminLoginSync";
 import {
   Eye,
   EyeOff,
@@ -83,6 +84,8 @@ async function authRequest(body: Record<string, string>): Promise<AuthResult> {
 }
 
 export default function GarminSettings() {
+  const { status: syncStatus, revision, sync: syncGarmin } = useGarminLoginSync();
+  const syncing = syncStatus === "syncing";
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
   const [phase, setPhase] = useState<AuthPhase>("idle");
   const [busy, setBusy] = useState(false);
@@ -93,7 +96,6 @@ export default function GarminSettings() {
   const [handshake, setHandshake] = useState<Handshake | null>(null);
   const [mfaState, setMfaState] = useState("");
   const [mfaCode, setMfaCode] = useState("");
-  const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [syncError, setSyncError] = useState("");
   const [statusError, setStatusError] = useState(false);
@@ -115,7 +117,7 @@ export default function GarminSettings() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, revision]);
 
   function clearVerification() {
     setMfaCode("");
@@ -242,23 +244,15 @@ export default function GarminSettings() {
   }
 
   async function sync() {
-    setSyncing(true);
     setSyncResult(null);
     setSyncError("");
     try {
-      const response = await fetch("/api/garmin/sync", { method: "POST" });
-      const body = await response.json().catch(() => ({})) as { imported?: number; error?: string };
-      if (!response.ok) {
-        setSyncError(body.error ?? "Sync failed");
-        return;
+      const { imported, incomplete } = await syncGarmin();
+      if (imported || !incomplete) {
+        setSyncResult(imported === 0 ? "No new Garmin activities." : `${imported} new ${imported === 1 ? "activity" : "activities"} ready to review.`);
       }
-      const count = body.imported ?? 0;
-      setSyncResult(count === 0 ? "No new Garmin activities." : `${count} new ${count === 1 ? "activity" : "activities"} ready to review.`);
-      await load();
-    } catch {
-      setSyncError("Sync failed");
-    } finally {
-      setSyncing(false);
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Garmin sync failed. Try again.");
     }
   }
 
@@ -303,6 +297,7 @@ export default function GarminSettings() {
               {syncing ? "Syncing…" : "Sync now"}
             </button>
             <Link href="/progress?view=garmin" className="btn-ghost w-full">View Garmin health</Link>
+            {syncStatus === "partial" && <p role="status" className="text-xs text-muted">{GARMIN_PARTIAL_MESSAGE}</p>}
             {syncResult && <p className="text-xs text-accent text-center">{syncResult}</p>}
             {syncError && <p role="alert" className="rounded bg-danger/10 px-3 py-2 text-xs text-danger">{syncError}</p>}
           </>

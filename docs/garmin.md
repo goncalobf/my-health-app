@@ -24,6 +24,10 @@ deploying this version. It preserves the encrypted connections and adds
 handshake fields, per-account operation state, and request nonces. A Garmin
 sign-in begun before rollout must be restarted because older handshakes did
 not record how they were created.
+Apply [migration 0030](../drizzle/0030_garmin_sync_and_coach_revisions.sql)
+before deploying login sync. It adds an activity sync timestamp alongside the
+last complete sync timestamp. Existing encrypted connections are preserved.
+
 Rotating the encryption key requires re-encrypting stored connections or asking
 users to connect again.
 
@@ -73,15 +77,27 @@ lease is checked before each database write, so a superseded connection cannot
 store a token, health metrics, or staged activities. DI renewals and legacy
 OAuth exchanges persist the new credentials before subsequent Garmin requests.
 
+After Fitlog sign-in, the authenticated app starts Garmin sync in the
+background if the account is linked and has not synced since the session
+began. The server checks freshness under the account lock before contacting
+Garmin. A tab that finds a sync already running waits for completion and
+refreshes its open view. Manual sync uses the same refresh and status state.
+
 - Recent activities are normalized and bounded. Strength activities stay out
   of the import queue because Fitlog records them in guided sessions.
 - Each activity is staged once per user. The response counts newly staged
   rows. The user labels a staged activity before it becomes an
-  `activity_session`.
+  `activity_session`. Labeling and inserting the session happen atomically.
+  Fitlog uses Garmin’s GMT timestamp when available. Older timestamps without
+  an offset use Fitlog’s configured timezone.
 - The metric date follows Fitlog's configured timezone. Available fields are
   updated independently, preserving existing values when Garmin omits fields.
-- Optional metric outages allow activity sync to finish. Rejected credentials,
-  token persistence failures, and activity write failures return a failure.
+- The app saves activities and available metrics during an optional endpoint
+  outage and reports a partial result. Login sync makes one automatic health
+  retry after a partial result, reusing the completed activity pull. Missing
+  measurements, including HTTP 404 or 204 from a daily endpoint, are expected.
+  Rejected credentials, token persistence failures, and activity write failures
+  return a sync error.
 - Disconnect removes the encrypted connection and preserves imported sessions.
 
 ## Local verification

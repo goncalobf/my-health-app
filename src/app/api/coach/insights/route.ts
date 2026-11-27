@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { coachInsights, sessions } from "@/db/schema";
-import { getCoachSnapshot, saveCoachMemoryNote } from "@/lib/coach-data";
+import { getCoachSnapshot } from "@/lib/coach-data";
+import { getCoachRevisions, saveCoachMemoryNote } from "@/lib/coach-storage";
 import { formatCoachSnapshotAsMarkdown } from "@/lib/coach-snapshot-markdown";
 import { CoachInsightPayload, insightSchema } from "@/lib/coach";
 import { COACH_MODEL, isCoachConfigured, structuredCoachResponse } from "@/lib/openai";
@@ -57,15 +58,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Too many requests. Try again shortly." }, { status: 429 });
   }
 
-  const snapshot = await getCoachSnapshot({ userId: user.id, days: kind === "weekly" ? 28 : 14, sessionId });
   try {
+    const { memoryRevision } = await getCoachRevisions(user.id);
+    const snapshot = await getCoachSnapshot({ userId: user.id, days: kind === "weekly" ? 28 : 14, sessionId });
     const payload = await structuredCoachResponse<CoachInsightPayload>({
       name: `fitlog_coach_${kind}`, schema: insightSchema, data: formatCoachSnapshotAsMarkdown(snapshot),
     });
     const [row] = await db.insert(coachInsights).values({
       userId: user.id, kind, sourceKey, payloadJson: JSON.stringify(payload), model: COACH_MODEL,
     }).returning();
-    await saveCoachMemoryNote(user.id, payload.memoryNote);
+    await saveCoachMemoryNote(user.id, memoryRevision, payload.memoryNote).catch(() => {
+      console.error("Fitlog Coach could not save the optional memory note");
+    });
     return NextResponse.json(publicRow(row), { status: 201 });
   } catch {
     return NextResponse.json({ error: "Coach request failed. Try again." }, { status: 502 });

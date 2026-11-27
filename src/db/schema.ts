@@ -461,6 +461,14 @@ export const coachInsights = pgTable("coach_insights", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const coachRevisions = pgTable("coach_revisions", {
+  userId: integer("user_id")
+    .primaryKey()
+    .references(() => appUsers.id, { onDelete: "cascade" }),
+  chatRevision: integer("chat_revision").notNull().default(0),
+  memoryRevision: integer("memory_revision").notNull().default(0),
+});
+
 export const coachMessages = pgTable("coach_messages", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
@@ -558,6 +566,7 @@ export const garminConnections = pgTable("garmin_connections", {
     .references(() => appUsers.id, { onDelete: "cascade" }),
   encryptedData: text("encrypted_data").notNull(), // JSON: {iv, ciphertext, authTag}
   lastSyncedAt: timestamp("last_synced_at"),
+  lastActivitiesSyncedAt: timestamp("last_activities_synced_at"),
   connectedAt: timestamp("connected_at").notNull().defaultNow(),
 });
 

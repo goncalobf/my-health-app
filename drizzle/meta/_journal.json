@@ -211,6 +211,13 @@
       "when": 1795724230356,
       "tag": "0029_garmin_operation_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1795791450860,
+      "tag": "0030_garmin_sync_and_coach_revisions",
+      "breakpoints": true
     }
   ]
 }
