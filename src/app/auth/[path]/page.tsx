@@ -3,13 +3,12 @@
 import { use, useState } from "react";
 import Link from "next/link";
 import BrandMark from "@/components/BrandMark";
-import { useRouter } from "next/navigation";
 import { LogIn, UserPlus } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { GARMIN_SIGN_IN_LANDING } from "@/lib/garmin-sync-on-login";
 
 export default function AuthPage({ params }: { params: Promise<{ path: string }> }) {
   const { path } = use(params);
-  const router = useRouter();
   const signingUp = path === "sign-up";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -40,8 +39,7 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
         return;
       }
 
-      router.replace("/");
-      router.refresh();
+      window.location.replace(new URL(GARMIN_SIGN_IN_LANDING, window.location.origin));
     } catch (error) {
       setError(error instanceof Error ? error.message : "Authentication failed.");
       setBusy(null);
@@ -54,7 +52,7 @@ export default function AuthPage({ params }: { params: Promise<{ path: string }>
     try {
       const result = await authClient.signIn.social({
         provider: "google",
-        callbackURL: "/",
+        callbackURL: GARMIN_SIGN_IN_LANDING,
       });
       if (result.error) {
         setError(result.error.message || "Google sign-in failed.");

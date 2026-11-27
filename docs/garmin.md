@@ -77,11 +77,13 @@ lease is checked before each database write, so a superseded connection cannot
 store a token, health metrics, or staged activities. DI renewals and legacy
 OAuth exchanges persist the new credentials before subsequent Garmin requests.
 
-After Fitlog sign-in, the authenticated app starts Garmin sync in the
-background if the account is linked and has not synced since the session
-began. The server checks freshness under the account lock before contacting
-Garmin. A tab that finds a sync already running waits for completion and
-refreshes its open view. Manual sync uses the same refresh and status state.
+Successful email and Google sign-ins ask the authenticated app to refresh the
+linked Garmin account. The same check runs when Fitlog opens or returns to the
+foreground. On an existing session, data younger than 30 minutes is reused
+unless it predates sign-in or a health pull is incomplete. The server checks
+freshness under the account lock before contacting Garmin and coalesces
+concurrent requests. A waiting tab refreshes its open view once sync finishes.
+Manual sync uses the same progress and refresh state.
 
 - Recent activities are normalized and bounded. Strength activities stay out
   of the import queue because Fitlog records them in guided sessions.

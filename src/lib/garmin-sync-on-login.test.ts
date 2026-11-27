@@ -1,29 +1,46 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { garminLoginSyncPlan, shouldSyncGarminOnLogin } from "./garmin-sync-on-login";
+import { garminLoginSyncPlan } from "./garmin-sync-on-login";
 
-test("Garmin login sync is due until a sync has finished in that signed-in session", () => {
-  const signedInAt = new Date("2026-11-27T09:00:00Z");
-  const previousSync = new Date("2026-11-27T08:59:59Z");
-  const completed = new Date("2026-11-27T09:00:05Z");
-  assert.equal(shouldSyncGarminOnLogin(signedInAt, null), true);
-  assert.equal(shouldSyncGarminOnLogin(signedInAt, previousSync), true);
-  assert.equal(shouldSyncGarminOnLogin(signedInAt, signedInAt), false);
-  assert.equal(shouldSyncGarminOnLogin(signedInAt, completed), false);
-  assert.equal(shouldSyncGarminOnLogin(new Date("2026-11-27T09:03:00Z"), completed), true);
+const now = new Date("2026-11-27T10:00:00Z").getTime();
+const before = (ms: number) => new Date(now - ms);
+const full = { activities: true, health: true };
+const fresh = { activities: false, health: false };
+
+test("a new verified session triggers Garmin even after a recent successful sync", () => {
+  const signedInAt = before(60_000);
+  const previousSync = before(120_000);
+  const completed = before(30_000);
+  assert.deepEqual(garminLoginSyncPlan(signedInAt, previousSync, previousSync, { now }), full);
+  assert.deepEqual(garminLoginSyncPlan(signedInAt, completed, completed, { now }), fresh);
 });
 
-test("Garmin login sync requires a known, valid authentication session date", () => {
-  assert.equal(shouldSyncGarminOnLogin(null, null), false);
-  assert.equal(shouldSyncGarminOnLogin(new Date("invalid"), null), false);
+test("an explicit sign-in triggers a refresh even when the authentication timestamp is reused or missing", () => {
+  const previousSync = before(60_000);
+  const options = { now, justSignedIn: true };
+  for (const session of [before(86_400_000), null, new Date("invalid")]) {
+    assert.deepEqual(garminLoginSyncPlan(session, previousSync, previousSync, options), full);
+    const completed = before(2_000);
+    assert.deepEqual(garminLoginSyncPlan(session, completed, completed, options), fresh);
+  }
 });
 
-test("a partial sync only retries health once the session's activities are saved", () => {
-  const login = new Date("2026-11-27T09:00:00Z");
-  const completed = new Date("2026-11-27T09:01:00Z");
-  const partial = new Date("2026-11-27T09:02:00Z");
-  assert.deepEqual(garminLoginSyncPlan(login, null, null), { activities: true, health: true });
-  assert.deepEqual(garminLoginSyncPlan(login, completed, partial), { activities: false, health: true });
-  assert.deepEqual(garminLoginSyncPlan(login, partial, partial), { activities: false, health: false });
-  assert.deepEqual(garminLoginSyncPlan(null, completed, partial), { activities: false, health: false });
+test("app open checks freshness even when the session date is old or unavailable", () => {
+  for (const session of [before(86_400_000), null, new Date("invalid")]) {
+    assert.deepEqual(garminLoginSyncPlan(session, null, null, { now }), full);
+    const oldSync = before(31 * 60_000);
+    assert.deepEqual(garminLoginSyncPlan(session, oldSync, oldSync, { now }), full);
+    const recentSync = before(29 * 60_000);
+    assert.deepEqual(garminLoginSyncPlan(session, recentSync, recentSync, { now }), fresh);
+  }
+});
+
+test("a partial result from sign-in retries health without another activity pull", () => {
+  const session = before(86_400_000);
+  const complete = before(60_000);
+  const partial = before(1_000);
+  assert.deepEqual(garminLoginSyncPlan(session, complete, partial, { now }), {
+    activities: false, health: true,
+  });
+  assert.deepEqual(garminLoginSyncPlan(session, partial, partial, { now }), fresh);
 });
