@@ -18,7 +18,9 @@ function reply(data: object, status = 200) {
 export async function POST(req: Request) {
   if (!isGarminBrowserRequest(req)) return garminDenied();
   const { user: { id: userId }, signedInAt } = await requireAppAccess();
-  const onLogin = new URL(req.url).searchParams.get("trigger") === "login";
+  const params = new URL(req.url).searchParams;
+  const onLogin = params.get("trigger") === "login";
+  const justSignedIn = params.get("fresh") === "1";
   const lease = randomUUID();
   const started = await withGarminAccount(userId, async (tx, state) => {
     if (state.syncLease && state.syncExpiresAt && state.syncExpiresAt.getTime() > Date.now()) {
@@ -32,7 +34,9 @@ export async function POST(req: Request) {
     if (!connection) {
       return onLogin ? { status: "skipped" } as const : { status: "disconnected" } as const;
     }
-    const plan = garminLoginSyncPlan(signedInAt, connection.lastSyncedAt, connection.lastActivitiesSyncedAt);
+    const plan = garminLoginSyncPlan(signedInAt, connection.lastSyncedAt, connection.lastActivitiesSyncedAt, {
+      justSignedIn,
+    });
     if (onLogin && !plan.health) return { status: "skipped" } as const;
     const pullActivities = !onLogin || plan.activities;
     if (!await takeGarminAttempt(tx, state, "sync")) return { status: "limited" } as const;

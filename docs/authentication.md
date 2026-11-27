@@ -32,7 +32,7 @@ The custom auth page starts the supported SDK flow:
 ```ts
 await authClient.signIn.social({
   provider: "google",
-  callbackURL: "/",
+  callbackURL: "/?signed-in=1",
 });
 ```
 
